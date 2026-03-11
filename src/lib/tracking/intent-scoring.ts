@@ -1,0 +1,206 @@
+/**
+ * P1-06: Intent Scoring Engine
+ *
+ * Scores each session 0–100 and classifies as:
+ *   HIGH | MEDIUM | LOW | RESEARCHER | COMPETITOR | BOT
+ *
+ * The intent score is the most important derived metric in WebGrade.
+ * All downstream analysis (ad source quality, drop-off analysis,
+ * AI explanations) references intent scores.
+ *
+ * Scoring factors:
+ *   - Scroll depth (max scroll depth reached)
+ *   - Engagement depth (time on page)
+ *   - Page sequence (did they move through the funnel?)
+ *   - Micro-gestures (CTA interactions, hesitation, form focus)
+ *   - Conversion actions
+ *
+ * Called by: Inngest background job after session ends
+ */
+
+import type { VisitorSession, SessionEvent, PageView } from '@prisma/client';
+
+export type IntentClass = 'HIGH' | 'MEDIUM' | 'LOW' | 'RESEARCHER' | 'COMPETITOR' | 'BOT';
+
+export interface IntentScoreResult {
+  score: number;          // 0–100
+  intentClass: IntentClass;
+  breakdown: IntentBreakdown;
+}
+
+export interface IntentBreakdown {
+  scrollScore: number;    // 0–25
+  engagementScore: number; // 0–25
+  pageSequenceScore: number; // 0–20
+  microGestureScore: number; // 0–20
+  conversionScore: number;  // 0–10
+  total: number;          // 0–100
+}
+
+interface SessionData {
+  session: VisitorSession;
+  events: SessionEvent[];
+  pageViews: PageView[];
+}
+
+/**
+ * Calculate intent score for a completed session.
+ *
+ * @param data - Session with its events and page views
+ * @param conversionGoalUrl - The site's conversion goal URL
+ * @returns Score (0–100) and classification
+ */
+export function scoreSessionIntent(
+  data: SessionData,
+  conversionGoalUrl: string | null
+): IntentScoreResult {
+  const { session, events, pageViews } = data;
+
+  // -------------------------------------------------------------------------
+  // Factor 1: Scroll depth (0–25 points)
+  // High intent visitors scroll deep into pages
+  // -------------------------------------------------------------------------
+  const scrollEvents = events.filter(e => e.eventType === 'SCROLL' && e.scrollDepthPct != null);
+  const maxScrollDepth = scrollEvents.length > 0
+    ? Math.max(...scrollEvents.map(e => e.scrollDepthPct!))
+    : 0;
+
+  let scrollScore = 0;
+  if (maxScrollDepth >= 90) scrollScore = 25;
+  else if (maxScrollDepth >= 75) scrollScore = 20;
+  else if (maxScrollDepth >= 50) scrollScore = 15;
+  else if (maxScrollDepth >= 25) scrollScore = 8;
+  else scrollScore = 2;
+
+  // -------------------------------------------------------------------------
+  // Factor 2: Engagement depth (0–25 points)
+  // Time on site + page depth
+  // -------------------------------------------------------------------------
+  const sessionDurationMs = session.durationMs ?? 0;
+  const pageCount = session.pageCount;
+
+  let engagementScore = 0;
+
+  // Time on site
+  if (sessionDurationMs >= 5 * 60 * 1000) engagementScore += 15;       // 5+ min
+  else if (sessionDurationMs >= 2 * 60 * 1000) engagementScore += 10;  // 2+ min
+  else if (sessionDurationMs >= 60 * 1000) engagementScore += 6;       // 1+ min
+  else if (sessionDurationMs >= 30 * 1000) engagementScore += 3;       // 30+ sec
+  else engagementScore += 1;
+
+  // Page depth
+  if (pageCount >= 5) engagementScore += 10;
+  else if (pageCount >= 3) engagementScore += 7;
+  else if (pageCount >= 2) engagementScore += 4;
+  else engagementScore += 1;
+
+  engagementScore = Math.min(25, engagementScore);
+
+  // -------------------------------------------------------------------------
+  // Factor 3: Page sequence (0–20 points)
+  // Did the visitor follow a meaningful path through the funnel?
+  // -------------------------------------------------------------------------
+  let pageSequenceScore = 0;
+
+  // Visited more than just the homepage
+  if (pageCount >= 2) pageSequenceScore += 5;
+
+  // Visited a pricing, features, or product page (common buying signals)
+  const buyingSignalPages = ['pricing', 'plans', 'features', 'product', 'buy', 'checkout'];
+  const visitedBuyingPage = pageViews.some(pv =>
+    buyingSignalPages.some(keyword => pv.url.toLowerCase().includes(keyword))
+  );
+  if (visitedBuyingPage) pageSequenceScore += 10;
+
+  // Visited the conversion goal page
+  if (conversionGoalUrl && pageViews.some(pv => pv.url.includes(conversionGoalUrl))) {
+    pageSequenceScore += 5;
+  }
+
+  pageSequenceScore = Math.min(20, pageSequenceScore);
+
+  // -------------------------------------------------------------------------
+  // Factor 4: Micro-gestures (0–20 points)
+  // CTA interactions, hesitation (signals consideration), form focus
+  // -------------------------------------------------------------------------
+  let microGestureScore = 0;
+
+  const ctaClicks = events.filter(e => e.eventType === 'CLICK' && e.isCtaClick).length;
+  const hesitations = events.filter(e => e.eventType === 'HESITATION').length;
+  const formFocuses = events.filter(e => e.eventType === 'FORM_FOCUS').length;
+  const formSubmits = events.filter(e => e.eventType === 'FORM_SUBMIT').length;
+  const rageClicks = events.filter(e => e.eventType === 'RAGE_CLICK').length;
+
+  microGestureScore += Math.min(8, ctaClicks * 4);  // Up to 8 pts for CTA clicks
+  microGestureScore += Math.min(4, hesitations * 2); // Up to 4 pts for hesitation
+  microGestureScore += Math.min(4, formFocuses * 2); // Up to 4 pts for form focus
+  microGestureScore += formSubmits > 0 ? 4 : 0;      // 4 pts for any form submit
+
+  // Rage clicks are negative signal (frustrated, not buying)
+  microGestureScore -= Math.min(4, rageClicks * 2);
+
+  microGestureScore = Math.max(0, Math.min(20, microGestureScore));
+
+  // -------------------------------------------------------------------------
+  // Factor 5: Conversion (0–10 points)
+  // -------------------------------------------------------------------------
+  let conversionScore = 0;
+  if (session.conversionGoalHit) conversionScore = 10;
+
+  // -------------------------------------------------------------------------
+  // Total score
+  // -------------------------------------------------------------------------
+  const total = scrollScore + engagementScore + pageSequenceScore + microGestureScore + conversionScore;
+
+  const breakdown: IntentBreakdown = {
+    scrollScore,
+    engagementScore,
+    pageSequenceScore,
+    microGestureScore,
+    conversionScore,
+    total,
+  };
+
+  // -------------------------------------------------------------------------
+  // Classification
+  // -------------------------------------------------------------------------
+  const intentClass = classifyIntent(total, session, events);
+
+  return { score: total, intentClass, breakdown };
+}
+
+/**
+ * Classify intent based on score and session signals.
+ * Some classifications override the numeric score.
+ */
+function classifyIntent(
+  score: number,
+  session: VisitorSession,
+  events: SessionEvent[]
+): IntentClass {
+  // Bot was already filtered at ingestion, but double-check
+  if (session.isBotFiltered) return 'BOT';
+
+  // Researcher: Very long session, many pages, no conversion signals
+  // Typical: someone reading docs, comparing options in detail
+  const isResearcher =
+    (session.durationMs ?? 0) > 10 * 60 * 1000 &&  // 10+ min
+    session.pageCount >= 6 &&
+    !session.conversionGoalHit &&
+    events.filter(e => e.isCtaClick).length === 0;
+
+  if (isResearcher) return 'RESEARCHER';
+
+  // Competitor: Very short session, visited pricing page, then left
+  // (heuristic — refine with IP range patterns in future)
+  const isLikelyCompetitor =
+    (session.durationMs ?? 0) < 90 * 1000 &&        // Under 90 sec
+    events.some(e => e.pageUrl?.toLowerCase().includes('pricing'));
+
+  if (isLikelyCompetitor) return 'COMPETITOR';
+
+  // Standard intent classification
+  if (score >= 70) return 'HIGH';
+  if (score >= 40) return 'MEDIUM';
+  return 'LOW';
+}

@@ -1,0 +1,119 @@
+/**
+ * DL-01: IP Anonymization on Ingestion
+ *
+ * LEGAL NON-NEGOTIABLE: Raw IP addresses must NEVER be written to the database.
+ * This module runs synchronously on the ingestion API before any database write.
+ *
+ * What we store:
+ *   - ipHash: SHA-256 of (ip + site-specific salt). One-way. Cannot be reversed.
+ *   - country: Derived from IP via geolocation lookup, then IP is discarded.
+ *   - region: Optional, derived from IP, then IP is discarded.
+ *
+ * What we NEVER store:
+ *   - Raw IP address
+ *   - Full geolocation (city, lat/lng)
+ *   - Any data that could re-identify a visitor
+ *
+ * Used by:
+ *   - src/app/api/ingest/route.ts (session ingestion)
+ *   - src/app/api/onboarding/route.ts (DPA acceptance logging)
+ */
+
+import { createHash } from 'crypto';
+
+/**
+ * Hash an IP address with a site-specific salt.
+ * The salt ensures that the same IP on two different sites produces different hashes,
+ * preventing cross-site visitor tracking.
+ *
+ * @param ip - Raw IP address (IPv4 or IPv6). Discarded after hashing.
+ * @param siteId - Site ID used as salt component.
+ * @returns One-way hash safe to store in the database.
+ */
+export function hashIp(ip: string, siteId: string): string {
+  // Normalize IPv6 loopback to IPv4 form
+  const normalizedIp = ip === '::1' ? '127.0.0.1' : ip;
+
+  // Site-specific salt prevents cross-site correlation
+  const saltedInput = `${normalizedIp}:${siteId}:webgrade-v1`;
+
+  return createHash('sha256').update(saltedInput).digest('hex');
+}
+
+/**
+ * Extract country and region from an IP address using Vercel's geo headers.
+ * If not available (local dev, non-Vercel), returns null.
+ *
+ * Vercel injects these headers automatically in production:
+ *   x-vercel-ip-country: "US"
+ *   x-vercel-ip-country-region: "CA"
+ *
+ * @param headers - Request headers object
+ * @returns { country, region } or nulls if not available
+ */
+export function extractGeoFromHeaders(headers: Headers): {
+  country: string | null;
+  region: string | null;
+} {
+  return {
+    country: headers.get('x-vercel-ip-country'),
+    region: headers.get('x-vercel-ip-country-region'),
+  };
+}
+
+/**
+ * Extract the real client IP from request headers.
+ * Handles proxies and load balancers (Vercel, Cloudflare, etc.)
+ *
+ * IMPORTANT: This IP is used ONLY for hashing and geo extraction.
+ * It is NEVER passed to any database write function.
+ *
+ * @param headers - Request headers object
+ * @returns Raw IP string (to be hashed immediately, never stored)
+ */
+export function extractRawIp(headers: Headers): string {
+  // Vercel: real client IP
+  const vercelIp = headers.get('x-real-ip');
+  if (vercelIp) return vercelIp;
+
+  // Cloudflare: connecting IP
+  const cfIp = headers.get('cf-connecting-ip');
+  if (cfIp) return cfIp;
+
+  // Standard forwarded header (take first IP = original client)
+  const forwarded = headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+
+  // Fallback for local dev
+  return '127.0.0.1';
+}
+
+/**
+ * Combined helper: extract and immediately hash the IP.
+ * Call this at the top of any ingestion handler.
+ * The raw IP never leaves this function.
+ *
+ * @param headers - Request headers
+ * @param siteId - Site ID for per-site salt
+ * @returns { ipHash, country, region } — all safe to store
+ */
+export function anonymizeRequest(
+  headers: Headers,
+  siteId: string
+): {
+  ipHash: string;
+  country: string | null;
+  region: string | null;
+} {
+  // 1. Extract raw IP (temporary, never stored)
+  const rawIp = extractRawIp(headers);
+
+  // 2. Hash immediately — rawIp is not returned or stored
+  const ipHash = hashIp(rawIp, siteId);
+
+  // 3. Extract geo from Vercel headers (IP itself not needed)
+  const { country, region } = extractGeoFromHeaders(headers);
+
+  // rawIp goes out of scope here and is never persisted
+  return { ipHash, country, region };
+}
