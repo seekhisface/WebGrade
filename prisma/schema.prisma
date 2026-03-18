@@ -12,9 +12,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // =============================================================================
@@ -89,17 +88,18 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members OrgMember[]
-  sites   Site[]
+  members             OrgMember[]
+  sites               Site[]
+  reportDistributions ReportDistribution[]
 
   @@map("organizations")
 }
 
 model OrgMember {
-  id     String   @id @default(cuid())
-  orgId  String
-  userId String
-  role   OrgRole  @default(VIEWER)
+  id       String   @id @default(cuid())
+  orgId    String
+  userId   String
+  role     OrgRole  @default(VIEWER)
   joinedAt DateTime @default(now())
 
   org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -121,19 +121,19 @@ enum OrgRole {
 // =============================================================================
 
 model Site {
-  id          String      @id @default(cuid())
+  id          String        @id @default(cuid())
   orgId       String
   name        String
-  domain      String      // e.g. "hellonote.com" (no protocol)
-  url         String      // e.g. "https://hellonote.com"
+  domain      String // e.g. "hellonote.com" (no protocol)
+  url         String // e.g. "https://hellonote.com"
   platform    SitePlatform?
-  timezone    String      @default("America/New_York")
+  timezone    String        @default("America/New_York")
   industry    String?
-  description String?     @db.Text
-  dataRegion  DataRegion  @default(US)
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  description String?       @db.Text
+  dataRegion  DataRegion    @default(US)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   // Product assignments
   hasInterimReport Boolean @default(false)
@@ -146,23 +146,30 @@ model Site {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   // Relationships across all modules
-  onboarding          SiteOnboarding?
-  baselines           SiteBaseline[]
-  healthChecks        SiteHealthCheck[]
-  visitorSessions     VisitorSession[]
-  seoPageResults      SeoPageResult[]
-  seoCrawls           SeoCrawl[]
-  adSources           AdSource[]
-  reports             Report[]
-  alerts              Alert[]
-  alertSettings       AlertSetting[]
-  recommendations     Recommendation[]
-  measurementJobs     MeasurementJob[]
-  impactReports       ImpactReport[]
-  webOppAnalyses      WebOppAnalysis[]
-  dpaAcceptances      DpaAcceptance[]
-  dataRetentionLogs   DataRetentionLog[]
-  competitorSnapshots CompetitorSnapshot[]
+  onboarding               SiteOnboarding?
+  baselines                SiteBaseline[]
+  healthChecks             SiteHealthCheck[]
+  visitorSessions          VisitorSession[]
+  seoPageResults           SeoPageResult[]
+  seoCrawls                SeoCrawl[]
+  adSources                AdSource[]
+  reports                  Report[]
+  alerts                   Alert[]
+  alertSettings            AlertSetting[]
+  recommendations          Recommendation[]
+  measurementJobs          MeasurementJob[]
+  impactReports            ImpactReport[]
+  webOppAnalyses           WebOppAnalysis[]
+  dpaAcceptances           DpaAcceptance[]
+  dataRetentionLogs        DataRetentionLog[]
+  competitorSnapshots      CompetitorSnapshot[]
+  siteInstallations        SiteInstallation[]
+  sessionEvents            SessionEvent[]
+  pageViews                PageView[]
+  webOppKeywordClusters    WebOppKeywordCluster[]
+  reportDistributions      ReportDistribution[]
+  retentionTargets         SnippetRetentionTarget[]
+  MonthlyPerformanceReport MonthlyPerformanceReport[]
 
   @@index([orgId])
   @@index([domain])
@@ -213,21 +220,21 @@ model SiteOnboarding {
   competitorUrls String[] @default([])
 
   // Step 4: GA4 connection (OB-03)
-  ga4PropertyId    String?
-  ga4AccessToken   String? // Encrypted at application layer
-  ga4RefreshToken  String? // Encrypted at application layer
+  ga4PropertyId         String?
+  ga4AccessToken        String? // Encrypted at application layer
+  ga4RefreshToken       String? // Encrypted at application layer
   ga4BaselineImportedAt DateTime?
 
   // Step 5: Goals & industry context
-  monthlyAdSpend       Float?
-  averageOrderValue    Float?
-  leadToWinRate        Float? // 0.0–1.0
-  conversionRate       Float? // 0.0–1.0
+  monthlyAdSpend    Float?
+  averageOrderValue Float?
+  leadToWinRate     Float? // 0.0–1.0
+  conversionRate    Float? // 0.0–1.0
 
   // Completion state
-  isComplete    Boolean  @default(false)
-  completedAt   DateTime?
-  completedSteps Int[]   @default([]) // Steps completed: [1,2,3,4,5]
+  isComplete     Boolean   @default(false)
+  completedAt    DateTime?
+  completedSteps Int[]     @default([]) // Steps completed: [1,2,3,4,5]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -239,12 +246,12 @@ model SiteOnboarding {
 
 // OB-02: Site baselines — versioned, never overwritten
 model SiteBaseline {
-  id        String   @id @default(cuid())
-  siteId    String
-  metricKey String   // e.g. "sessions_90d", "bounce_rate", "conversion_rate"
-  value     Float
-  period    String   // e.g. "2024-Q4", "2025-01"
-  source    String   // e.g. "ga4_import", "manual", "webgrade_calculated"
+  id         String   @id @default(cuid())
+  siteId     String
+  metricKey  String // e.g. "sessions_90d", "bounce_rate", "conversion_rate"
+  value      Float
+  period     String // e.g. "2024-Q4", "2025-01"
+  source     String // e.g. "ga4_import", "manual", "webgrade_calculated"
   capturedAt DateTime @default(now())
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -255,14 +262,14 @@ model SiteBaseline {
 
 // OB-04: Competitor snapshots (Puppeteer crawl, refreshed monthly)
 model CompetitorSnapshot {
-  id          String   @id @default(cuid())
-  siteId      String
-  competitorUrl String
-  aboveFold   String?  @db.Text // Extracted above-fold content
-  ctaText     String?
-  pricingFound Boolean @default(false)
+  id             String   @id @default(cuid())
+  siteId         String
+  competitorUrl  String
+  aboveFold      String?  @db.Text // Extracted above-fold content
+  ctaText        String?
+  pricingFound   Boolean  @default(false)
   pageSpeedScore Float?
-  crawledAt   DateTime @default(now())
+  crawledAt      DateTime @default(now())
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
@@ -284,32 +291,32 @@ model CompetitorSnapshot {
 // =============================================================================
 
 model SiteHealthCheck {
-  id      String @id @default(cuid())
-  siteId  String
+  id        String   @id @default(cuid())
+  siteId    String
   checkedAt DateTime @default(now())
 
   // HC-01: Snippet
-  snippetFires          Boolean?
-  snippetFireTimeMs     Int?     // Time for first event to fire
-  snippetStatus         HealthStatus @default(UNKNOWN)
+  snippetFires      Boolean?
+  snippetFireTimeMs Int? // Time for first event to fire
+  snippetStatus     HealthStatus @default(UNKNOWN)
 
   // HC-02: SPA
-  spaFramework         String?   // "react", "vue", "angular", "next", null
-  spaRouteEventsWork   Boolean?
-  spaStatus            HealthStatus @default(UNKNOWN)
+  spaFramework       String? // "react", "vue", "angular", "next", null
+  spaRouteEventsWork Boolean?
+  spaStatus          HealthStatus @default(UNKNOWN)
 
   // HC-03: Conversion goal
-  conversionGoalReachable Boolean?
+  conversionGoalReachable    Boolean?
   conversionGoalSnippetFires Boolean?
-  conversionGoalStatus    HealthStatus @default(UNKNOWN)
+  conversionGoalStatus       HealthStatus @default(UNKNOWN)
 
   // HC-04: UTM
-  utmPreservedToGoal    Boolean?
-  utmStrippingDetected  Boolean?
-  utmStatus             HealthStatus @default(UNKNOWN)
+  utmPreservedToGoal   Boolean?
+  utmStrippingDetected Boolean?
+  utmStatus            HealthStatus @default(UNKNOWN)
 
   // HC-05: Duplicate script
-  duplicateSnippetCount Int      @default(0)
+  duplicateSnippetCount Int          @default(0)
   duplicateStatus       HealthStatus @default(UNKNOWN)
 
   // HC-06: Consent interference
@@ -318,19 +325,19 @@ model SiteHealthCheck {
   consentStatus         HealthStatus @default(UNKNOWN)
 
   // HC-07: Bot traffic
-  estimatedBotPercent   Float?
-  botStatus             HealthStatus @default(UNKNOWN)
+  estimatedBotPercent Float?
+  botStatus           HealthStatus @default(UNKNOWN)
 
   // HC-08: Page speed
-  lighthouseLcp         Float?   // Largest Contentful Paint (s)
-  lighthouseFid         Float?   // First Input Delay (ms)
-  lighthouseCls         Float?   // Cumulative Layout Shift
-  lighthouseScore       Int?     // 0–100
-  pageSpeedStatus       HealthStatus @default(UNKNOWN)
+  lighthouseLcp   Float? // Largest Contentful Paint (s)
+  lighthouseFid   Float? // First Input Delay (ms)
+  lighthouseCls   Float? // Cumulative Layout Shift
+  lighthouseScore Int? // 0–100
+  pageSpeedStatus HealthStatus @default(UNKNOWN)
 
   // Overall
-  overallStatus         HealthStatus @default(UNKNOWN)
-  fixInstructions       Json?    // Per-check fix instructions
+  overallStatus   HealthStatus @default(UNKNOWN)
+  fixInstructions Json? // Per-check fix instructions
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
@@ -359,11 +366,11 @@ enum HealthStatus {
 // =============================================================================
 
 model SiteInstallation {
-  id          String          @id @default(cuid())
-  siteId      String          @unique
-  method      InstallMethod?
-  status      InstallStatus   @default(PENDING)
-  installedAt DateTime?
+  id             String         @id @default(cuid())
+  siteId         String         @unique
+  method         InstallMethod?
+  status         InstallStatus  @default(PENDING)
+  installedAt    DateTime?
   lastVerifiedAt DateTime?
 
   // GTM-specific
@@ -374,10 +381,12 @@ model SiteInstallation {
   // Platform-specific OAuth tokens (encrypted at application layer)
   platformAccessToken  String?
   platformRefreshToken String?
-  platformMetadata     Json?   // Platform-specific data
+  platformMetadata     Json? // Platform-specific data
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_installations")
 }
@@ -411,18 +420,18 @@ enum InstallStatus {
 // A visitor session — one visit to the site
 // CRITICAL (DL-01): ipAddress is NEVER stored. ipHash and country only.
 model VisitorSession {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   siteId    String
-  sessionId String   // Pseudonymous ID from client (not linked to identity)
+  sessionId String // Pseudonymous ID from client (not linked to identity)
 
   // DL-01: IP anonymization — raw IP never stored
-  ipHash    String   // SHA-256 of IP, salted per-site
-  country   String?  // Derived from IP geolocation, IP then discarded
-  region    String?
+  ipHash  String // SHA-256 of IP, salted per-site
+  country String? // Derived from IP geolocation, IP then discarded
+  region  String?
 
   // Device & browser
-  userAgent  String?  @db.Text
-  deviceType String?  // "desktop", "mobile", "tablet"
+  userAgent  String? @db.Text
+  deviceType String? // "desktop", "mobile", "tablet"
   browser    String?
   os         String?
 
@@ -440,19 +449,19 @@ model VisitorSession {
   durationMs Int?
 
   // Classification (P1-06)
-  intentScore Int?           // 0–100
-  intentClass IntentClass?
-  isBotFiltered Boolean       @default(false) // P1-05
-  botReason   String?
+  intentScore   Int? // 0–100
+  intentClass   IntentClass?
+  isBotFiltered Boolean      @default(false) // P1-05
+  botReason     String?
 
   // Pages visited
-  pageCount   Int      @default(0)
-  entryPage   String?
-  exitPage    String?
+  pageCount Int     @default(0)
+  entryPage String?
+  exitPage  String?
 
   // Conversion
-  convertedAt     DateTime?
-  conversionGoalHit Boolean  @default(false)
+  convertedAt       DateTime?
+  conversionGoalHit Boolean   @default(false)
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
@@ -486,7 +495,7 @@ model SessionEvent {
   timestamp DateTime  @default(now())
 
   // Scroll events
-  scrollDepthPct Int?    // 0–100
+  scrollDepthPct Int? // 0–100
 
   // Click events
   elementTag   String?
@@ -495,7 +504,7 @@ model SessionEvent {
   isCtaClick   Boolean @default(false)
 
   // Hesitation / rage click
-  hesitationMs Int?    // Time spent hovering before action
+  hesitationMs   Int? // Time spent hovering before action
   rageClickCount Int?
 
   // Page timing
@@ -505,6 +514,7 @@ model SessionEvent {
   metadata Json?
 
   session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([siteId, eventType, timestamp])
@@ -521,34 +531,35 @@ enum EventType {
   FORM_FOCUS
   FORM_SUBMIT
   CONVERSION
-  ROUTE_CHANGE  // SPA navigation
+  ROUTE_CHANGE // SPA navigation
   CUSTOM
 }
 
 // Page-level behavioral aggregates
 model PageView {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   sessionId String
   siteId    String
   url       String
   title     String?
-  enteredAt DateTime @default(now())
+  enteredAt DateTime  @default(now())
   exitedAt  DateTime?
 
   // Engagement
-  timeOnPageMs      Int?
-  maxScrollDepthPct Int?     // 0–100
-  clickCount        Int      @default(0)
-  rageClickCount    Int      @default(0)
-  hesitationCount   Int      @default(0)
-  isExit            Boolean  @default(false)
+  timeOnPageMs       Int?
+  maxScrollDepthPct  Int? // 0–100
+  clickCount         Int     @default(0)
+  rageClickCount     Int     @default(0)
+  hesitationCount    Int     @default(0)
+  isExit             Boolean @default(false)
   exitIntentDetected Boolean @default(false)
 
   // Drop-off (P1-07)
-  isDropOffPage     Boolean  @default(false)
+  isDropOffPage       Boolean @default(false)
   storylineBreakpoint Boolean @default(false)
 
   session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([siteId, url])
@@ -570,22 +581,22 @@ model PageView {
 // =============================================================================
 
 model SeoCrawl {
-  id        String   @id @default(cuid())
-  siteId    String
-  startedAt DateTime @default(now())
-  completedAt DateTime?
-  pagesFound Int     @default(0)
-  pagesAnalyzed Int  @default(0)
-  crawlStatus CrawlStatus @default(RUNNING)
+  id            String      @id @default(cuid())
+  siteId        String
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
+  pagesFound    Int         @default(0)
+  pagesAnalyzed Int         @default(0)
+  crawlStatus   CrawlStatus @default(RUNNING)
 
   // Overall scores
-  overallSeoScore     Int? // 0–100
-  technicalScore      Int?
-  onPageScore         Int?
-  contentScore        Int?
-  crawlabilityScore   Int?
+  overallSeoScore   Int? // 0–100
+  technicalScore    Int?
+  onPageScore       Int?
+  contentScore      Int?
+  crawlabilityScore Int?
 
-  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site        Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
   pageResults SeoPageResult[]
 
   @@index([siteId, startedAt])
@@ -600,25 +611,25 @@ enum CrawlStatus {
 }
 
 model SeoPageResult {
-  id       String   @id @default(cuid())
-  crawlId  String
-  siteId   String
-  url      String
+  id        String   @id @default(cuid())
+  crawlId   String
+  siteId    String
+  url       String
   crawledAt DateTime @default(now())
 
   // HTTP
-  statusCode    Int?
+  statusCode     Int?
   responseTimeMs Int?
-  redirectChain String[]  @default([])
-  canonicalUrl  String?
+  redirectChain  String[] @default([])
+  canonicalUrl   String?
 
   // Lighthouse (P2-02)
-  lcp           Float?  // Largest Contentful Paint (s)
-  fid           Float?  // First Input Delay (ms)
-  cls           Float?  // Cumulative Layout Shift
-  ttfb          Float?  // Time to First Byte (s)
-  mobileScore   Int?    // 0–100
-  desktopScore  Int?
+  lcp          Float? // Largest Contentful Paint (s)
+  fid          Float? // First Input Delay (ms)
+  cls          Float? // Cumulative Layout Shift
+  ttfb         Float? // Time to First Byte (s)
+  mobileScore  Int? // 0–100
+  desktopScore Int?
 
   // On-page SEO (P2-03)
   title           String? @db.Text
@@ -628,35 +639,35 @@ model SeoPageResult {
   h1Count         Int?
   h1Text          String? @db.Text
   h2Count         Int?
-  altTextMissing  Int?    // Count of images missing alt text
+  altTextMissing  Int? // Count of images missing alt text
   internalLinks   Int?
   externalLinks   Int?
   wordCount       Int?
-  onPageScore     Int?    // 0–100
+  onPageScore     Int? // 0–100
 
   // Technical (P2-04)
-  isMobileResponsive  Boolean?
+  isMobileResponsive    Boolean?
   renderBlockingScripts Int?
-  hasStructuredData   Boolean?
-  jsRenderRequired    Boolean?
-  frameworkDetected   String?
+  hasStructuredData     Boolean?
+  jsRenderRequired      Boolean?
+  frameworkDetected     String?
 
   // Crawlability (P2-06)
-  isIndexable        Boolean?
-  hasNoindex         Boolean?
-  robotsTxtBlocked   Boolean?
-  isInSitemap        Boolean?
-  crawlDepth         Int?
-  isOrphanPage       Boolean?
+  isIndexable      Boolean?
+  hasNoindex       Boolean?
+  robotsTxtBlocked Boolean?
+  isInSitemap      Boolean?
+  crawlDepth       Int?
+  isOrphanPage     Boolean?
 
   // Content (P2-05)
-  contentScore       Int?    // 0–100
-  searchIntentMatch  Float?  // 0.0–1.0
-  isThinContent      Boolean?
-  isOutdated         Boolean?
+  contentScore      Int? // 0–100
+  searchIntentMatch Float? // 0.0–1.0
+  isThinContent     Boolean?
+  isOutdated        Boolean?
 
   // Aggregated issues list
-  issues Json[]  @default([]) // Array of {type, severity, description, fix}
+  issues Json[] @default([]) // Array of {type, severity, description, fix}
 
   crawl SeoCrawl @relation(fields: [crawlId], references: [id], onDelete: Cascade)
   site  Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -681,41 +692,41 @@ model SeoPageResult {
 // =============================================================================
 
 model AdSource {
-  id      String @id @default(cuid())
-  siteId  String
+  id     String @id @default(cuid())
+  siteId String
 
   // UTM dimensions
-  source   String  // e.g. "google", "facebook", "email"
-  medium   String  // e.g. "cpc", "social", "newsletter"
+  source   String // e.g. "google", "facebook", "email"
+  medium   String // e.g. "cpc", "social", "newsletter"
   campaign String?
   term     String?
   content  String?
 
   // Quality scoring (P3-02)
-  qualityScore    Int?   // 0–100
-  avgIntentScore  Float?
-  avgScrollDepth  Float?
-  conversionRate  Float?
+  qualityScore   Int? // 0–100
+  avgIntentScore Float?
+  avgScrollDepth Float?
+  conversionRate Float?
 
   // Wasted spend flags (P3-05)
-  has404LandingPage Boolean @default(false)
-  hasSlowLandingPage Boolean @default(false)
-  hasZeroConversions Boolean @default(false)
+  has404LandingPage    Boolean @default(false)
+  hasSlowLandingPage   Boolean @default(false)
+  hasZeroConversions   Boolean @default(false)
   estimatedWastedSpend Float? // $ per month
 
   // Platform data (P3-09)
-  platformSpend       Float?  // From Google Ads / Meta
+  platformSpend       Float? // From Google Ads / Meta
   platformImpressions Int?
   platformClicks      Int?
   platformCpc         Float?
 
   // Time-of-day data (P3-03) — stored as JSON arrays [hour0..hour23]
-  intentByHour    Json?  // avg intent score per hour
+  intentByHour     Json? // avg intent score per hour
   conversionByHour Json? // conversion rate per hour
 
   // Landing page alignment (P3-04)
   landingPageUrl        String?
-  landingPageAlignScore Int?   // 0–100 NLP match
+  landingPageAlignScore Int? // 0–100 NLP match
 
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
@@ -741,54 +752,61 @@ model AdSource {
 // =============================================================================
 
 model Report {
-  id      String     @id @default(cuid())
-  siteId  String
-  type    ReportType
-  status  ReportStatus @default(GENERATING)
+  id     String       @id @default(cuid())
+  siteId String
+  type   ReportType
+  status ReportStatus @default(GENERATING)
 
   // Version (P4-04)
-  version  Int      @default(1)
-  isDiff   Boolean  @default(false) // True if compared to previous
+  version Int     @default(1)
+  isDiff  Boolean @default(false) // True if compared to previous
 
   // Period covered
   periodStart DateTime
   periodEnd   DateTime
 
   // Segment 1: Behavioral + Ad Spend
-  behavioralSummary  String? @db.Text
-  adSpendSummary     String? @db.Text
-  totalWastedSpend   Float?
+  behavioralSummary String? @db.Text
+  adSpendSummary    String? @db.Text
+  totalWastedSpend  Float?
 
   // Segment 2: SEO
-  seoScore        Int?
-  seoIssueCount   Int?
-  seoSummary      String? @db.Text
+  seoScore      Int?
+  seoIssueCount Int?
+  seoSummary    String? @db.Text
 
   // Executive summary (P4-02)
   executiveSummary   String? @db.Text
-  topFindings        Json?   // Array of finding objects
-  topRecommendations Json?   // Array of recommendation objects
+  topFindings        Json? // Array of finding objects
+  topRecommendations Json? // Array of recommendation objects
   estimatedImpact    String? @db.Text
 
   // PDF (P4-07)
-  pdfUrl    String?
-  pdfGenAt  DateTime?
+  pdfUrl   String?
+  pdfGenAt DateTime?
 
-  generatedAt DateTime?
-  createdAt   DateTime  @default(now())
+  // RT-01 Win-back share link
+  shareToken      String?   @unique
+  shareExpiresAt  DateTime?
+  shareUnlockedAt DateTime?
+  shareRecipient  String?
+  generatedAt     DateTime?
+  createdAt       DateTime  @default(now())
 
-  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  recommendations Recommendation[]
-  abTestIdeas     AbTestIdea[]
+  site                     Site                       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  recommendations          Recommendation[]
+  monthlyPerformanceReport MonthlyPerformanceReport[]
+  abTestIdeas              AbTestIdea[]
 
   @@index([siteId, createdAt])
   @@map("reports")
 }
 
 enum ReportType {
-  INTERIM      // WebGrade Interim Report™ (one-time)
-  WEBWATCH     // WebWatch™ continuous report
-  WEBOPP       // WebOpp™ market intelligence
+  INTERIM // WebGrade Interim Report™ (one-time)
+  WEBWATCH // WebWatch™ continuous report
+  WEBOPP // WebOpp™ market intelligence
+  WINBACK // RT-01 Win-back / prospect teaser report
 }
 
 enum ReportStatus {
@@ -800,15 +818,15 @@ enum ReportStatus {
 
 // P4-06: A/B test ideas per recommendation
 model AbTestIdea {
-  id             String @id @default(cuid())
-  reportId       String
+  id               String  @id @default(cuid())
+  reportId         String
   recommendationId String?
 
-  hypothesis     String @db.Text
-  variant        String @db.Text  // What to change
-  successMetric  String          // How to measure
-  estimatedLift  String?         // e.g. "+5-15% conversion"
-  priority       Int    @default(5) // 1–10
+  hypothesis    String  @db.Text
+  variant       String  @db.Text // What to change
+  successMetric String // How to measure
+  estimatedLift String? // e.g. "+5-15% conversion"
+  priority      Int     @default(5) // 1–10
 
   createdAt DateTime @default(now())
 
@@ -829,30 +847,98 @@ model AbTestIdea {
 // EP-08: CSV export
 // =============================================================================
 
+// Monthly performance snapshot — stores the living monthly report
+// with AI narrative, trend data, and recommendation verdicts
+model MonthlyPerformanceReport {
+  id       String  @id @default(cuid())
+  siteId   String
+  reportId String? // Links to the parent Report if generated from one
+
+  // Period
+  year  Int
+  month Int // 1–12
+  label String // e.g. "March 2026"
+
+  // Comparison mode
+  comparisonMode   ComparisonMode @default(VS_BASELINE)
+  baselineLabel    String? // e.g. "December 2025"
+  priorPeriodLabel String? // e.g. "February 2026"
+
+  // Executive AI narrative (Claude-generated)
+  executiveNarrative String @db.Text
+  praisePoints       Json? // [{title, detail, dollarImpact}]
+  concernPoints      Json? // [{title, detail, daysSinceFlag, estimatedCost}]
+  topOpportunities   Json? // [{rank, title, metricNow, metricBaseline, dollarImpact, isRepeat}]
+  contradictions     Json? // [{recId, title, customerClaim, aiFindings}]
+
+  // Key metric snapshots this month
+  sessionsThisMonth   Float?
+  sessionsBaseline    Float?
+  sessionsMoM         Float? // % change vs prior month
+  sessionsPctBaseline Float? // % change vs baseline
+
+  intentScoreNow      Float?
+  intentScoreBaseline Float?
+  intentScoreMoM      Float?
+
+  conversionRateNow      Float?
+  conversionRateBaseline Float?
+
+  revenueAtRiskNow      Float?
+  revenueRecoveredTotal Float? // cumulative since baseline
+
+  // Implementation summary
+  totalRecs       Int @default(0)
+  verifiedFixed   Int @default(0)
+  inProgress      Int @default(0)
+  stalled         Int @default(0)
+  contradictions2 Int @default(0) // renamed to avoid conflict
+  openUnacted     Int @default(0)
+
+  // Grade (A–F, computed from metrics + implementation)
+  performanceGrade String? // "B+", "C", "A-"
+
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  site   Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id])
+
+  @@unique([siteId, year, month])
+  @@index([siteId, year, month])
+  @@map("monthly_performance_reports")
+}
+
+enum ComparisonMode {
+  VS_BASELINE // Default: month 1–11
+  VS_PRIOR_YEAR // YoY: month 12+
+  VS_PRIOR_MONTH // MoM: always available as secondary
+}
+
 model Recommendation {
-  id      String @id @default(cuid())
-  siteId  String
+  id       String  @id @default(cuid())
+  siteId   String
   reportId String?
 
   // Source module
   sourceModule SourceModule
 
   // Content
-  title       String      @db.Text
-  finding     String      @db.Text
-  fixAction   String      @db.Text
-  expectedResult String?  @db.Text
+  title          String  @db.Text
+  finding        String  @db.Text
+  fixAction      String  @db.Text
+  expectedResult String? @db.Text
 
   // Priority scoring (EP-01): Impact × Effort × Confidence
-  impactScore     Int  // 1–10
-  effortScore     Int  // 1–10 (lower = less effort)
-  confidenceScore Int  // 1–10
-  priorityScore   Int  // Computed: impact × (11 - effort) × confidence
+  impactScore     Int // 1–10
+  effortScore     Int // 1–10 (lower = less effort)
+  confidenceScore Int // 1–10
+  priorityScore   Int // Computed: impact × (11 - effort) × confidence
 
   // Task card state (EP-02)
-  fixType    FixType   @default(UNKNOWN)
-  status     TaskStatus @default(TODO)
-  assignee   String?
+  fixType     FixType    @default(UNKNOWN)
+  status      TaskStatus @default(TODO)
+  assignee    String?
   completedAt DateTime?
 
   // Integration sync
@@ -860,6 +946,32 @@ model Recommendation {
   jiraIssueId   String?
   asanaTaskId   String?
   notionPageId  String?
+
+  // Implementation lifecycle tracking
+  implementationStatus ImplementationStatus @default(OPEN)
+  customerNote         String?              @db.Text // What customer said they did
+  customerUpdatedAt    DateTime? // When they last updated status
+
+  // Baseline metric snapshot (captured when recommendation was created)
+  baselineMetricKey   String? // e.g. "exit_rate", "lcp_ms", "intent_score"
+  baselineMetricValue Float? // e.g. 0.54 (54% exit rate)
+  baselineMetricLabel String? // e.g. "54% exit rate"
+  targetMetricValue   Float? // e.g. 0.30 (target: 30%)
+
+  // AI verification (run monthly)
+  lastVerifiedAt     DateTime?
+  lastVerifiedValue  Float? // Current metric value as of last check
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  verificationNote   String?            @db.Text // AI's assessment
+  contradictionFlag  Boolean            @default(false) // Customer said done, AI disagrees
+  contradictionNote  String?            @db.Text
+
+  // Monthly snapshots (stored as JSON array: [{month, value, note}])
+  metricHistory Json? // Array of monthly readings
+
+  // Revenue tracking
+  estimatedMonthlyImpact Float? // $/mo if fixed
+  recoveredMonthlyValue  Float? // $/mo actually recovered (AI verified)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -870,6 +982,7 @@ model Recommendation {
 
   @@index([siteId, priorityScore])
   @@index([siteId, status])
+  @@index([siteId, implementationStatus])
   @@map("recommendations")
 }
 
@@ -898,6 +1011,25 @@ enum TaskStatus {
   DISMISSED
 }
 
+enum ImplementationStatus {
+  OPEN // New finding, no action taken
+  IN_PROGRESS // Customer clicked "Working on this"
+  IMPLEMENTED // Customer marked done
+  VERIFIED // AI confirmed metric improvement
+  STALLED // In progress >30 days with no movement
+  ABANDONED // Customer won't fix, or 60 days OPEN with no movement
+  CONTRADICTION // Customer said fixed, AI sees no improvement
+}
+
+enum VerificationStatus {
+  UNVERIFIED // Not yet checked by AI
+  IMPROVED // Metric moved in right direction
+  PARTIAL // Some improvement, not at target
+  NO_CHANGE // Metric unchanged since baseline
+  REGRESSED // Metric got worse
+  INSUFFICIENT_DATA // Not enough data to verify
+}
+
 // =============================================================================
 // SECTION 14: ALERT SYSTEM
 // AL-01: Alert rules engine
@@ -910,22 +1042,22 @@ enum TaskStatus {
 // =============================================================================
 
 model Alert {
-  id          String      @id @default(cuid())
-  siteId      String
-  alertType   AlertType
-  severity    AlertSeverity
+  id            String        @id @default(cuid())
+  siteId        String
+  alertType     AlertType
+  severity      AlertSeverity
   productModule SourceModule
 
   // Content
-  message     String @db.Text
-  metadata    Json?   // Alert-specific context data
+  message  String @db.Text
+  metadata Json? // Alert-specific context data
 
   // Lifecycle
-  triggeredAt  DateTime  @default(now())
-  resolvedAt   DateTime?
-  acknowledgedAt DateTime?
-  resolvedAutomatically Boolean @default(false)
-  resolutionTimeMs Int?   // For SLA tracking
+  triggeredAt           DateTime  @default(now())
+  resolvedAt            DateTime?
+  acknowledgedAt        DateTime?
+  resolvedAutomatically Boolean   @default(false)
+  resolutionTimeMs      Int? // For SLA tracking
 
   // Delivery
   emailSentAt DateTime?
@@ -971,18 +1103,18 @@ enum AlertSeverity {
 }
 
 model AlertSetting {
-  id      String @id @default(cuid())
-  siteId  String
+  id     String @id @default(cuid())
+  siteId String
 
-  alertType   AlertType
-  isEnabled   Boolean   @default(true)
-  severity    AlertSeverity
+  alertType AlertType
+  isEnabled Boolean       @default(true)
+  severity  AlertSeverity
 
   // Channels
-  emailEnabled Boolean @default(true)
-  slackEnabled Boolean @default(false)
-  slackChannel String?
-  smsEnabled   Boolean @default(false)
+  emailEnabled  Boolean  @default(true)
+  slackEnabled  Boolean  @default(false)
+  slackChannel  String?
+  smsEnabled    Boolean  @default(false)
   smsRecipients String[] @default([])
 
   // Quiet hours (24h format, e.g. 22 = 10pm)
@@ -1011,15 +1143,15 @@ model AlertSetting {
 // =============================================================================
 
 model MeasurementJob {
-  id               String @id @default(cuid())
-  recommendationId String @unique
+  id               String       @id @default(cuid())
+  recommendationId String       @unique
   siteId           String // Denormalized for query efficiency
   productModule    SourceModule
 
   // Timeline
-  createdAt       DateTime @default(now())
+  createdAt        DateTime  @default(now())
   measureAfterDate DateTime
-  completedAt     DateTime?
+  completedAt      DateTime?
 
   // Results
   status        MeasurementStatus @default(PENDING)
@@ -1034,6 +1166,7 @@ model MeasurementJob {
   narrative String? @db.Text
 
   recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  site           Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId, status])
   @@map("measurement_jobs")
@@ -1054,23 +1187,23 @@ enum ResultType {
 }
 
 model ImpactReport {
-  id      String @id @default(cuid())
-  siteId  String
-  period  String // e.g. "2025-03"
+  id     String @id @default(cuid())
+  siteId String
+  period String // e.g. "2025-03"
 
   // Aggregated results
-  tasksCompleted      Int    @default(0)
-  tasksWorked         Int    @default(0)
-  winRate             Float?
-  conversionLiftPct   Float?
-  estimatedSpendSaved Float?
+  tasksCompleted           Int    @default(0)
+  tasksWorked              Int    @default(0)
+  winRate                  Float?
+  conversionLiftPct        Float?
+  estimatedSpendSaved      Float?
   estimatedRevenueCaptured Float?
 
   // AI narrative
   summary String? @db.Text
 
   // Email delivery
-  sentAt  DateTime?
+  sentAt    DateTime?
   emailedTo String[]
 
   generatedAt DateTime @default(now())
@@ -1100,11 +1233,11 @@ model ImpactReport {
 // =============================================================================
 
 model WebOppAnalysis {
-  id      String @id @default(cuid())
-  siteId  String
+  id     String @id @default(cuid())
+  siteId String
 
-  status  AnalysisStatus @default(RUNNING)
-  startedAt DateTime     @default(now())
+  status      AnalysisStatus @default(RUNNING)
+  startedAt   DateTime       @default(now())
   completedAt DateTime?
 
   // Totals
@@ -1113,7 +1246,7 @@ model WebOppAnalysis {
   totalOpportunitiesFound    Int?
   topOpportunityCluster      String?
 
-  site            Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site            Site                   @relation(fields: [siteId], references: [id], onDelete: Cascade)
   keywordClusters WebOppKeywordCluster[]
   budgetModels    WebOppBudgetModel[]
 
@@ -1134,48 +1267,49 @@ model WebOppKeywordCluster {
   siteId     String
 
   // Cluster definition
-  clusterName  String
-  keywords     String[]
+  clusterName    String
+  keywords       String[]
   primaryKeyword String
 
   // Demand data (WO-01)
   monthlySearchVolume Int?
-  competition         Float?  // 0.0–1.0
+  competition         Float? // 0.0–1.0
   avgCpc              Float?
   source              String? // "google", "bing", "youtube", "local"
 
   // Current position (WO-03)
-  currentRankPosition  Int?    // null if not ranking
+  currentRankPosition  Int? // null if not ranking
   currentMonthlyClicks Int?
-  visibilityScore      Float?  // vs category leaders
+  visibilityScore      Float? // vs category leaders
 
   // Gap (WO-02) — competitor data
-  topCompetitorUrl     String?
+  topCompetitorUrl       String?
   competitorRankPosition Int?
-  isCompetitorKeyword  Boolean @default(false)
+  isCompetitorKeyword    Boolean @default(false)
 
   // Missed revenue (WO-04)
   missedImpressions Int?
   missedClicks      Int?
   missedLeads       Int?
-  missedRevenue     Float?  // $ per month
+  missedRevenue     Float? // $ per month
 
   // Decision engine (WO-05)
-  competitionDifficulty  Int?    // 1–10
-  monthsToRank           Int?    // Organic estimate
-  estimatedCpaForPaid    Float?
-  roiPotential           Float?
-  decision               OpportunityDecision?
+  competitionDifficulty Int? // 1–10
+  monthsToRank          Int? // Organic estimate
+  estimatedCpaForPaid   Float?
+  roiPotential          Float?
+  decision              OpportunityDecision?
 
   // Local search (WO-11)
   isLocalKeyword     Boolean @default(false)
   localProximityRank Int?
 
   // Video intent (WO-12)
-  hasHighVideoIntent Boolean @default(false)
+  hasHighVideoIntent  Boolean @default(false)
   youtubeSearchVolume Int?
 
   analysis WebOppAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  site     Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([analysisId])
   @@index([siteId, decision])
@@ -1192,17 +1326,17 @@ enum OpportunityDecision {
 model WebOppBudgetModel {
   id         String @id @default(cuid())
   analysisId String
-  channel    String  // "google_ads", "meta_ads", "seo_organic", "youtube"
+  channel    String // "google_ads", "meta_ads", "seo_organic", "youtube"
 
-  currentMonthlySpend   Float?
+  currentMonthlySpend     Float?
   recommendedMonthlySpend Float?
-  maxMarketSpend        Float?  // Market can support up to this
+  maxMarketSpend          Float? // Market can support up to this
 
   // Projections at recommended spend
   expectedLeads   Int?
   expectedWins    Int?
   expectedRevenue Float?
-  roiTimeline     Int?     // Months to positive ROI
+  roiTimeline     Int? // Months to positive ROI
   breakEvenMonths Int?
 
   // Stair-stepped plan (array of {month, spend, leads, revenue})
@@ -1212,6 +1346,161 @@ model WebOppBudgetModel {
 
   @@index([analysisId])
   @@map("webopp_budget_models")
+}
+
+// =============================================================================
+// REPORT DISTRIBUTION SETTINGS (Admin)
+// Allows org admins to configure who receives reports, how often, and which
+// products. Feeds into AL-03 email/Slack delivery.
+// =============================================================================
+
+model ReportDistribution {
+  id     String @id @default(cuid())
+  siteId String
+  orgId  String
+
+  // Recipient
+  recipientEmail String
+  recipientName  String?
+  role           DistributionRole @default(STAKEHOLDER)
+
+  // Which reports they receive
+  receiveInterimReport Boolean @default(true)
+  receiveWebWatch      Boolean @default(true)
+  receiveWebOpp        Boolean @default(false)
+  receiveWeeklyDigest  Boolean @default(true)
+  receiveAlerts        Boolean @default(false)
+
+  // Delivery schedule
+  webWatchFrequency DigestFrequency @default(MONTHLY)
+  digestDay         Int? // Day of week (0=Sun) or day of month for monthly
+  digestHour        Int             @default(8) // Hour in org timezone (0–23)
+
+  // Optional custom message prepended to deliveries
+  customMessage String? @db.Text
+
+  // Channel
+  deliveryChannel DistributionChannel @default(EMAIL)
+  slackWebhookUrl String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  site Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([orgId])
+  @@map("report_distributions")
+}
+
+enum DistributionRole {
+  OWNER // Receives everything
+  STAKEHOLDER // Receives reports only
+  EXEC // Receives exec summary only
+  CUSTOM
+}
+
+enum DigestFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  ON_PUBLISH // Immediately when a report is generated
+}
+
+enum DistributionChannel {
+  EMAIL
+  SLACK
+  BOTH
+}
+
+// =============================================================================
+// SNIPPET RETENTION TARGETS (RT-01)
+// When a visitor's snippet data shows behavioral signals, we track them
+// for re-engagement — both for active customers (value reinforcement) and
+// churned/lapsed customers (win-back sequences).
+// =============================================================================
+
+model SnippetRetentionTarget {
+  id     String @id @default(cuid())
+  siteId String
+
+  // Pseudonymous identifier — never PII
+  sessionFingerprint String // Derived from device/behavior signals, not identity
+  firstSeenAt        DateTime @default(now())
+  lastSeenAt         DateTime @updatedAt
+  visitCount         Int      @default(1)
+
+  // Behavioral profile (built from snippet data)
+  highestIntentScore Int?
+  pagesVisited       String[] @default([])
+  reachedPricing     Boolean  @default(false)
+  reachedSignup      Boolean  @default(false)
+  exitedAtSignup     Boolean  @default(false)
+  conversionGoalHit  Boolean  @default(false)
+  totalSessionsCount Int      @default(1)
+
+  // Customer status
+  targetType RetentionTargetType @default(PROSPECT)
+  customerId String? // Set if they become a customer (links to external CRM)
+
+  // Win-back / retention trigger
+  triggerType    RetentionTriggerType?
+  triggerFiredAt DateTime?
+  triggerPayload Json? // e.g. { metric: 'pricing_exit_rate', value: 54, benchmark: 42 }
+
+  // Sequence state
+  sequenceStatus  RetentionSequenceStatus @default(WATCHING)
+  sequenceStep    Int                     @default(0)
+  lastContactedAt DateTime?
+  nextContactAt   DateTime?
+  unsubscribedAt  DateTime?
+
+  // Performance
+  reEngaged              Boolean   @default(false)
+  reEngagedAt            DateTime?
+  convertedFromRetention Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, targetType])
+  @@index([siteId, sequenceStatus])
+  @@index([siteId, nextContactAt])
+  @@map("snippet_retention_targets")
+}
+
+enum RetentionTargetType {
+  PROSPECT // Never converted — active on site
+  TRIAL_USER // In trial, behavioral signals tracked
+  CUSTOMER // Active customer — value reinforcement
+  CHURNED // Was a customer, no longer
+  LAPSED // Stopped visiting — win-back candidate
+}
+
+enum RetentionTriggerType {
+  // Value reinforcement (active customers)
+  METRIC_IMPROVEMENT // "Your /pricing exit rate dropped 8pts this month"
+  NEW_OPPORTUNITY // "We found a new keyword gap worth $X/mo"
+  MILESTONE_HIT // "You've recovered $38,400 since install"
+
+  // Win-back (churned/lapsed)
+  DORMANT_REACTIVATION // Visitor returned after 30+ days
+  COMPETITOR_SIGNAL // Competitor traffic spike detected
+  BENCHMARK_GAP_WIDENING // Their metrics getting worse vs benchmark
+  REPORT_READY // New report generated — re-engage with insight
+}
+
+enum RetentionSequenceStatus {
+  WATCHING // Monitoring, no outreach yet
+  QUALIFYING // Meets criteria, building profile
+  ACTIVE // In an active sequence
+  PAUSED // Manually paused
+  COMPLETED // Sequence finished
+  UNSUBSCRIBED // Opted out
+  CONVERTED // Goal achieved
 }
 
 // =============================================================================
@@ -1232,7 +1521,7 @@ model DpaAcceptance {
   siteId     String
   dpaVersion String   @default("1.0")
   acceptedAt DateTime @default(now())
-  ipHash     String   // Hash of IP at time of acceptance (DL-01 compliant)
+  ipHash     String // Hash of IP at time of acceptance (DL-01 compliant)
 
   user User @relation(fields: [userId], references: [id])
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -1243,12 +1532,12 @@ model DpaAcceptance {
 
 // DL-04: Data retention audit log
 model DataRetentionLog {
-  id            String   @id @default(cuid())
-  siteId        String
-  deletionType  String   // "session_events_90d", "page_views_90d", "offboarding"
+  id             String   @id @default(cuid())
+  siteId         String
+  deletionType   String // "session_events_90d", "page_views_90d", "offboarding"
   recordsDeleted Int
-  periodCovered String   // e.g. "before 2024-12-01"
-  executedAt    DateTime @default(now())
+  periodCovered  String // e.g. "before 2024-12-01"
+  executedAt     DateTime @default(now())
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
