@@ -1,37 +1,13 @@
+// Root redirect — logged-in users go to dashboard, others see landing page
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
-import { prisma } from '@/lib/db/client';
 
-export default async function HomePage() {
+export default async function RootPage() {
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.email) {
-    redirect('/login');
+  if (session?.user) {
+    redirect('/dashboard');
   }
-
-  // Find the user's first site
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    include: {
-      orgMemberships: {
-        include: {
-          org: {
-            include: {
-              sites: { take: 1, orderBy: { createdAt: 'asc' } }
-            }
-          }
-        },
-        take: 1,
-      }
-    }
-  });
-
-  const firstSite = user?.orgMemberships[0]?.org?.sites[0];
-
-  if (!firstSite) {
-    redirect('/onboarding');
-  }
-
-  redirect(`/dashboard/${firstSite.id}`);
+  // Non-authenticated users see the marketing landing page
+  redirect('/marketing');
 }
