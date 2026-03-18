@@ -13,7 +13,8 @@ npm run db:migrate   # prisma migrate dev (production migrations)
 npm run db:studio    # prisma studio (DB browser)
 ```
 
-Seed demo data: `npx tsx prisma/seed-demo.ts` (or `npx tsx scripts/seed-demo.ts`)
+Seed demo data: `npx tsx scripts/seed-demo.ts`
+Seed behavioral data: `npx tsx scripts/seed-behavioral.ts` (1200 sessions for NovaPulse HR)
 
 No test suite exists yet. No `npm test` script.
 
@@ -68,9 +69,12 @@ Raw `SessionEvent` and `PageView` records are deleted after 90 days by a daily I
 - **Dev login**: CredentialsProvider enabled only in `NODE_ENV=development` — signs in any seeded user by email
 - **Demo account**: `demo@webgrade.io` / `DemoPass2026!` (password overridable via `DEMO_PASSWORD` env var)
 - **Session helpers** in `src/lib/auth/session.ts`:
-  - `requireSession()` — guard for authenticated routes
+  - `requireSession()` — guard for authenticated server component routes
   - `getUserOrgs()` — fetches user's orgs + sites
   - `requireSiteAccess(siteId)` — verifies org membership for a specific site
+- **API auth helper** in `src/lib/auth/api.ts`:
+  - `requireApiSession()` — returns `{ userId, email }` or null for API routes
+  - `unauthorizedResponse()` — returns a 401 NextResponse
 
 ## Code Conventions
 
@@ -98,6 +102,20 @@ All Claude API calls use context injection via `src/lib/ai/context.ts`:
 - `buildContextString()` — injects business description, target audience, AOV, conversion rate
 - `buildSystemPrompt(mode)` — mode-specific prompts for: explain, report, recommend, webopp
 - `estimateDollarImpact()` — computes revenue impact from engagement lift
+
+### Shared Modules — Use These, Don't Duplicate
+- **Types**: `src/types/index.ts` — `Site`, `IntentDistribution`, `DropOffPage`, `DashboardData`, `ActionItem`, `GrowthPlay`, `ReportPayload`, `Alert`
+- **Style constants**: `src/lib/constants/styles.ts` — `SEVERITY_STYLES`, `ALERT_ICONS`, `EFFORT_COLORS`, `CHANNEL_LABELS`, `INTENT_CONFIG`
+- **Format utilities**: `src/lib/utils/format.ts` — `formatDate()`, `formatMoney()`, `formatDateTime()`, `formatTimeAgo()`, `formatPercent()`
+- **Hooks**: `src/lib/hooks/useCountUp.ts` — animated number counter with optional trigger
+- **API auth**: `src/lib/auth/api.ts` — `requireApiSession()` + `unauthorizedResponse()`
+
+### Tailwind Colors
+Use theme tokens from `tailwind.config.js` — **do not use raw hex values** in Tailwind classes:
+- `bg-page-bg`, `border-page-border` (light blue theme)
+- `bg-nav-bg`, `border-nav-border` (dark navy nav)
+- `text-status-green`, `text-status-red`, `text-status-yellow` (semantic colors)
+- Standard Tailwind: `text-slate-500`, `text-slate-900`, `text-slate-400`, etc.
 
 ### Comments
 - Section dividers use `// -----…----` pattern
@@ -134,7 +152,8 @@ src/
 │   │   ├── layout.tsx               # Auth-guarded layout with AppNav
 │   │   ├── page.tsx                 # Root redirect to first site
 │   │   └── [siteId]/
-│   │       ├── page.tsx             # Behavioral intelligence dashboard
+│   │       ├── page.tsx             # Behavioral intelligence (server component, real DB queries)
+│   │       ├── DashboardClient.tsx  # Client component for dashboard interactivity
 │   │       ├── report/page.tsx      # Interim Report viewer
 │   │       ├── seo/page.tsx         # Live SEO dashboard
 │   │       ├── webwatch/page.tsx    # WebWatch monthly intelligence
@@ -153,7 +172,7 @@ src/
 ├── components/
 │   ├── auth/provider.tsx            # SessionProvider wrapper
 │   ├── demo/DemoBanner.tsx          # Demo mode indicator
-│   ├── nav/AppNav.tsx               # Main nav (site switcher, tabs, user menu)
+│   ├── nav/AppNav.tsx               # Main nav — rendered by dashboard/layout.tsx, NOT individual pages
 │   └── webwatch/RecommendationTracker.tsx
 ├── lib/
 │   ├── ai/context.ts               # OB-05 context injection for Claude prompts
@@ -163,8 +182,11 @@ src/
 │   │   ├── benchmarks.ts           # Industry benchmarking
 │   │   └── dropoff.ts              # Drop-off analysis
 │   ├── auth/
+│   │   ├── api.ts                  # requireApiSession, unauthorizedResponse (API routes)
 │   │   ├── options.ts              # NextAuth config
-│   │   └── session.ts              # requireSession, getUserOrgs, requireSiteAccess
+│   │   └── session.ts              # requireSession, getUserOrgs, requireSiteAccess (pages)
+│   ├── constants/styles.ts         # SEVERITY_STYLES, ALERT_ICONS, INTENT_CONFIG, etc.
+│   ├── hooks/useCountUp.ts         # Animated number counter hook
 │   ├── db/client.ts                # Prisma singleton
 │   ├── email/sender.ts             # Resend email + Slack webhook delivery
 │   ├── jobs/inngest.ts             # Background job definitions
@@ -177,14 +199,18 @@ src/
 │   │   ├── bot-filter.ts           # UA pattern matching + headless detection
 │   │   ├── intent-scoring.ts       # 5-factor intent classification
 │   │   └── posthog.ts              # Consent-aware event forwarding
-│   ├── utils/rate-limit.ts         # In-memory rate limiter
+│   ├── utils/
+│   │   ├── format.ts              # formatDate, formatMoney, formatTimeAgo, etc.
+│   │   └── rate-limit.ts          # In-memory rate limiter
 │   ├── webopp/search-demand.ts     # DataForSEO keyword volume + gap analysis
 │   └── webwatch/                   # WebWatch monitoring logic
+├── types/index.ts                   # Shared TypeScript interfaces
 prisma/
 │   ├── schema.prisma               # ~1546 lines, all modules
 │   └── seed-demo.ts                # Seeds NovaPulse HR demo data (90 days)
 scripts/
 │   ├── seed-demo.ts                # Alternate demo seed location
+│   ├── seed-behavioral.ts          # Seed 1200 visitor sessions with pageviews/events
 │   ├── check-users.ts              # List all users + org memberships
 │   └── fix-demo-membership.ts      # Fix demo user linkage
 public/
@@ -220,7 +246,7 @@ public/
 - **Re-measurement loop** (RM-*): schema exists, no code
 - **GA4 import** (OB-03): OAuth flow stubbed in onboarding
 - **SMS alerts via Twilio**: dependency installed, not used
-- **Dashboard data**: some pages use demo/mock data rather than live DB queries
+- **Dashboard data**: behavioral dashboard is wired to real DB; other pages (SEO, WebWatch, WebOpp) still use hardcoded demo data
 
 ## Known Issues
 
