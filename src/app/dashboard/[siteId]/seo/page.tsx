@@ -3,8 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
-
 // ---------------------------------------------------------------------------
 // Live SEO Dashboard — NovaPulse HR
 // Date range drives all metrics via a deterministic seed multiplier
@@ -265,13 +263,6 @@ export default function LiveSEOPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
-
-      {/* Shared nav — highlights Live SEO tab */}
-      <AppNav
-        currentSiteId={siteId}
-        sites={[{ id: siteId, name: 'NovaPulse HR', domain: 'novapulsehr.com', hasWebWatch: true, hasWebOpp: true, hasInterimReport: true }]}
-        activePage="seo"
-      />
 
       {/* Page sub-header: date picker + tabs */}
       <div className="bg-white border-b border-sky-100 px-6 py-2">

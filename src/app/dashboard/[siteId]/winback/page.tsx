@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
-
 interface SentReport {
   id: string;
   shareToken: string;
@@ -91,8 +89,6 @@ export default function WinbackPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
-      <AppNav currentSiteId={siteId} sites={[]} activePage="winback" />
-
       <div className="max-w-3xl mx-auto px-4 py-8">
 
         {/* Header */}

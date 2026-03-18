@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 
@@ -15,13 +15,47 @@ interface Site {
 }
 
 interface Props {
-  currentSiteId: string;
+  currentSiteId?: string;
   sites?: Site[];
   activePage?: 'behavioral' | 'seo' | 'webwatch' | 'webopp' | 'report' | 'winback' | 'settings';
   isAdmin?: boolean; // Win-Back tab only shows in admin/demo mode
 }
 
-export function AppNav({ currentSiteId, sites = [], activePage = 'behavioral', isAdmin = false }: Props) {
+// Derive activePage from URL path
+function getActivePageFromPath(pathname: string): Props['activePage'] {
+  if (pathname.includes('/seo')) return 'seo';
+  if (pathname.includes('/webwatch')) return 'webwatch';
+  if (pathname.includes('/webopp')) return 'webopp';
+  if (pathname.includes('/report')) return 'report';
+  if (pathname.includes('/winback')) return 'winback';
+  if (pathname.includes('/settings')) return 'settings';
+  if (pathname.includes('/alerts')) return 'settings';
+  return 'behavioral';
+}
+
+export function AppNav({ currentSiteId: propSiteId, sites: propSites, activePage: propActivePage, isAdmin = false }: Props) {
+  const pathname = usePathname();
+
+  // Derive siteId from URL: /dashboard/[siteId]/...
+  const pathSegments = pathname.split('/');
+  const dashboardIdx = pathSegments.indexOf('dashboard');
+  const urlSiteId = dashboardIdx >= 0 ? pathSegments[dashboardIdx + 1] : undefined;
+  const currentSiteId = propSiteId ?? urlSiteId ?? '';
+
+  // Derive activePage from URL if not passed
+  const activePage = propActivePage ?? getActivePageFromPath(pathname);
+
+  // Read sites from props, or fall back to the hidden script tag injected by dashboard layout
+  const [scriptSites, setScriptSites] = useState<Site[]>([]);
+  useEffect(() => {
+    if (!propSites || propSites.length === 0) {
+      const el = document.getElementById('__webgrade_sites__');
+      if (el) {
+        try { setScriptSites(JSON.parse(el.textContent ?? '[]')); } catch {}
+      }
+    }
+  }, [propSites]);
+  const sites = (propSites && propSites.length > 0) ? propSites : scriptSites;
   const router = useRouter();
   const { data: session } = useSession();
   const [siteSwitcherOpen, setSiteSwitcherOpen] = useState(false);

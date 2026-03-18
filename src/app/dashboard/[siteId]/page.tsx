@@ -146,5 +146,5 @@ export default async function DashboardPage({ params }: { params: { siteId: stri
     hasInterimReport: s.hasInterimReport,
   }));
 
-  return <DashboardClient siteId={params.siteId} sites={siteList} data={data} />;
+  return <DashboardClient siteId={params.siteId} data={data} />;
 }

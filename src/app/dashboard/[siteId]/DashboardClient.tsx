@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { AppNav } from '@/components/nav/AppNav';
-
 // ── Types ──────────────────────────────────────────────────────────────────
-
-interface Site {
-  id: string; name: string; domain: string;
-  hasWebWatch: boolean; hasWebOpp: boolean; hasInterimReport: boolean;
-}
 
 interface IntentDistribution {
   HIGH: number; MEDIUM: number; LOW: number;
@@ -51,9 +44,8 @@ function useCountUp(target: number, duration = 1800, trigger = true): number {
 
 // ── Main client component ─────────────────────────────────────────────────
 
-export function DashboardClient({ siteId, sites, data }: {
+export function DashboardClient({ siteId, data }: {
   siteId: string;
-  sites: Site[];
   data: DashboardData | null;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -77,7 +69,6 @@ export function DashboardClient({ siteId, sites, data }: {
   if (!data) {
     return (
       <div className="min-h-screen bg-[#f0f9ff]">
-        <AppNav currentSiteId={siteId} sites={sites} activePage="behavioral" />
         <div className="px-6 py-8 max-w-7xl mx-auto">
           <h1 className="text-2xl font-black text-[#0c4a6e] mb-4">Behavioral Intelligence</h1>
           <p className="text-sm text-[#64748b]">No data available yet. Install the tracking snippet to start collecting behavioral data.</p>
@@ -88,7 +79,6 @@ export function DashboardClient({ siteId, sites, data }: {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      <AppNav currentSiteId={siteId} sites={sites} activePage="behavioral" />
 
       <div className="px-6 py-8 max-w-7xl mx-auto">
 

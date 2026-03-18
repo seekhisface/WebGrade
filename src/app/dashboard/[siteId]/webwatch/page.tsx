@@ -3,9 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
-
-
 function useCountUp(target: number, duration = 1800): number {
   const [current, setCurrent] = useState(0);
   useEffect(() => {
@@ -395,13 +392,6 @@ export default function WebWatchPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
-
-      {/* Shared nav — highlights WebWatch™ tab */}
-      <AppNav
-        currentSiteId={siteId}
-        sites={[{ id: siteId, name: 'NovaPulse HR', domain: 'novapulsehr.com', hasWebWatch: true, hasWebOpp: true, hasInterimReport: true }]}
-        activePage="webwatch"
-      />
 
       {/* Page sub-header: view tabs */}
       <div className="bg-white border-b border-sky-100 px-6 py-2">
