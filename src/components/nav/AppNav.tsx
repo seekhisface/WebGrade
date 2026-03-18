@@ -4,15 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
-
-interface Site {
-  id: string;
-  name: string;
-  domain: string;
-  hasWebWatch: boolean;
-  hasWebOpp: boolean;
-  hasInterimReport: boolean;
-}
+import type { Site } from '@/types';
 
 interface Props {
   currentSiteId?: string;
@@ -90,12 +82,12 @@ export function AppNav({ currentSiteId: propSiteId, sites: propSites, activePage
   ].filter(tab => tab.show);
 
   return (
-    <nav className="bg-[#0c4a6e] border-b border-[#075985] px-3 md:px-6 py-0 flex items-center justify-between h-14 sticky top-0 z-50 min-w-0">
+    <nav className="bg-nav-bg border-b border-nav-border px-3 md:px-6 py-0 flex items-center justify-between h-14 sticky top-0 z-50 min-w-0">
       {/* Left: logo + site switcher + tabs */}
       <div className="flex items-center gap-2 md:gap-6 min-w-0 flex-1">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-7 h-7 bg-[#0284c7] rounded-md flex items-center justify-center">
+          <div className="w-7 h-7 bg-status-blue rounded-md flex items-center justify-center">
             <span className="text-white font-bold text-xs">W</span>
           </div>
           <span className="font-semibold text-white text-sm hidden sm:block">WebGrade</span>
@@ -204,7 +196,7 @@ export function AppNav({ currentSiteId: propSiteId, sites: propSites, activePage
             onClick={() => setUserMenuOpen((o: boolean) => !o)}
             className="flex items-center gap-2 p-1 rounded-lg hover:bg-white/5 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-[#0284c7] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-status-blue flex items-center justify-center">
               <span className="text-white text-xs font-semibold">
                 {session?.user?.name?.charAt(0) ?? session?.user?.email?.charAt(0) ?? '?'}
               </span>

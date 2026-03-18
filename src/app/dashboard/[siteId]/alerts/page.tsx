@@ -2,34 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-interface Alert {
-  id: string;
-  alertType: string;
-  severity: string;
-  message: string;
-  triggeredAt: string;
-  resolvedAt: string | null;
-  resolvedAutomatically: boolean;
-  acknowledgedAt: string | null;
-  emailSentAt: string | null;
-  slackSentAt: string | null;
-}
-
-const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
-  HIGH: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-  MEDIUM: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-400' },
-  LOW: { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' },
-};
-
-const ALERT_ICONS: Record<string, string> = {
-  CONVERSION_DROP: '📉',
-  BOUNCE_RATE_SPIKE: '🔄',
-  WASTED_SPEND_DETECTED: '💸',
-  SNIPPET_FIRING_STOPPED: '⚡',
-  SEO_REGRESSION: '🔍',
-  NEW_HIGH_VALUE_OPPORTUNITY: '🎯',
-};
+import type { Alert } from '@/types';
+import { SEVERITY_STYLES, ALERT_ICONS } from '@/lib/constants/styles';
+import { formatDateTime, formatTimeAgo } from '@/lib/utils/format';
 
 export default function AlertCenterPage() {
   const params = useParams();
@@ -73,30 +48,21 @@ export default function AlertCenterPage() {
     await loadAlerts();
   }
 
-  const formatTime = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const timeAgo = (d: string) => {
-    const ms = Date.now() - new Date(d).getTime();
-    const h = Math.floor(ms / 3600000);
-    if (h < 1) return `${Math.floor(ms / 60000)}m ago`;
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-  };
-
   return (
-    <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
+    <div className="min-h-screen bg-page-bg flex flex-col">
       {/* Sub-header */}
-      <div className="bg-white border-b border-[#e0f2fe] px-6 py-3 flex items-center justify-between">
+      <div className="bg-white border-b border-sky-100 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-[#1e293b]">Alert Center</span>
+          <span className="text-sm font-semibold text-slate-900">Alert Center</span>
           {stats.criticalCount > 0 && (
             <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{stats.criticalCount} critical</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={runAutoResolve} className="text-xs px-3 py-1.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-[#64748b] hover:bg-[#e0f2fe] transition-colors">
+          <button onClick={runAutoResolve} className="text-xs px-3 py-1.5 bg-page-bg border border-page-border rounded-lg text-slate-500 hover:bg-sky-100 transition-colors">
             ↻ Run Auto-Resolve
           </button>
-          <a href={`/dashboard/${siteId}/settings/alerts`} className="text-xs px-3 py-1.5 bg-[#0c4a6e] text-white rounded-lg hover:bg-[#075985] transition-colors">
+          <a href={`/dashboard/${siteId}/settings/alerts`} className="text-xs px-3 py-1.5 bg-nav-bg text-white rounded-lg hover:bg-nav-border transition-colors">
             ⚙ Alert Settings
           </a>
         </div>
@@ -109,20 +75,20 @@ export default function AlertCenterPage() {
           {[
             { label: 'Open Alerts', value: String(stats.openCount), color: stats.openCount > 0 ? 'text-red-600' : 'text-green-600', bg: stats.openCount > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100' },
             { label: 'Critical', value: String(stats.criticalCount), color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-            { label: 'Avg Resolution', value: stats.avgResolutionHours > 0 ? `${stats.avgResolutionHours}h` : '—', color: 'text-[#0c4a6e]', bg: 'bg-[#f0f9ff] border-[#bae6fd]' },
+            { label: 'Avg Resolution', value: stats.avgResolutionHours > 0 ? `${stats.avgResolutionHours}h` : '—', color: 'text-nav-bg', bg: 'bg-page-bg border-page-border' },
           ].map(s => (
             <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
-              <p className="text-xs font-semibold text-[#64748b] uppercase tracking-wider mb-1">{s.label}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{s.label}</p>
               <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* Tabs */}
-        <div className="flex bg-[#f0f9ff] border border-[#bae6fd] rounded-lg p-0.5 gap-0.5 mb-4 w-fit">
+        <div className="flex bg-page-bg border border-page-border rounded-lg p-0.5 gap-0.5 mb-4 w-fit">
           {(['open', 'resolved'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${tab === t ? 'bg-white text-[#1e293b] shadow-sm' : 'text-[#64748b]'}`}>
+              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
               {t} {t === 'open' ? `(${open.length})` : `(${resolved.length})`}
             </button>
           ))}
@@ -130,21 +96,21 @@ export default function AlertCenterPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-[#0c4a6e] border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-nav-bg border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <div className="space-y-3">
             {(tab === 'open' ? open : resolved).length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#e0f2fe] p-16 text-center">
+              <div className="bg-white rounded-2xl border border-sky-100 p-16 text-center">
                 <p className="text-3xl mb-3">{tab === 'open' ? '✅' : '📋'}</p>
-                <p className="text-[#1e293b] font-semibold mb-1">{tab === 'open' ? 'No open alerts' : 'No resolved alerts yet'}</p>
-                <p className="text-xs text-[#94a3b8]">{tab === 'open' ? 'Everything looks good.' : 'Resolved alerts will appear here.'}</p>
+                <p className="text-slate-900 font-semibold mb-1">{tab === 'open' ? 'No open alerts' : 'No resolved alerts yet'}</p>
+                <p className="text-xs text-slate-400">{tab === 'open' ? 'Everything looks good.' : 'Resolved alerts will appear here.'}</p>
               </div>
             ) : (
               (tab === 'open' ? open : resolved).map(alert => {
                 const sev = SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES.MEDIUM;
                 return (
-                  <div key={alert.id} className="bg-white rounded-2xl border border-[#e0f2fe] p-5">
+                  <div key={alert.id} className="bg-white rounded-2xl border border-sky-100 p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${sev.dot}`} />
@@ -152,13 +118,13 @@ export default function AlertCenterPage() {
                           <div className="flex items-center gap-2 mb-1">
                             <span>{ALERT_ICONS[alert.alertType] ?? '🔔'}</span>
                             <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${sev.bg} ${sev.text} ${sev.border}`}>{alert.severity}</span>
-                            <span className="text-xs text-[#94a3b8]">{alert.alertType.replace(/_/g, ' ')}</span>
+                            <span className="text-xs text-slate-400">{alert.alertType.replace(/_/g, ' ')}</span>
                           </div>
-                          <p className="text-sm text-[#334155] leading-relaxed">{alert.message}</p>
+                          <p className="text-sm text-slate-700 leading-relaxed">{alert.message}</p>
                           <div className="flex items-center gap-3 mt-2">
-                            <span className="text-xs text-[#94a3b8]">🕐 {timeAgo(alert.triggeredAt)}</span>
-                            {alert.emailSentAt && <span className="text-xs text-[#94a3b8]">📧 emailed</span>}
-                            {alert.slackSentAt && <span className="text-xs text-[#94a3b8]">💬 slacked</span>}
+                            <span className="text-xs text-slate-400">🕐 {formatTimeAgo(alert.triggeredAt)}</span>
+                            {alert.emailSentAt && <span className="text-xs text-slate-400">📧 emailed</span>}
+                            {alert.slackSentAt && <span className="text-xs text-slate-400">💬 slacked</span>}
                             {alert.resolvedAutomatically && <span className="text-xs text-green-600">✓ auto-resolved</span>}
                           </div>
                         </div>
@@ -166,13 +132,13 @@ export default function AlertCenterPage() {
 
                       {tab === 'open' && (
                         <button onClick={() => resolveAlert(alert.id)} disabled={resolving === alert.id}
-                          className="flex-shrink-0 text-xs px-3 py-1.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-[#64748b] hover:bg-[#e0f2fe] transition-colors disabled:opacity-50">
+                          className="flex-shrink-0 text-xs px-3 py-1.5 bg-page-bg border border-page-border rounded-lg text-slate-500 hover:bg-sky-100 transition-colors disabled:opacity-50">
                           {resolving === alert.id ? '…' : 'Resolve'}
                         </button>
                       )}
 
                       {tab === 'resolved' && alert.resolvedAt && (
-                        <span className="flex-shrink-0 text-xs text-[#94a3b8]">Resolved {timeAgo(alert.resolvedAt)}</span>
+                        <span className="flex-shrink-0 text-xs text-slate-400">Resolved {formatTimeAgo(alert.resolvedAt)}</span>
                       )}
                     </div>
                   </div>

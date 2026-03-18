@@ -3,8 +3,7 @@
  * GET  /api/rt/generate?token=xxx — load by share token (public, no auth)
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 import { loadSiteContext, buildSystemPrompt } from '@/lib/ai/context';
 import crypto from 'crypto';
@@ -12,13 +11,14 @@ import crypto from 'crypto';
 export const maxDuration = 90;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const { siteId, recipientEmail, recipientName, targetType = 'PROSPECT' } = await req.json();
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  const ctx = await loadSiteContext(siteId, session.user.email);
+  const ctx = await loadSiteContext(siteId, email);
   if (!ctx) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const latestReport = await prisma.report.findFirst({

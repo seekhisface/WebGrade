@@ -12,8 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 
 const anthropic = new Anthropic({
@@ -34,10 +33,9 @@ const ExplainRequestSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const body = await req.json();
   const parsed = ExplainRequestSchema.safeParse(body);
@@ -51,7 +49,7 @@ export async function POST(req: NextRequest) {
   const site = await prisma.site.findFirst({
     where: {
       id: siteId,
-      org: { members: { some: { user: { email: session.user.email } } } }
+      org: { members: { some: { user: { email } } } }
     },
     include: { onboarding: true }
   });

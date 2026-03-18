@@ -262,12 +262,12 @@ export default function LiveSEOPage() {
     : PRESETS.find(p => p.id === range.preset)?.label ?? '';
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff]">
+    <div className="min-h-screen bg-page-bg">
 
       {/* Page sub-header: date picker + tabs */}
       <div className="bg-white border-b border-sky-100 px-6 py-2">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-sm text-[#64748b]">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -286,11 +286,11 @@ export default function LiveSEOPage() {
                 onClick={() => setPickerOpen((o: boolean) => !o)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-200 hover:border-sky-300 rounded-lg transition-all text-xs text-slate-700"
               >
-                <svg className="w-3.5 h-3.5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 {rangeLabel}
-                <svg className={`w-3 h-3 text-[#64748b] transition-transform ${pickerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={`w-3 h-3 text-slate-500 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -308,7 +308,7 @@ export default function LiveSEOPage() {
                     ))}
                   </div>
                   <div className="border-t border-sky-100 p-3">
-                    <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-2">Custom range</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Custom range</p>
                     <div className="flex items-center gap-2 mb-2">
                       <input type="date" value={customFrom} max={customTo}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomFrom(e.target.value)}
@@ -347,13 +347,13 @@ export default function LiveSEOPage() {
       <div className="max-w-6xl mx-auto px-6 pt-7 pb-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs text-[#64748b] uppercase tracking-wider mb-1">NovaPulse HR · Search Performance</p>
-            <h1 className="text-2xl font-bold text-[#1e293b]">Live SEO</h1>
-            <p className="text-sm text-[#64748b] mt-1">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">NovaPulse HR · Search Performance</p>
+            <h1 className="text-2xl font-bold text-slate-900">Live SEO</h1>
+            <p className="text-sm text-slate-500 mt-1">
               {fmtDate(range.from)} – {fmtDate(range.to)} · {days} days
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#64748b]">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             Synced with Google Search Console · Updated hourly
           </div>
@@ -370,13 +370,13 @@ export default function LiveSEOPage() {
             { label: 'Keywords Ranking',  value: M.rankingKeywords.toString(),        delta: M.sessionsDelta * 0.8, unit: '', spark: M.sparkPoints.map((v: number) => Math.round(v * 0.6 + 20)), color: '#a78bfa' },
           ].map((kpi, i) => (
             <div key={i} className="p-4 bg-sky-50 border border-sky-100 rounded-xl">
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1 truncate">{kpi.label}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 truncate">{kpi.label}</p>
               <p className="text-lg font-bold text-slate-800 mb-1">{kpi.value}</p>
               <div className="mb-2">
                 <Sparkline data={kpi.spark} color={kpi.color} />
               </div>
               <Delta v={kpi.delta} unit={kpi.unit} inverse={kpi.inverse} />
-              <span className="text-[10px] text-[#94a3b8] ml-1">vs prior period</span>
+              <span className="text-[10px] text-slate-400 ml-1">vs prior period</span>
             </div>
           ))}
         </div>
@@ -401,10 +401,10 @@ export default function LiveSEOPage() {
                   {M.cwvPass ? '✓' : '⚠'}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[#1e293b]">
+                  <p className="text-sm font-semibold text-slate-900">
                     Core Web Vitals — {M.cwvPass ? 'All pages passing' : 'Needs attention'}
                   </p>
-                  <p className="text-xs text-[#64748b]">
+                  <p className="text-xs text-slate-500">
                     LCP {M.lcp}s · CLS {M.cls} · FID {M.fid}ms · TTFB {M.ttfb}ms
                   </p>
                 </div>
@@ -417,7 +417,7 @@ export default function LiveSEOPage() {
 
             {/* Ranking distribution */}
             <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Keyword Ranking Distribution</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Keyword Ranking Distribution</p>
               <div className="grid grid-cols-4 gap-3">
                 {[
                   { label: 'Top 3',   value: M.top3,  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', bar: 'bg-emerald-500' },
@@ -426,7 +426,7 @@ export default function LiveSEOPage() {
                   { label: 'Total ranking', value: M.rankingKeywords, color: 'text-slate-800', bg: 'bg-sky-50 border-sky-100', bar: 'bg-indigo-500' },
                 ].map((r, i) => (
                   <div key={i} className={`p-4 border rounded-xl ${r.bg}`}>
-                    <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">{r.label}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{r.label}</p>
                     <p className={`text-2xl font-bold ${r.color} mb-2`}>{r.value}</p>
                     <div className="h-1 bg-sky-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${r.bar}`}
@@ -439,7 +439,7 @@ export default function LiveSEOPage() {
 
             {/* Indexing snapshot */}
             <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Indexing Snapshot</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Indexing Snapshot</p>
               <div className="grid grid-cols-4 gap-3">
                 {[
                   { label: 'Indexed pages',  value: M.indexedPages,  icon: '✓', color: 'text-emerald-400' },
@@ -450,8 +450,8 @@ export default function LiveSEOPage() {
                   <div key={i} className="p-4 bg-sky-50 border border-sky-100 rounded-xl flex items-center gap-3">
                     <span className={`text-xl ${s.color}`}>{s.icon}</span>
                     <div>
-                      <p className="text-xl font-bold text-[#1e293b]">{s.value}</p>
-                      <p className="text-[10px] text-[#64748b]">{s.label}</p>
+                      <p className="text-xl font-bold text-slate-900">{s.value}</p>
+                      <p className="text-[10px] text-slate-500">{s.label}</p>
                     </div>
                   </div>
                 ))}
@@ -461,7 +461,7 @@ export default function LiveSEOPage() {
             {/* Top 5 keywords preview */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] text-[#64748b] uppercase tracking-wider">Top Keywords</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Top Keywords</p>
                 <button onClick={() => setActiveTab('keywords')}
                   className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
                   View all {M.keywords.length} →
@@ -469,13 +469,13 @@ export default function LiveSEOPage() {
               </div>
               <div className="space-y-1.5">
                 {M.keywords.slice(0, 5).map((kw: typeof M.keywords[0], i: number) => (
-                  <div key={i} className="relative flex items-center gap-4 p-3 bg-sky-50 border border-sky-100 rounded-xl hover:bg-[#e0f2fe] transition-colors group"
+                  <div key={i} className="relative flex items-center gap-4 p-3 bg-sky-50 border border-sky-100 rounded-xl hover:bg-sky-100 transition-colors group"
                     onMouseEnter={() => setHoveredKw(100 + i)}
                     onMouseLeave={() => setHoveredKw(null)}>
                     <RankBadge pos={kw.pos} />
-                    <p className="text-sm text-[#334155] flex-1 font-mono text-xs cursor-help">{kw.kw}</p>
+                    <p className="text-sm text-slate-700 flex-1 font-mono text-xs cursor-help">{kw.kw}</p>
                     {hoveredKw === 100 + i && kw.desc && (
-                      <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-[#1e293b] text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
+                      <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-slate-900 text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kw.intent === 'Commercial' ? 'bg-violet-500/30 text-violet-200' : kw.intent === 'Navigational' ? 'bg-blue-500/30 text-blue-200' : 'bg-slate-500/30 text-slate-300'}`}>{kw.intent}</span>
                           <span className="font-semibold text-sky-300">#{Math.round(kw.pos)}</span>
@@ -485,9 +485,9 @@ export default function LiveSEOPage() {
                     )}
                     <TrendArrow trend={kw.trend} />
                     <div className="flex gap-5 text-right text-xs">
-                      <div><p className="text-slate-400 text-[10px]">Clicks</p><p className="text-sm font-semibold text-[#1e293b]">{kw.clicks.toLocaleString()}</p></div>
-                      <div><p className="text-slate-400 text-[10px]">Impr.</p><p className="text-[#64748b]">{kw.impressions.toLocaleString()}</p></div>
-                      <div><p className="text-slate-400 text-[10px]">CTR</p><p className="text-[#64748b]">{kw.ctr}%</p></div>
+                      <div><p className="text-slate-400 text-[10px]">Clicks</p><p className="text-sm font-semibold text-slate-900">{kw.clicks.toLocaleString()}</p></div>
+                      <div><p className="text-slate-400 text-[10px]">Impr.</p><p className="text-slate-500">{kw.impressions.toLocaleString()}</p></div>
+                      <div><p className="text-slate-400 text-[10px]">CTR</p><p className="text-slate-500">{kw.ctr}%</p></div>
                     </div>
                   </div>
                 ))}
@@ -501,10 +501,10 @@ export default function LiveSEOPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-[#1e293b]">Keyword Rankings</h2>
-                <p className="text-sm text-[#64748b]">{M.rankingKeywords} keywords tracked · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
+                <h2 className="text-lg font-bold text-slate-900">Keyword Rankings</h2>
+                <p className="text-sm text-slate-500">{M.rankingKeywords} keywords tracked · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
               </div>
-              <div className="flex items-center gap-4 text-xs text-[#64748b]">
+              <div className="flex items-center gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-emerald-500/40" />Top 3</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-cyan-500/40" />Top 10</div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-amber-500/40" />Top 30</div>
@@ -514,7 +514,7 @@ export default function LiveSEOPage() {
             <div className="overflow-hidden border border-sky-100 rounded-2xl">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-[#f0f9ff] border-b border-[#e0f2fe] text-[#64748b]">
+                  <tr className="bg-page-bg border-b border-sky-100 text-slate-500">
                     <th className="text-left p-3 font-medium">Keyword</th>
                     <th className="text-center p-3 font-medium w-16">Rank</th>
                     <th className="text-center p-3 font-medium w-10">↕</th>
@@ -526,12 +526,12 @@ export default function LiveSEOPage() {
                 <tbody>
                   {M.keywords.map((kw: typeof M.keywords[0], i: number) => (
                     <tr key={i} className="border-b border-sky-100 hover:bg-sky-50 transition-colors relative">
-                      <td className="p-3 font-mono text-[#334155] relative"
+                      <td className="p-3 font-mono text-slate-700 relative"
                         onMouseEnter={() => setHoveredKw(i)}
                         onMouseLeave={() => setHoveredKw(null)}>
-                        <span className="cursor-help underline decoration-dotted decoration-[#94a3b8]">{kw.kw}</span>
+                        <span className="cursor-help underline decoration-dotted decoration-slate-400">{kw.kw}</span>
                         {hoveredKw === i && kw.desc && (
-                          <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-[#1e293b] text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
+                          <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-slate-900 text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
                             <div className="flex items-center gap-2 mb-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kw.intent === 'Commercial' ? 'bg-violet-500/30 text-violet-200' : kw.intent === 'Navigational' ? 'bg-blue-500/30 text-blue-200' : 'bg-slate-500/30 text-slate-300'}`}>{kw.intent}</span>
                               <span className="font-semibold text-sky-300">#{Math.round(kw.pos)}</span>
@@ -543,8 +543,8 @@ export default function LiveSEOPage() {
                       <td className="p-3 text-center"><RankBadge pos={kw.pos} /></td>
                       <td className="p-3 text-center"><TrendArrow trend={kw.trend} /></td>
                       <td className="p-3 text-right text-slate-800 font-medium">{kw.clicks.toLocaleString()}</td>
-                      <td className="p-3 text-right text-[#64748b]">{kw.impressions.toLocaleString()}</td>
-                      <td className="p-3 text-right text-[#64748b]">{kw.ctr}%</td>
+                      <td className="p-3 text-right text-slate-500">{kw.impressions.toLocaleString()}</td>
+                      <td className="p-3 text-right text-slate-500">{kw.ctr}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -576,14 +576,14 @@ export default function LiveSEOPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-lg font-bold text-slate-800 mb-1">Core Web Vitals</h2>
-              <p className="text-sm text-[#64748b]">
+              <p className="text-sm text-slate-500">
                 Field data for {fmtDate(range.from)} – {fmtDate(range.to)} · {days} days
               </p>
             </div>
 
             {/* Site-wide scores */}
             <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Site-wide averages</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Site-wide averages</p>
               <div className="grid grid-cols-4 gap-3">
                 <CwvPill value={M.lcp}  good={2.5}  ok={4.0}   unit="s"  label="LCP — Largest Contentful Paint" />
                 <CwvPill value={M.fid}  good={100}  ok={300}   unit="ms" label="FID — First Input Delay" />
@@ -594,11 +594,11 @@ export default function LiveSEOPage() {
 
             {/* Per-page breakdown */}
             <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Per-page breakdown</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Per-page breakdown</p>
               <div className="overflow-hidden border border-sky-100 rounded-2xl">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-[#f0f9ff] border-b border-[#e0f2fe] text-[#64748b]">
+                    <tr className="bg-page-bg border-b border-sky-100 text-slate-500">
                       <th className="text-left p-3 font-medium">Page</th>
                       <th className="text-right p-3 font-medium">LCP</th>
                       <th className="text-right p-3 font-medium">CLS</th>
@@ -640,13 +640,13 @@ export default function LiveSEOPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-lg font-bold text-slate-800 mb-1">Indexing & Crawl Status</h2>
-              <p className="text-sm text-[#64748b]">Google Search Console data · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
+              <p className="text-sm text-slate-500">Google Search Console data · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               {/* Indexed vs not */}
               <div className="p-5 bg-sky-50 border border-sky-100 rounded-2xl">
-                <p className="text-xs text-[#64748b] mb-4">Page indexing breakdown</p>
+                <p className="text-xs text-slate-500 mb-4">Page indexing breakdown</p>
                 <div className="space-y-3">
                   {[
                     { label: 'Indexed', value: M.indexedPages, color: 'bg-emerald-500', text: 'text-emerald-400', total: M.indexedPages + M.notIndexed },
@@ -655,7 +655,7 @@ export default function LiveSEOPage() {
                   ].map((s, i) => (
                     <div key={i}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-[#64748b]">{s.label}</span>
+                        <span className="text-xs text-slate-500">{s.label}</span>
                         <span className={`text-sm font-bold ${s.text}`}>{s.value}</span>
                       </div>
                       <div className="h-1.5 bg-sky-50 rounded-full overflow-hidden">
@@ -669,7 +669,7 @@ export default function LiveSEOPage() {
 
               {/* Recent crawl activity */}
               <div className="p-5 bg-sky-50 border border-sky-100 rounded-2xl">
-                <p className="text-xs text-[#64748b] mb-4">Recent crawl activity</p>
+                <p className="text-xs text-slate-500 mb-4">Recent crawl activity</p>
                 <div className="space-y-2">
                   {[
                     { url: '/',                     status: 'Indexed', date: 'Mar 11', ok: true },
@@ -682,11 +682,11 @@ export default function LiveSEOPage() {
                     <div key={i} className="flex items-center justify-between py-1.5 border-b border-sky-100 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <span className="text-xs font-mono text-[#64748b]">{r.url}</span>
+                        <span className="text-xs font-mono text-slate-500">{r.url}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`text-[10px] ${r.ok ? 'text-emerald-400/70' : 'text-red-400'}`}>{r.status}</span>
-                        <span className="text-[10px] text-[#64748b]">{r.date}</span>
+                        <span className="text-[10px] text-slate-500">{r.date}</span>
                       </div>
                     </div>
                   ))}

@@ -7,8 +7,7 @@
 // Response is cached for 5 minutes at the edge to keep the dashboard fast.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 import { computeDropOffAnalysis, buildDemoAnalysis } from '@/lib/analytics/dropoff';
 
@@ -17,10 +16,9 @@ export const revalidate = 300; // 5 min edge cache
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireApiSession();
+    if (!auth) return unauthorizedResponse();
+    const { userId, email } = auth;
 
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get('siteId');
@@ -37,7 +35,7 @@ export async function GET(req: NextRequest) {
         org: {
           members: {
             some: {
-              user: { email: session.user.email },
+              user: { email },
             },
           },
         },

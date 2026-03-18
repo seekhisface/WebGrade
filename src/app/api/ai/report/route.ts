@@ -17,8 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 import { aggregateReportData } from '@/lib/report/aggregator';
 import { buildReportPrompts } from '@/lib/report/prompt';
@@ -26,10 +25,9 @@ import { buildReportPrompts } from '@/lib/report/prompt';
 export const maxDuration = 120; // 2 min timeout for Vercel
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const { siteId } = await req.json();
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
@@ -67,7 +65,7 @@ export async function POST(req: NextRequest) {
   // ── Aggregate data ───────────────────────────────────────────────────────
   let reportData;
   try {
-    reportData = await aggregateReportData(siteId, session.user.email);
+    reportData = await aggregateReportData(siteId, email);
     if (!reportData) {
       await prisma.report.update({ where: { id: report.id }, data: { status: 'FAILED' } });
       return NextResponse.json({ error: 'Site not found or no access' }, { status: 404 });
@@ -167,10 +165,9 @@ export async function POST(req: NextRequest) {
 // ── GET — fetch existing report ───────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });

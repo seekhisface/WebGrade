@@ -5,18 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { alertId: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const { alertId } = params;
   const { resolvedAt } = await req.json();

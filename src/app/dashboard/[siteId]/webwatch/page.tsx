@@ -3,20 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-function useCountUp(target: number, duration = 1800): number {
-  const [current, setCurrent] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const step = target / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= target) { setCurrent(target); clearInterval(timer); }
-      else setCurrent(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [target, duration]);
-  return current;
-}
+import { useCountUp } from '@/lib/hooks/useCountUp';
 
 function WatchKpiTile({ label, raw, display, sub, bg, fg, sub_c, trend, tc }: {
   label: string; raw: number; display: string; sub: string;
@@ -364,15 +351,15 @@ function SpendBars({ data }: { data: typeof REPORT.spendTrend }) {
       <div className="flex items-center gap-4 mt-1">
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-sm bg-emerald-500/40" />
-          <span className="text-[10px] text-[#64748b]">Effective spend</span>
+          <span className="text-[10px] text-slate-500">Effective spend</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-sm bg-red-500/40" />
-          <span className="text-[10px] text-[#64748b]">Wasted spend</span>
+          <span className="text-[10px] text-slate-500">Wasted spend</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 border-l-2 border-dashed border-indigo-400/50" />
-          <span className="text-[10px] text-[#64748b]">Baseline (Dec)</span>
+          <span className="text-[10px] text-slate-500">Baseline (Dec)</span>
         </div>
       </div>
     </div>
@@ -391,7 +378,7 @@ export default function WebWatchPage() {
   const h = REPORT.headline;
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff]">
+    <div className="min-h-screen bg-page-bg">
 
       {/* Page sub-header: view tabs */}
       <div className="bg-white border-b border-sky-100 px-6 py-2">
@@ -403,7 +390,7 @@ export default function WebWatchPage() {
             </div>
             <span className="text-slate-300">·</span>
             <span>{REPORT.month}</span>
-            <span className="px-2 py-0.5 bg-sky-50 border border-sky-200 rounded text-[10px] text-[#64748b]">Report #{REPORT.reportNumber}</span>
+            <span className="px-2 py-0.5 bg-sky-50 border border-sky-200 rounded text-[10px] text-slate-500">Report #{REPORT.reportNumber}</span>
           </div>
           <div className="flex items-center bg-sky-50 border border-sky-200 rounded-lg p-1 gap-1">
             {(['overview', 'implementations', 'findings', 'behavioral'] as View[]).map((v) => {
@@ -418,7 +405,7 @@ export default function WebWatchPage() {
               );
             })}
           </div>
-          <div className="text-xs text-[#64748b]">Generated {REPORT.generatedAt}</div>
+          <div className="text-xs text-slate-500">Generated {REPORT.generatedAt}</div>
         </div>
       </div>
 
@@ -426,27 +413,27 @@ export default function WebWatchPage() {
       <div className="max-w-6xl mx-auto px-6 pt-8 pb-4">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <p className="text-xs text-[#64748b] uppercase tracking-wider mb-1">{REPORT.domain}</p>
-            <h1 className="text-2xl font-bold text-[#1e293b]">{REPORT.site}</h1>
-            <p className="text-sm text-[#64748b] mt-1">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{REPORT.domain}</p>
+            <h1 className="text-2xl font-bold text-slate-900">{REPORT.site}</h1>
+            <p className="text-sm text-slate-500 mt-1">
               Monthly monitoring report · {REPORT.month} · Baseline: {REPORT.baselineMonth}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-[#64748b] mb-1">Revenue recovered this month</p>
+            <p className="text-xs text-slate-500 mb-1">Revenue recovered this month</p>
             <p className="text-2xl font-bold text-emerald-600">${h.revenueRecovered.toLocaleString()}</p>
-            <p className="text-xs text-[#64748b]">vs {REPORT.baselineMonth} baseline</p>
+            <p className="text-xs text-slate-500">vs {REPORT.baselineMonth} baseline</p>
           </div>
         </div>
 
         {/* Headline KPI bar */}
         <div className="grid grid-cols-6 gap-3 mt-6">
           {[
-            { label: 'Trials This Month', raw: h.trialsThisMonth, display: String(h.trialsThisMonth), sub: `+${h.trialsVsBaseline} vs ${REPORT.baselineMonth}`, bg: 'bg-[#0c4a6e]', fg: 'text-white', sub_c: 'text-sky-300', trend: REPORT.trends.trials, tc: '#7dd3fc' },
-            { label: 'Cost Per Trial', raw: h.cpaThisMonth, display: `$${h.cpaThisMonth}`, sub: `${h.cpaChange}% vs ${REPORT.baselineMonth}`, bg: 'bg-[#0d9488]', fg: 'text-white', sub_c: 'text-teal-200', trend: REPORT.trends.cpa.map((v: number) => -v), tc: '#99f6e4' },
+            { label: 'Trials This Month', raw: h.trialsThisMonth, display: String(h.trialsThisMonth), sub: `+${h.trialsVsBaseline} vs ${REPORT.baselineMonth}`, bg: 'bg-nav-bg', fg: 'text-white', sub_c: 'text-sky-300', trend: REPORT.trends.trials, tc: '#7dd3fc' },
+            { label: 'Cost Per Trial', raw: h.cpaThisMonth, display: `$${h.cpaThisMonth}`, sub: `${h.cpaChange}% vs ${REPORT.baselineMonth}`, bg: 'bg-status-green', fg: 'text-white', sub_c: 'text-teal-200', trend: REPORT.trends.cpa.map((v: number) => -v), tc: '#99f6e4' },
             { label: 'Total Ad Spend', raw: h.totalSpend/1000, display: `$${(h.totalSpend/1000).toFixed(1)}k`, sub: `-$${Math.abs(h.spendChange).toLocaleString()} vs ${REPORT.baselineMonth}`, bg: 'bg-[#1e40af]', fg: 'text-white', sub_c: 'text-blue-200', trend: REPORT.trends.spendTotal.map((v: number) => -v), tc: '#93c5fd' },
             { label: 'Wasted Spend', raw: h.wastedSpend/1000, display: `$${(h.wastedSpend/1000).toFixed(1)}k`, sub: `${h.wastedChange}% vs ${REPORT.baselineMonth}`, bg: 'bg-[#7c3aed]', fg: 'text-white', sub_c: 'text-violet-200', trend: REPORT.trends.wastedSpend.map((v: number) => -v), tc: '#c4b5fd' },
-            { label: 'Avg Intent Score', raw: h.intentAvg, display: `${h.intentAvg}/100`, sub: `+${h.intentAvg - h.intentBaseline}pts vs ${REPORT.baselineMonth}`, bg: 'bg-[#b45309]', fg: 'text-white', sub_c: 'text-amber-200', trend: REPORT.trends.intentAvg, tc: '#fde68a' },
+            { label: 'Avg Intent Score', raw: h.intentAvg, display: `${h.intentAvg}/100`, sub: `+${h.intentAvg - h.intentBaseline}pts vs ${REPORT.baselineMonth}`, bg: 'bg-status-yellow', fg: 'text-white', sub_c: 'text-amber-200', trend: REPORT.trends.intentAvg, tc: '#fde68a' },
             { label: 'Trial CVR', raw: REPORT.trends.cvr[5], display: `${REPORT.trends.cvr[5]}%`, sub: `+${(REPORT.trends.cvr[5] - REPORT.trends.cvr[3]).toFixed(1)}pts vs ${REPORT.baselineMonth}`, bg: 'bg-[#166534]', fg: 'text-white', sub_c: 'text-green-200', trend: REPORT.trends.cvr, tc: '#86efac' },
           ].map((kpi, i) => (
             <WatchKpiTile key={i} {...kpi} />
@@ -462,7 +449,7 @@ export default function WebWatchPage() {
 
             {/* Executive summary */}
             <section>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Monthly Summary</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Monthly Summary</p>
               <div className="p-6 bg-sky-50 border border-sky-100 rounded-2xl">
                 <p className="text-sm text-slate-700 leading-relaxed">{REPORT.executiveSummary}</p>
               </div>
@@ -470,7 +457,7 @@ export default function WebWatchPage() {
 
             {/* Spend trend chart */}
             <section>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Ad Spend — 6-Month Trend</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Ad Spend — 6-Month Trend</p>
               <div className="p-5 bg-sky-50 border border-sky-100 rounded-2xl">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -479,9 +466,9 @@ export default function WebWatchPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-[#64748b]">Wasted this month</p>
+                    <p className="text-xs text-slate-500">Wasted this month</p>
                     <p className="text-lg font-bold text-emerald-600">
-                      ${h.wastedSpend.toLocaleString()}<span className="text-xs font-normal text-[#64748b]">/mo</span>
+                      ${h.wastedSpend.toLocaleString()}<span className="text-xs font-normal text-slate-500">/mo</span>
                     </p>
                     <p className="text-[10px] text-emerald-400/70">↓ ${(11100 - h.wastedSpend).toLocaleString()} from baseline</p>
                   </div>
@@ -492,7 +479,7 @@ export default function WebWatchPage() {
 
             {/* Trend sparklines grid */}
             <section>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">6-Month Performance Trends</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">6-Month Performance Trends</p>
               <div className="grid grid-cols-3 gap-4">
                 {[
                   { label: 'Monthly Trial Starts', data: REPORT.trends.trials, color: '#10b981', unit: 'trials', baselineIdx: 3 },
@@ -507,9 +494,9 @@ export default function WebWatchPage() {
                   const positive = parseFloat(delta) > 0;
                   return (
                     <div key={i} className="p-4 bg-sky-50 border border-sky-100 rounded-xl">
-                      <p className="text-xs text-[#64748b] mb-3">{chart.label}</p>
+                      <p className="text-xs text-slate-500 mb-3">{chart.label}</p>
                       <div className="flex items-end justify-between mb-3">
-                        <p className="text-xl font-bold text-[#1e293b]">{current}{chart.unit}</p>
+                        <p className="text-xl font-bold text-slate-900">{current}{chart.unit}</p>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded ${positive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                           {positive ? '+' : ''}{delta}% vs baseline
                         </span>
@@ -533,7 +520,7 @@ export default function WebWatchPage() {
 
             {/* Campaign table */}
             <section>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Campaign Performance — February 2026</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">Campaign Performance — February 2026</p>
               <div className="space-y-3">
                 {REPORT.campaigns.map((c, i) => {
                   const statusConfig = {
@@ -549,14 +536,14 @@ export default function WebWatchPage() {
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusConfig.dot}`} />
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-[#1e293b]">{c.name}</p>
+                              <p className="text-sm font-semibold text-slate-900">{c.name}</p>
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
                                 c.status === 'performing' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                 c.status === 'improving' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
                                 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                               }`}>{statusConfig.label}</span>
                             </div>
-                            <p className="text-xs text-[#64748b]">{c.source}</p>
+                            <p className="text-xs text-slate-500">{c.source}</p>
                           </div>
                         </div>
                         {c.status !== 'new_opportunity' && (
@@ -569,8 +556,8 @@ export default function WebWatchPage() {
                               { label: 'Cost/HI', value: `$${c.costPerHighIntent}`, delta: 0, unit: '', neutral: true },
                             ].map((m, mi) => (
                               <div key={mi}>
-                                <p className="text-[10px] text-[#64748b] mb-0.5">{m.label}</p>
-                                <p className="text-sm font-semibold text-[#1e293b]">{m.value}</p>
+                                <p className="text-[10px] text-slate-500 mb-0.5">{m.label}</p>
+                                <p className="text-sm font-semibold text-slate-900">{m.value}</p>
                                 {m.delta !== 0 && !m.neutral && (
                                   <Delta value={m.delta} unit={m.unit} inverse={m.inverse} />
                                 )}
@@ -608,7 +595,7 @@ export default function WebWatchPage() {
                 { label: 'Combined lift', value: '+$38,400/mo', color: 'text-emerald-400' },
               ].map((s, i) => (
                 <div key={i} className="p-4 bg-sky-50 border border-sky-100 rounded-xl">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">{s.label}</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{s.label}</p>
                   <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
                 </div>
               ))}
@@ -624,8 +611,8 @@ export default function WebWatchPage() {
                         <span className="text-emerald-400 text-xs font-bold">✓</span>
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-[#1e293b]">{impl.title}</p>
-                        <p className="text-xs text-[#64748b]">Implemented {impl.implementedDate}</p>
+                        <p className="text-sm font-semibold text-slate-900">{impl.title}</p>
+                        <p className="text-xs text-slate-500">Implemented {impl.implementedDate}</p>
                       </div>
                     </div>
                     <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold rounded uppercase tracking-wider">
@@ -636,17 +623,17 @@ export default function WebWatchPage() {
                   {/* Impact comparison */}
                   <div className="grid grid-cols-4 gap-3 mb-3">
                     <div className="p-3 bg-sky-50 border border-sky-100 rounded-lg">
-                      <p className="text-[10px] text-[#64748b] mb-1">{impl.impact.metric}</p>
+                      <p className="text-[10px] text-slate-500 mb-1">{impl.impact.metric}</p>
                       <p className="text-xs text-slate-500">Before</p>
                       <p className="text-sm font-semibold text-red-600">{impl.impact.before}</p>
                     </div>
                     <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-lg">
-                      <p className="text-[10px] text-[#64748b] mb-1">{impl.impact.metric}</p>
+                      <p className="text-[10px] text-slate-500 mb-1">{impl.impact.metric}</p>
                       <p className="text-xs text-slate-500">Now</p>
                       <p className="text-sm font-semibold text-emerald-600">{impl.impact.after}</p>
                     </div>
                     <div className="p-3 bg-sky-50 border border-sky-100 rounded-lg col-span-2">
-                      <p className="text-[10px] text-[#64748b] mb-1">Change</p>
+                      <p className="text-[10px] text-slate-500 mb-1">Change</p>
                       <p className="text-lg font-bold text-emerald-600">{impl.impact.change}</p>
                     </div>
                   </div>
@@ -686,7 +673,7 @@ export default function WebWatchPage() {
                           <span className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded border ${sev.badge}`}>
                             {f.severity}
                           </span>
-                          <span className="px-2 py-0.5 text-[10px] font-medium text-[#64748b] bg-sky-50 rounded">
+                          <span className="px-2 py-0.5 text-[10px] font-medium text-slate-500 bg-sky-50 rounded">
                             {f.module}
                           </span>
                           {f.isNew && (
@@ -742,12 +729,12 @@ export default function WebWatchPage() {
             <div className="space-y-2">
               {/* Header row */}
               <div className="grid grid-cols-12 gap-2 px-4 pb-1">
-                <p className="col-span-3 text-[10px] text-[#64748b] uppercase tracking-wider">Page</p>
-                <p className="col-span-2 text-[10px] text-[#64748b] uppercase tracking-wider">Metric</p>
-                <p className="col-span-2 text-[10px] text-[#64748b] uppercase tracking-wider">Baseline</p>
-                <p className="col-span-2 text-[10px] text-[#64748b] uppercase tracking-wider">Current</p>
-                <p className="col-span-2 text-[10px] text-[#64748b] uppercase tracking-wider">Change</p>
-                <p className="col-span-1 text-[10px] text-[#64748b] uppercase tracking-wider">Signal</p>
+                <p className="col-span-3 text-[10px] text-slate-500 uppercase tracking-wider">Page</p>
+                <p className="col-span-2 text-[10px] text-slate-500 uppercase tracking-wider">Metric</p>
+                <p className="col-span-2 text-[10px] text-slate-500 uppercase tracking-wider">Baseline</p>
+                <p className="col-span-2 text-[10px] text-slate-500 uppercase tracking-wider">Current</p>
+                <p className="col-span-2 text-[10px] text-slate-500 uppercase tracking-wider">Change</p>
+                <p className="col-span-1 text-[10px] text-slate-500 uppercase tracking-wider">Signal</p>
               </div>
 
               {REPORT.behavioralShifts.map((s, i) => {
@@ -768,13 +755,13 @@ export default function WebWatchPage() {
                   <div key={i} className={`grid grid-cols-12 gap-2 p-4 border rounded-xl items-center ${signalConfig.bg}`}>
                     <p className="col-span-3 text-xs font-mono text-slate-600">{s.page}</p>
                     <p className="col-span-2 text-xs text-slate-500">{s.metric}</p>
-                    <p className="col-span-2 text-xs text-[#64748b]">{s.baseline}{s.unit}</p>
-                    <p className="col-span-2 text-xs font-semibold text-[#1e293b]">{s.current}{s.unit}</p>
+                    <p className="col-span-2 text-xs text-slate-500">{s.baseline}{s.unit}</p>
+                    <p className="col-span-2 text-xs font-semibold text-slate-900">{s.current}{s.unit}</p>
                     <div className="col-span-2">
                       <p className={`text-xs font-semibold ${isGood ? 'text-emerald-400' : isBad ? 'text-red-400' : 'text-slate-400'}`}>
                         {rawDelta > 0 ? '+' : ''}{rawDelta.toFixed(rawDelta < 1 && rawDelta > -1 ? 1 : 0)}{s.unit}
                       </p>
-                      <p className="text-[10px] text-[#64748b]">{pctDelta}%</p>
+                      <p className="text-[10px] text-slate-500">{pctDelta}%</p>
                     </div>
                     <div className="col-span-1 flex items-center">
                       <div className={`w-2 h-2 rounded-full ${signalConfig.indicator}`} />
@@ -785,7 +772,7 @@ export default function WebWatchPage() {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-6 text-xs text-[#64748b] pt-2">
+            <div className="flex items-center gap-6 text-xs text-slate-500 pt-2">
               <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Improved vs baseline</div>
               <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500" /> Degraded — action recommended</div>
               <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-sky-200" /> Neutral / informational</div>
@@ -801,7 +788,7 @@ export default function WebWatchPage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawer(null)} />
           <div className="relative w-full max-w-lg bg-gray-950 border-l border-sky-200 h-full overflow-y-auto shadow-2xl">
             <div className="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-sky-100 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[#1e293b]">{drawer.title}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{drawer.title}</h3>
               <button onClick={() => setDrawer(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
             </div>
             <div className="px-6 py-6">

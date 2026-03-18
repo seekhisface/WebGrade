@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   }));
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff]">
+    <div className="min-h-screen bg-page-bg">
       <AppNav sites={siteList} />
       {children}
     </div>

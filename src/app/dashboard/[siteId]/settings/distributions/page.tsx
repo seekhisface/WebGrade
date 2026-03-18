@@ -72,7 +72,7 @@ const DEMO_RECIPIENTS: Recipient[] = [
 // Constants
 // ---------------------------------------------------------------------------
 const ROLE_CONFIG: Record<DistributionRole, { label: string; description: string; color: string }> = {
-  OWNER:       { label: 'Owner',       description: 'Receives all reports + alerts',     color: 'bg-[#0c4a6e] text-white' },
+  OWNER:       { label: 'Owner',       description: 'Receives all reports + alerts',     color: 'bg-nav-bg text-white' },
   STAKEHOLDER: { label: 'Stakeholder', description: 'Receives full reports',             color: 'bg-sky-100 text-sky-700' },
   EXEC:        { label: 'Exec',        description: 'Executive summary + digest only',   color: 'bg-violet-100 text-violet-700' },
   CUSTOM:      { label: 'Custom',      description: 'Manually configured',               color: 'bg-slate-100 text-slate-600' },
@@ -155,7 +155,7 @@ function RecipientDrawer({
             <button key={t} onClick={() => setTab(t)}
               className={`px-3 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px ${
                 tab === t
-                  ? 'border-[#0284c7] text-[#0284c7]'
+                  ? 'border-status-blue text-status-blue'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}>{t}</button>
           ))}
@@ -171,14 +171,14 @@ function RecipientDrawer({
                 <input type="email" value={form.recipientEmail}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('recipientEmail', e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#0284c7] placeholder-slate-300" />
+                  className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-status-blue placeholder-slate-300" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Display name</label>
                 <input type="text" value={form.recipientName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('recipientName', e.target.value)}
                   placeholder="e.g. Sarah (CMO)"
-                  className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#0284c7] placeholder-slate-300" />
+                  className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-status-blue placeholder-slate-300" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Role</label>
@@ -186,12 +186,12 @@ function RecipientDrawer({
                   {(Object.entries(ROLE_CONFIG) as [DistributionRole, typeof ROLE_CONFIG[DistributionRole]][]).map(([role, cfg]) => (
                     <button key={role} onClick={() => set('role', role)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                        form.role === role ? 'border-[#0284c7] bg-sky-50' : 'border-sky-100 hover:border-sky-200'
+                        form.role === role ? 'border-status-blue bg-sky-50' : 'border-sky-100 hover:border-sky-200'
                       }`}>
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                        form.role === role ? 'border-[#0284c7]' : 'border-slate-300'
+                        form.role === role ? 'border-status-blue' : 'border-slate-300'
                       }`}>
-                        {form.role === role && <div className="w-1.5 h-1.5 rounded-full bg-[#0284c7]" />}
+                        {form.role === role && <div className="w-1.5 h-1.5 rounded-full bg-status-blue" />}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -211,7 +211,7 @@ function RecipientDrawer({
                     <button key={ch} onClick={() => set('deliveryChannel', ch)}
                       className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
                         form.deliveryChannel === ch
-                          ? 'border-[#0284c7] bg-sky-50 text-[#0284c7]'
+                          ? 'border-status-blue bg-sky-50 text-status-blue'
                           : 'border-sky-100 text-slate-500 hover:border-sky-200'
                       }`}>{ch}</button>
                   ))}
@@ -220,7 +220,7 @@ function RecipientDrawer({
                   <input type="url" value={form.slackWebhookUrl}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('slackWebhookUrl', e.target.value)}
                     placeholder="https://hooks.slack.com/services/..."
-                    className="mt-2 w-full px-3 py-2 bg-sky-50 border border-sky-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[#0284c7] placeholder-slate-300" />
+                    className="mt-2 w-full px-3 py-2 bg-sky-50 border border-sky-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-status-blue placeholder-slate-300" />
                 )}
               </div>
             </>
@@ -239,7 +239,7 @@ function RecipientDrawer({
                     <p className="text-sm font-semibold text-slate-800">{label}</p>
                     <p className="text-xs text-slate-400">{description}</p>
                   </div>
-                  <div className={`w-10 h-6 rounded-full relative transition-colors flex-shrink-0 ${form[key] ? 'bg-[#0284c7]' : 'bg-slate-200'}`}>
+                  <div className={`w-10 h-6 rounded-full relative transition-colors flex-shrink-0 ${form[key] ? 'bg-status-blue' : 'bg-slate-200'}`}>
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${form[key] ? 'translate-x-5' : 'translate-x-1'}`} />
                   </div>
                 </div>
@@ -256,12 +256,12 @@ function RecipientDrawer({
                   {(Object.entries(FREQUENCY_LABELS) as [DigestFrequency, string][]).map(([freq, label]) => (
                     <button key={freq} onClick={() => set('webWatchFrequency', freq)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                        form.webWatchFrequency === freq ? 'border-[#0284c7] bg-sky-50' : 'border-sky-100 hover:border-sky-200'
+                        form.webWatchFrequency === freq ? 'border-status-blue bg-sky-50' : 'border-sky-100 hover:border-sky-200'
                       }`}>
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                        form.webWatchFrequency === freq ? 'border-[#0284c7]' : 'border-slate-300'
+                        form.webWatchFrequency === freq ? 'border-status-blue' : 'border-slate-300'
                       }`}>
-                        {form.webWatchFrequency === freq && <div className="w-1.5 h-1.5 rounded-full bg-[#0284c7]" />}
+                        {form.webWatchFrequency === freq && <div className="w-1.5 h-1.5 rounded-full bg-status-blue" />}
                       </div>
                       <span className="text-sm text-slate-700 font-medium">{label}</span>
                     </button>
@@ -274,7 +274,7 @@ function RecipientDrawer({
                 </label>
                 <input type="range" min={6} max={20} value={form.digestHour}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('digestHour', parseInt(e.target.value, 10))}
-                  className="w-full accent-[#0284c7]" />
+                  className="w-full accent-status-blue" />
                 <div className="flex justify-between text-[10px] text-slate-400 mt-1">
                   <span>6am</span><span>12pm</span><span>8pm</span>
                 </div>
@@ -292,7 +292,7 @@ function RecipientDrawer({
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set('customMessage', e.target.value)}
                 rows={5}
                 placeholder={`e.g. "Hi Sarah — here's your monthly WebGrade intelligence digest for NovaPulse HR."`}
-                className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#0284c7] placeholder-slate-300 resize-none"
+                className="w-full px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-status-blue placeholder-slate-300 resize-none"
               />
               {form.customMessage && (
                 <div className="p-3.5 bg-white border border-sky-200 rounded-xl">
@@ -308,7 +308,7 @@ function RecipientDrawer({
         {/* Footer */}
         <div className="px-5 py-4 border-t border-sky-100 flex items-center gap-2">
           <button onClick={() => onSave(form)}
-            className="flex-1 py-2.5 bg-[#0284c7] hover:bg-[#0369a1] text-white text-sm font-bold rounded-xl transition-colors">
+            className="flex-1 py-2.5 bg-status-blue hover:bg-[#0369a1] text-white text-sm font-bold rounded-xl transition-colors">
             {isEdit ? 'Save changes' : 'Add recipient'}
           </button>
           <button onClick={onClose}
@@ -344,7 +344,7 @@ function RecipientCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-[#0284c7] flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-status-blue flex items-center justify-center flex-shrink-0">
             <span className="text-white text-sm font-bold">
               {(recipient.recipientName || recipient.recipientEmail).charAt(0).toUpperCase()}
             </span>
@@ -444,7 +444,7 @@ export default function DistributionsPage() {
   const activeCount = recipients.filter((r: Recipient) => r.isActive).length;
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff] text-slate-900">
+    <div className="min-h-screen bg-page-bg text-slate-900">
       <div className="max-w-3xl mx-auto px-6 py-7">
 
         {/* Breadcrumb */}
@@ -465,7 +465,7 @@ export default function DistributionsPage() {
             </p>
           </div>
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0284c7] hover:bg-[#0369a1] text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex-shrink-0">
+            className="flex items-center gap-2 px-4 py-2 bg-status-blue hover:bg-[#0369a1] text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex-shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -479,7 +479,7 @@ export default function DistributionsPage() {
             { label: 'Recipients',      value: recipients.length,                                color: 'text-slate-800' },
             { label: 'Active',          value: activeCount,                                      color: 'text-teal-600' },
             { label: 'Reports enabled', value: `${REPORT_LABELS.length} types`,                  color: 'text-slate-800' },
-            { label: 'Next delivery',   value: 'Apr 1, 8am',                                     color: 'text-[#0284c7]' },
+            { label: 'Next delivery',   value: 'Apr 1, 8am',                                     color: 'text-status-blue' },
           ].map((s, i) => (
             <div key={i} className="bg-white border border-sky-100 rounded-2xl p-3.5 shadow-card">
               <p className="text-[10px] text-sky-400 uppercase tracking-wider mb-1">{s.label}</p>
@@ -505,7 +505,7 @@ export default function DistributionsPage() {
             <p className="text-sm font-semibold text-slate-800 mb-1">No recipients yet</p>
             <p className="text-xs text-slate-400 mb-4">Add people who should receive WebGrade reports automatically.</p>
             <button onClick={openAdd}
-              className="px-4 py-2 bg-[#0284c7] text-white text-sm font-semibold rounded-xl hover:bg-[#0369a1] transition-colors">
+              className="px-4 py-2 bg-status-blue text-white text-sm font-semibold rounded-xl hover:bg-[#0369a1] transition-colors">
               Add first recipient
             </button>
           </div>

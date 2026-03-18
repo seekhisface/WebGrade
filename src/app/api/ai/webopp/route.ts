@@ -12,8 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 import { loadSiteContext, buildSystemPrompt } from '@/lib/ai/context';
 import { aggregateSearchDemand, extractSeedKeywords } from '@/lib/webopp/search-demand';
@@ -21,15 +20,14 @@ import { aggregateSearchDemand, extractSeedKeywords } from '@/lib/webopp/search-
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const { siteId } = await req.json();
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  const ctx = await loadSiteContext(siteId, session.user.email);
+  const ctx = await loadSiteContext(siteId, email);
   if (!ctx) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const onboarding = await prisma.siteOnboarding.findUnique({ where: { siteId } });
@@ -191,8 +189,9 @@ Base numbers on the business context and search data provided. Respond ONLY with
 // ── GET — fetch latest analysis ───────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });

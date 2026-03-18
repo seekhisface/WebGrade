@@ -201,7 +201,7 @@ export function RecommendationCard({
               value={noteInput}
               onChange={e => setNoteInput(e.target.value)}
               placeholder="What did you do? (e.g. 'Rewrote the /pricing headline and moved CTA above fold')"
-              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:border-[#0c4a6e]"
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:border-nav-bg"
               rows={3}
             />
             <div className="flex gap-2">
@@ -316,7 +316,7 @@ export function RecommendationCard({
                   return (
                     <div key={i} className="flex flex-col items-center gap-0.5 flex-1" title={`${h.month}: ${h.value.toFixed(1)}`}>
                       <div
-                        className="w-full rounded-sm bg-[#0c4a6e] opacity-70 hover:opacity-100 transition-opacity"
+                        className="w-full rounded-sm bg-nav-bg opacity-70 hover:opacity-100 transition-opacity"
                         style={{ height: `${pct}%`, minHeight: 4 }}
                       />
                       <span className="text-[8px] text-slate-400">{h.month.split(' ')[0]?.slice(0, 3)}</span>

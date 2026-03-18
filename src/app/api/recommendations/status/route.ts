@@ -6,15 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { requireApiSession, unauthorizedResponse } from '@/lib/auth/api';
 import { prisma } from '@/lib/db/client';
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireApiSession();
+  if (!auth) return unauthorizedResponse();
+  const { userId, email } = auth;
 
   const { recId, status, note } = await req.json();
   if (!recId || !status) {
@@ -44,11 +42,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Recommendation not found' }, { status: 404 });
   }
 
-  const isMember = rec.site.org.members.some(m => m.user.email === session.user!.email);
+  const isMember = rec.site.org.members.some(m => m.user.email === email);
   // Fallback: also allow if user's org owns the site
   if (!isMember) {
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email },
       include: { orgMemberships: { select: { orgId: true } } },
     });
     const orgIds = user?.orgMemberships.map(m => m.orgId) ?? [];
