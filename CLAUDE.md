@@ -15,6 +15,7 @@ npm run db:studio    # prisma studio (DB browser)
 
 Seed demo data: `npx tsx scripts/seed-demo.ts`
 Seed behavioral data: `npx tsx scripts/seed-behavioral.ts` (1200 sessions for NovaPulse HR)
+Seed SEO data: `npx tsx scripts/seed-seo.ts` (16 pages with CWV, on-page SEO, indexing + 8 GSC keywords)
 
 No test suite exists yet. No `npm test` script.
 
@@ -137,7 +138,8 @@ src/
 │   │   │   ├── settings/route.ts    # Alert rule configuration
 │   │   │   └── test/route.ts        # Test alert delivery
 │   │   ├── analytics/
-│   │   │   └── dropoff/route.ts     # Drop-off page analysis (P1-07)
+│   │   │   ├── dropoff/route.ts     # Drop-off page analysis (P1-07)
+│   │   │   └── seo/route.ts        # Live SEO data (CWV, keywords, indexing from DB)
 │   │   ├── auth/[...nextauth]/route.ts
 │   │   ├── health-check/route.ts
 │   │   ├── ingest/route.ts
@@ -211,6 +213,7 @@ prisma/
 scripts/
 │   ├── seed-demo.ts                # Alternate demo seed location
 │   ├── seed-behavioral.ts          # Seed 1200 visitor sessions with pageviews/events
+│   ├── seed-seo.ts                 # Seed SEO crawl data + GSC keywords for NovaPulse HR
 │   ├── check-users.ts              # List all users + org memberships
 │   └── fix-demo-membership.ts      # Fix demo user linkage
 public/
@@ -232,6 +235,8 @@ public/
 - WebOpp market intelligence (DataForSEO + Claude for keyword gap analysis)
 - Drop-off analysis API
 - Dashboard pages for all products (behavioral, SEO, WebWatch, WebOpp, alerts)
+- Live SEO dashboard wired to DB (`SeoCrawl`, `SeoPageResult`, `SiteBaseline` tables) with fallback to demo data
+- SEO API route (`/api/analytics/seo`) — returns CWV, indexing, keyword, and traffic data from DB
 - Marketing landing page with pricing and Cal.com scheduling
 - Demo mode with full seed data (NovaPulse HR, 90 days of behavioral data)
 - Win-back report system (public token-based reports)
@@ -242,11 +247,13 @@ public/
 
 ### Still Stubbed or Incomplete
 - **Health check**: some checks return hardcoded placeholder values (SPA detection, page speed)
-- **SEO crawler** (P2-01): Puppeteer crawler not implemented
+- **SEO crawler** (P2-01): Puppeteer crawler not implemented — needed to populate `SeoCrawl` + `SeoPageResult` tables with real data. Currently uses seed script for demo data. Schema is fully ready (`SeoPageResult` has 30+ fields for HTTP, Lighthouse CWV, on-page SEO, technical, crawlability, and content scoring).
+- **GSC import** (OB-03): Google Search Console OAuth flow stubbed in onboarding — needed to populate `SiteBaseline` with real keyword positions, clicks, impressions, CTR. Currently uses seed script with `gsc_import` source. Keyword data stored as `SiteBaseline` rows with metric keys like `gsc_kw_position__<keyword>`, `gsc_kw_clicks__<keyword>`, etc.
 - **Re-measurement loop** (RM-*): schema exists, no code
 - **GA4 import** (OB-03): OAuth flow stubbed in onboarding
 - **SMS alerts via Twilio**: dependency installed, not used
-- **Dashboard data**: behavioral dashboard is wired to real DB; other pages (SEO, WebWatch, WebOpp) still use hardcoded demo data
+- **Report aggregator broken import**: `src/lib/report/aggregator.ts` imports `runDropOffAnalysis` but the actual export is `computeDropOffAnalysis`. Also needs call signature adapted (takes `{ siteId, periodDays }` not `(siteId, { startDate, endDate })`).
+- **Dashboard data**: behavioral dashboard and SEO dashboard are wired to real DB; WebWatch and WebOpp pages still use hardcoded demo data
 
 ## Known Issues
 
