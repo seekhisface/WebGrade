@@ -1,4 +1,4 @@
-﻿export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 /**
  * POST /api/rt/generate  — generate a win-back / prospect teaser report
