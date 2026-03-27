@@ -1,4 +1,5 @@
 ﻿export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 /**
  * POST /api/onboarding/complete
  * Saves the remaining onboarding form data after all steps are done.

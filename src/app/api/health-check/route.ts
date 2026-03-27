@@ -1,4 +1,5 @@
 ﻿export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 /**
  * HC-01, HC-03, HC-04, HC-05, HC-06, HC-07, HC-08: Site Health Check API
  * POST /api/health-check

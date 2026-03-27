@@ -1,4 +1,5 @@
 ﻿export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 /**
  * POST /api/ai/webopp
  *

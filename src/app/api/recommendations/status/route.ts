@@ -1,4 +1,5 @@
 ﻿export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 /**
  * PATCH /api/recommendations/status
  *

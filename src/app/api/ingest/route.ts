@@ -1,4 +1,5 @@
 ﻿export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 /**
  * P1-04: Server-Side Event Ingestion API
  * POST /api/ingest
