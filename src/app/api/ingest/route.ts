@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * P1-04: Server-Side Event Ingestion API
  * POST /api/ingest

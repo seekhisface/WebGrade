@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * POST /api/rt/unlock
  * Marks a win-back report as unlocked after purchase / manual approval.

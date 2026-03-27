@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * POST /api/onboarding
  * Creates a new site + onboarding record from the onboarding form.

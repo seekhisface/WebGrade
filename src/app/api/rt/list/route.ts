@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * GET /api/rt/list?siteId=xxx
  * Returns all sent win-back reports for a site (authenticated)

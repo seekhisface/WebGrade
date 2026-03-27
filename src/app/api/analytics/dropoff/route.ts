@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 // src/app/api/analytics/dropoff/route.ts
 // P1-07: Drop-off analysis API endpoint
 //

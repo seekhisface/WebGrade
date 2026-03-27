@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * P1-09: AI Explanation API
  * POST /api/ai/explain

@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 /**
  * POST /api/rt/generate  — generate a win-back / prospect teaser report
  * GET  /api/rt/generate?token=xxx — load by share token (public, no auth)
