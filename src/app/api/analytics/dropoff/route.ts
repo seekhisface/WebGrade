@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
             leadToWinRate: true,
           },
         },
-        siteInstallations: {
+        installations: {
           select: { status: true },
           orderBy: { installedAt: 'desc' },
           take: 1,
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Check if snippet is actually installed and firing
-    const snippetInstalled = site.siteInstallations[0]?.status === 'VERIFIED';
+    const snippetInstalled = site.installations[0]?.status === 'VERIFIED';
 
     // If no snippet, return demo data immediately — no DB query needed
     if (!snippetInstalled) {
