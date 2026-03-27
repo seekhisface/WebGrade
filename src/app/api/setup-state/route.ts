@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       org: { members: { some: { user: { email: session.user.email } } } },
     },
     include: {
-      installations: { orderBy: { installedAt: 'desc' }, take: 1 },
+      siteInstallations: { orderBy: { installedAt: 'desc' }, take: 1 },
       onboarding: true,
       org: {
         include: {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const snippetInstalled = site.installations?.[0]?.status === 'VERIFIED';
+  const snippetInstalled = site.siteInstallations?.[0]?.status === 'VERIFIED';
   const ga4Connected = !!(site.org?.googleConnections?.[0]);
   const gscConnected = !!(site.org?.googleConnections?.[0]);
   const businessContextComplete = !!(
