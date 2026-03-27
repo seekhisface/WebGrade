@@ -23,19 +23,14 @@ export async function GET(req: NextRequest) {
     include: {
       siteInstallations: { orderBy: { installedAt: 'desc' }, take: 1 },
       onboarding: true,
-      org: {
-        include: {
-          googleConnections: { take: 1 },
-        },
-      },
     },
   });
 
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const snippetInstalled = site.siteInstallations?.[0]?.status === 'VERIFIED';
-  const ga4Connected = !!(site.org?.googleConnections?.[0]);
-  const gscConnected = !!(site.org?.googleConnections?.[0]);
+  const ga4Connected = false;
+  const gscConnected = false;
   const businessContextComplete = !!(
     site.onboarding?.businessDescription &&
     site.onboarding?.conversionGoalUrl
