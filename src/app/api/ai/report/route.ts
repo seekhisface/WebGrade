@@ -27,6 +27,7 @@ import { buildReportPrompts } from '@/lib/report/prompt';
 export const maxDuration = 120; // 2 min timeout for Vercel
 
 export async function POST(req: NextRequest) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
