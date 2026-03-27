@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Cal, { getCalApi } from '@calcom/embed-react';
 
-// ── Animated count-up ──────────────────────────────────────────────────────
+// -- Animated count-up --------------------------------------------------
 function useCountUp(target: number, duration = 2000, trigger = true): number {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -21,7 +22,7 @@ function useCountUp(target: number, duration = 2000, trigger = true): number {
   return val;
 }
 
-// ── Marquee ────────────────────────────────────────────────────────────────
+// -- Marquee ------------------------------------------------------------
 const MARQUEE_ITEMS = [
   { icon: '📊', text: 'Behavioral Intent Scoring' },
   { icon: '🔍', text: 'Live SEO Intelligence' },
@@ -57,7 +58,7 @@ function Marquee() {
   );
 }
 
-// ── Products ───────────────────────────────────────────────────────────────
+// -- Products -----------------------------------------------------------
 const PRODUCTS = [
   {
     id: 'interim',
@@ -113,21 +114,39 @@ const STATS = [
   { value: 45, suffix: ' days', label: 'forensic analysis window for the Interim Report™' },
 ];
 
-// ── Demo Modal ─────────────────────────────────────────────────────────────
-// 👉 REPLACE THIS URL with your actual Cal.com booking link
-const CAL_URL = 'https://cal.com/mike-stephens-ffp3wx/30min/webgrade-demo';
+// -- Cal.com embed component --------------------------------------------
+function CalBooking() {
+  useEffect(() => {
+    (async () => {
+      const cal = await getCalApi({ namespace: 'webgrade-demo' });
+      cal('ui', {
+        styles: { branding: { brandColor: '#0c4a6e' } },
+        hideEventTypeDetails: false,
+        layout: 'month_view',
+      });
+    })();
+  }, []);
 
+  return (
+    <Cal
+      namespace="webgrade-demo"
+      calLink="mike-stephens-ffp3wx/webgrade-demo"
+      style={{ width: '100%', height: '100%', minHeight: '420px' }}
+      config={{ layout: 'month_view' }}
+    />
+  );
+}
+
+// -- Demo Modal ---------------------------------------------------------
 function DemoModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
 
-  // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Prevent body scroll while modal open
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
@@ -155,7 +174,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
           </svg>
         </button>
 
-        {/* LEFT — Sign up panel */}
+        {/* LEFT - Sign up panel */}
         <div className="flex-1 bg-[#0c4a6e] p-8 md:p-10 flex flex-col justify-between min-w-[280px]">
           <div>
             <div className="flex items-center gap-2 mb-8">
@@ -173,12 +192,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
             </p>
 
             <ul className="space-y-3 mb-10">
-              {[
-                '45-day behavioral audit',
-                'Revenue at risk identified',
-                'Prioritized action plan',
-                'Free to start',
-              ].map(item => (
+              {['45-day behavioral audit', 'Revenue at risk identified', 'Prioritized action plan', 'Free to start'].map(item => (
                 <li key={item} className="flex items-center gap-3 text-sm text-sky-100">
                   <span className="w-5 h-5 rounded-full bg-[#0d9488] flex items-center justify-center flex-shrink-0">
                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -210,7 +224,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* RIGHT — Cal.com embed */}
+        {/* RIGHT - Cal.com embed */}
         <div className="flex-1 flex flex-col min-w-[280px]">
           <div className="p-6 pb-3 border-b border-[#e0f2fe]">
             <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider mb-1">Optional — Book a walkthrough</p>
@@ -218,12 +232,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
             <p className="text-xs text-[#64748b] mt-1">30-minute demo · Available up to 3 weeks out</p>
           </div>
           <div className="flex-1 overflow-hidden">
-            <iframe
-              src={`${CAL_URL}?embed=true&layout=month_view`}
-              className="w-full h-full border-0"
-              style={{ minHeight: '420px' }}
-              title="Book a WebGrade demo"
-            />
+            <CalBooking />
           </div>
         </div>
       </div>
@@ -231,7 +240,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Demo Button ────────────────────────────────────────────────────────────
+// -- Demo Button --------------------------------------------------------
 function DemoButton({
   size = 'md',
   className = '',
@@ -255,7 +264,7 @@ function DemoButton({
   );
 }
 
-// ── Page ───────────────────────────────────────────────────────────────────
+// -- Page ---------------------------------------------------------------
 export default function MarketingPage() {
   const [statsVisible, setStatsVisible] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -282,7 +291,6 @@ export default function MarketingPage() {
   return (
     <div className="min-h-screen bg-[#f0f9ff]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
-      {/* Modal */}
       {showModal && <DemoModal onClose={closeModal} />}
 
       {/* NAV */}
