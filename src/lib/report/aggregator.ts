@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@/lib/db/client';
-import { runDropOffAnalysis } from '@/lib/analytics/dropoff';
+import { computeDropOffAnalysis } from '@/lib/analytics/dropoff';
 import { loadSiteContext } from '@/lib/ai/context';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export async function aggregateReportData(
   const periodStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
 
   // Run drop-off analysis
-  const dropoff = await runDropOffAnalysis(siteId, {
+  const dropoff = await computeDropOffAnalysis(siteId, {
     startDate: periodStart,
     endDate: now,
   });
