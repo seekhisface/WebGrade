@@ -1,15 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { AppNav } from '@/components/nav/AppNav';
 import { useSetupState } from '@/hooks/useSetupState';
 import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
 import { DataBanner } from '@/components/dashboard/DataBanner';
-
-interface Site {
-  id: string; name: string; domain: string;
-  hasWebWatch: boolean; hasWebOpp: boolean; hasInterimReport: boolean;
-}
 
 interface IntentDistribution {
   HIGH: number; MEDIUM: number; LOW: number;
@@ -56,19 +50,12 @@ async function fetchDashboardData(siteId: string): Promise<DashboardData> {
 }
 
 export default function DashboardPage({ params }: { params: { siteId: string } }) {
-  const [sites, setSites] = useState<Site[]>([]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [triggered, setTriggered] = useState(false);
   const kpiRef = useRef<HTMLDivElement>(null);
   const setup = useSetupState(params.siteId);
-
-  useEffect(() => {
-    const el = document.getElementById('__webgrade_sites__');
-    const allSites: Site[] = el ? JSON.parse(el.textContent ?? '[]') : [];
-    setSites(allSites);
-  }, []);
 
   useEffect(() => {
     fetchDashboardData(params.siteId)
@@ -78,14 +65,14 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
   }, [params.siteId]);
 
   useEffect(() => {
-    if (!kpiRef.current) return;
+    if (!kpiRef.current || loading || !data) return;
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setTriggered(true); },
       { threshold: 0.3 }
     );
     observer.observe(kpiRef.current);
     return () => observer.disconnect();
-  }, [setup.loading]);
+  }, [loading, data]);
 
   const sessions    = useCountUp(data?.totalSessions ?? 0, 1600, triggered);
   const intentScore = useCountUp(data?.avgIntentScore ?? 0, 1400, triggered);
@@ -107,7 +94,6 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
   if (setup.mode === 'setup') {
     return (
       <div className="min-h-screen bg-[#f0f9ff]">
-        <AppNav currentSiteId={params.siteId} sites={sites} activePage="behavioral" />
         <SetupChecklist siteId={params.siteId} setup={setup} />
       </div>
     );
@@ -115,8 +101,6 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      <AppNav currentSiteId={params.siteId} sites={sites} activePage="behavioral" />
-
       {!setup.isDemo && <DataBanner siteId={params.siteId} tabName="behavioral" />}
 
       <div className="px-6 py-8 max-w-7xl mx-auto">

@@ -163,7 +163,7 @@ export async function GET(req: NextRequest) {
       isStorylineBreakpoint: p.isStorylineBreakpoint,
     }));
 
-    return NextResponse.json({
+    const response = {
       site: {
         id: site.id,
         name: site.name,
@@ -180,7 +180,8 @@ export async function GET(req: NextRequest) {
       healthStatus: latestHealth?.overallStatus ?? 'YELLOW',
       dataSource: dropOff.dataSource,
       prevSessions,
-    });
+    };
+    return NextResponse.json(response);
   } catch (err) {
     console.error('[dashboard] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
