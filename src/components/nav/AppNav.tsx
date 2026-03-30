@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface Site {
   id: string;
@@ -14,23 +18,67 @@ interface Site {
   hasInterimReport: boolean;
 }
 
-interface Props {
-  currentSiteId: string;
-  sites?: Site[];
-  activePage?: 'behavioral' | 'seo' | 'webwatch' | 'webopp' | 'report' | 'winback' | 'settings';
-  isAdmin?: boolean; // Win-Back tab only shows in admin/demo mode
+// ---------------------------------------------------------------------------
+// Derive activePage from URL path
+// ---------------------------------------------------------------------------
+
+function getActivePageFromPath(pathname: string) {
+  if (pathname.includes('/seo')) return 'seo';
+  if (pathname.includes('/webwatch')) return 'webwatch';
+  if (pathname.includes('/webopp')) return 'webopp';
+  if (pathname.includes('/report')) return 'report';
+  if (pathname.includes('/winback')) return 'winback';
+  if (pathname.includes('/snippet')) return 'snippet';
+  if (pathname.includes('/settings')) return 'settings';
+  if (pathname.includes('/alerts')) return 'settings';
+  return 'behavioral';
 }
 
-export function AppNav({ currentSiteId, sites = [], activePage = 'behavioral', isAdmin = false }: Props) {
+// ---------------------------------------------------------------------------
+// Read sites injected by dashboard/layout.tsx via <script> tag
+// ---------------------------------------------------------------------------
+
+function useSitesFromLayout(): Site[] {
+  const [sites, setSites] = useState<Site[]>([]);
+
+  useEffect(() => {
+    const el = document.getElementById('__webgrade_sites__');
+    if (el?.textContent) {
+      try {
+        setSites(JSON.parse(el.textContent));
+      } catch {
+        // Ignore malformed JSON
+      }
+    }
+  }, []);
+
+  return sites;
+}
+
+// ---------------------------------------------------------------------------
+// AppNav — self-sufficient, zero-prop component
+//
+// Reads sites from the layout's <script id="__webgrade_sites__"> tag,
+// derives currentSiteId from useParams(), and activePage from usePathname().
+// Rendered once in dashboard/layout.tsx.
+// ---------------------------------------------------------------------------
+
+export function AppNav() {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useParams();
   const { data: session } = useSession();
+
+  const currentSiteId = params.siteId as string | undefined;
+  const activePage = getActivePageFromPath(pathname);
+  const sites = useSitesFromLayout();
+
   const [siteSwitcherOpen, setSiteSwitcherOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const siteSwitcherRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const safeSites = sites ?? [];
-  const currentSite = safeSites.find(s => s.id === currentSiteId) ?? safeSites[0];
+  const currentSite = sites.find(s => s.id === currentSiteId) ?? sites[0];
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -46,13 +94,15 @@ export function AppNav({ currentSiteId, sites = [], activePage = 'behavioral', i
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  const isAdmin = session?.user?.email === 'demo@webgrade.io';
+
   const navTabs = [
-    { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: true },
-    { id: 'seo',        label: 'Live SEO',        href: `/dashboard/${currentSiteId}/seo`,       show: true },
-    { id: 'report',     label: 'Interim Report™', href: `/dashboard/${currentSiteId}/report`,    show: currentSite?.hasInterimReport ?? true },
-    { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: currentSite?.hasWebWatch ?? true },
-    { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: currentSite?.hasWebOpp ?? true, badge: 'New' },
-    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: isAdmin },
+    { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
+    { id: 'seo',        label: 'Live SEO',        href: `/dashboard/${currentSiteId}/seo`,       show: !!currentSiteId },
+    { id: 'report',     label: 'Interim Report™', href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
+    { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
+    { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
+    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAdmin },
   ].filter(tab => tab.show);
 
   return (
@@ -68,69 +118,71 @@ export function AppNav({ currentSiteId, sites = [], activePage = 'behavioral', i
         </Link>
 
         {/* Site switcher */}
-        <div className="relative" ref={siteSwitcherRef}>
-          <button
-            onClick={() => setSiteSwitcherOpen((o: boolean) => !o)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg transition-colors"
-          >
-            <div className="w-2 h-2 rounded-full bg-teal-400" />
-            <span className="text-sm text-white font-medium">
-              {currentSite?.name ?? 'Select site'}
-            </span>
-            <svg className={`w-3.5 h-3.5 text-white/40 transition-transform ${siteSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+        {currentSiteId && (
+          <div className="relative" ref={siteSwitcherRef}>
+            <button
+              onClick={() => setSiteSwitcherOpen((o: boolean) => !o)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg transition-colors"
+            >
+              <div className="w-2 h-2 rounded-full bg-teal-400" />
+              <span className="text-sm text-white font-medium">
+                {currentSite?.name ?? 'Select site'}
+              </span>
+              <svg className={`w-3.5 h-3.5 text-white/40 transition-transform ${siteSwitcherOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
 
-          {siteSwitcherOpen && (
-            <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-sky-200 rounded-xl shadow-xl overflow-hidden z-50">
-              <div className="px-3 py-2 border-b border-sky-100">
-                <p className="text-xs text-sky-500 uppercase tracking-wider">Your sites</p>
-              </div>
-              <div className="py-1">
-                {sites.map(site => (
-                  <button
-                    key={site.id}
-                    onClick={() => {
-                      setSiteSwitcherOpen(false);
-                      router.push(`/dashboard/${site.id}`);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left ${
-                      site.id === currentSiteId ? 'bg-sky-50' : ''
-                    }`}
+            {siteSwitcherOpen && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-sky-200 rounded-xl shadow-xl overflow-hidden z-50">
+                <div className="px-3 py-2 border-b border-sky-100">
+                  <p className="text-xs text-sky-500 uppercase tracking-wider">Your sites</p>
+                </div>
+                <div className="py-1">
+                  {sites.map(site => (
+                    <button
+                      key={site.id}
+                      onClick={() => {
+                        setSiteSwitcherOpen(false);
+                        router.push(`/dashboard/${site.id}`);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left ${
+                        site.id === currentSiteId ? 'bg-sky-50' : ''
+                      }`}
+                    >
+                      <div className="w-7 h-7 bg-sky-100 rounded-md flex items-center justify-center flex-shrink-0">
+                        <span className="text-sky-600 text-xs font-bold">
+                          {site.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-800 font-medium truncate">{site.name}</p>
+                        <p className="text-xs text-slate-400 truncate">{site.domain}</p>
+                      </div>
+                      {site.id === currentSiteId && (
+                        <svg className="w-4 h-4 text-emerald-400 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="border-t border-sky-100 py-1">
+                  <Link
+                    href="/setup"
+                    onClick={() => setSiteSwitcherOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2.5 hover:bg-sky-50 transition-colors"
                   >
-                    <div className="w-7 h-7 bg-sky-100 rounded-md flex items-center justify-center flex-shrink-0">
-                      <span className="text-sky-600 text-xs font-bold">
-                        {site.name.charAt(0).toUpperCase()}
-                      </span>
+                    <div className="w-7 h-7 bg-sky-100 rounded-md flex items-center justify-center">
+                      <span className="text-sky-500 text-lg leading-none">+</span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm text-slate-800 font-medium truncate">{site.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{site.domain}</p>
-                    </div>
-                    {site.id === currentSiteId && (
-                      <svg className="w-4 h-4 text-emerald-400 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
+                    <span className="text-sm text-sky-500">Add site</span>
+                  </Link>
+                </div>
               </div>
-              <div className="border-t border-sky-100 py-1">
-                <Link
-                  href="/setup"
-                  onClick={() => setSiteSwitcherOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2.5 hover:bg-sky-50 transition-colors"
-                >
-                  <div className="w-7 h-7 bg-sky-100 rounded-md flex items-center justify-center">
-                    <span className="text-sky-500 text-lg leading-none">+</span>
-                  </div>
-                  <span className="text-sm text-sky-500">Add site</span>
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Nav tabs */}
         <div className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
@@ -158,11 +210,13 @@ export function AppNav({ currentSiteId, sites = [], activePage = 'behavioral', i
       {/* Right: alerts + user menu */}
       <div className="flex items-center gap-3">
         {/* Alert bell */}
-        <Link href={`/dashboard/${currentSiteId}/alerts`} className="relative p-2 text-sky-300 hover:text-white transition-colors">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-        </Link>
+        {currentSiteId && (
+          <Link href={`/dashboard/${currentSiteId}/alerts`} className="relative p-2 text-sky-300 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+          </Link>
+        )}
 
         {/* User menu */}
         <div className="relative" ref={userMenuRef}>

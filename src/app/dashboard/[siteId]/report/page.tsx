@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
 
 interface ActionItem {
   rank: number;
@@ -66,8 +65,6 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const sites = [{ id: siteId, name: 'WebGrade', domain: 'webgrade.io', hasWebWatch: true, hasWebOpp: true, hasInterimReport: true }];
-
   useEffect(() => { loadReport(); }, [siteId]); // eslint-disable-line
 
   async function loadReport() {
@@ -101,7 +98,6 @@ export default function ReportPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
-      <AppNav currentSiteId={siteId} sites={sites} activePage="report" />
       <div className="flex-1 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#0c4a6e] border-t-transparent rounded-full animate-spin" />
       </div>
@@ -110,7 +106,6 @@ export default function ReportPage() {
 
   if (!report) return (
     <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
-      <AppNav currentSiteId={siteId} sites={sites} activePage="report" />
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 bg-[#e0f2fe] rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -136,7 +131,6 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
-      <AppNav currentSiteId={siteId} sites={sites} activePage="report" />
 
       {/* Sub-header */}
       <div className="bg-white border-b border-[#e0f2fe] px-6 py-2 flex items-center justify-between sticky top-[52px] z-10">

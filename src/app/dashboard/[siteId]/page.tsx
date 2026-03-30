@@ -48,36 +48,17 @@ function useCountUp(target: number, duration = 1800, trigger = true): number {
   return val;
 }
 
-const DEMO_DATA: DashboardData = {
-  site: { id: '', name: 'NovaPulse HR', domain: 'novapulsehr.com', url: 'https://novapulsehr.com' },
-  totalSessions: 31200,
-  totalSessionsChange: 9.9,
-  avgIntentScore: 49,
-  avgIntentScoreChange: 11.2,
-  revenueAtRisk: 38400,
-  intentDistribution: { HIGH: 12, MEDIUM: 26, LOW: 44, RESEARCHER: 8, COMPETITOR: 4, BOT: 6 },
-  dropOffPages: [
-    {
-      url: '/pricing', title: 'Pricing', exitRate: 68, avgScrollDepth: 61, sessions: 4820,
-      isStorylineBreakpoint: true,
-      aiExplanation: 'Visitors reaching /pricing have an average intent score of 74 — highly qualified — but 68% exit before clicking any CTA. Rage-click signals on the "Start Free Trial" button suggest it may be non-functional on mobile. Adding a secondary "See a 2-min demo" option typically recovers 8–12% of abandoning visitors.',
-    },
-    {
-      url: '/features', title: 'Features', exitRate: 54, avgScrollDepth: 34, sessions: 6140,
-      isStorylineBreakpoint: true,
-      aiExplanation: 'Message mismatch detected. Paid traffic arriving from "HR compliance automation" ads is hitting a page leading with "enterprise-grade" language. The /features to /signup funnel shows 54% drop-off, costing an estimated $12,400/mo. Aligning the headline to match ad copy would reduce friction immediately.',
-    },
-    {
-      url: '/signup', title: 'Sign Up', exitRate: 41, avgScrollDepth: 82, sessions: 2910,
-      isStorylineBreakpoint: false,
-      aiExplanation: 'High scroll depth (82%) shows genuine intent but visitors are abandoning the 6-field signup form. Industry SaaS average is 3 fields on first step. Removing the phone number and company size fields from step 1 could recover ~130 signups/month at current traffic levels.',
-    },
-  ],
-  healthStatus: 'YELLOW',
-};
+// ── Fetch dashboard data from API ──────────────────────────────────────────
+async function fetchDashboardData(siteId: string): Promise<DashboardData> {
+  const res = await fetch(`/api/dashboard?siteId=${siteId}&days=30`);
+  if (!res.ok) throw new Error(`Dashboard API error: ${res.status}`);
+  return res.json();
+}
 
 export default function DashboardPage({ params }: { params: { siteId: string } }) {
   const [sites, setSites] = useState<Site[]>([]);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [triggered, setTriggered] = useState(false);
   const kpiRef = useRef<HTMLDivElement>(null);
@@ -90,6 +71,13 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
   }, []);
 
   useEffect(() => {
+    fetchDashboardData(params.siteId)
+      .then(setData)
+      .catch(err => console.error('[dashboard] Failed to load:', err))
+      .finally(() => setLoading(false));
+  }, [params.siteId]);
+
+  useEffect(() => {
     if (!kpiRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setTriggered(true); },
@@ -99,12 +87,11 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
     return () => observer.disconnect();
   }, [setup.loading]);
 
-  const data = DEMO_DATA;
-  const sessions    = useCountUp(data.totalSessions, 1600, triggered);
-  const intentScore = useCountUp(data.avgIntentScore, 1400, triggered);
-  const revenueRisk = useCountUp(data.revenueAtRisk, 1800, triggered);
+  const sessions    = useCountUp(data?.totalSessions ?? 0, 1600, triggered);
+  const intentScore = useCountUp(data?.avgIntentScore ?? 0, 1400, triggered);
+  const revenueRisk = useCountUp(data?.revenueAtRisk ?? 0, 1800, triggered);
 
-  if (setup.loading) {
+  if (setup.loading || loading || !data) {
     return (
       <div className="min-h-screen bg-[#f0f9ff]">
         <div className="px-6 py-8 max-w-7xl mx-auto animate-pulse">
@@ -176,8 +163,7 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
           <div>
             <p className="text-xs font-bold text-[#b91c1c] uppercase tracking-wider mb-1">Revenue at Risk</p>
             <p className="text-sm text-[#334155] max-w-xl">
-              WebGrade has identified <strong className="text-[#0c4a6e]">$38,400/mo</strong> in recoverable revenue across your behavioral data, ad spend, and SEO profile.
-              Your top 3 fixes could recover an estimated <strong className="text-[#0d9488]">$28,400/mo</strong> within 60 days.
+              WebGrade has identified <strong className="text-[#0c4a6e]">${data.revenueAtRisk.toLocaleString()}/mo</strong> in recoverable revenue across your behavioral data, ad spend, and SEO profile.
             </p>
           </div>
           <a href={`/dashboard/${params.siteId}/report`} className="flex-shrink-0 px-5 py-2.5 bg-[#0c4a6e] hover:bg-[#075985] text-white text-sm font-bold rounded-xl transition-colors shadow-sm">

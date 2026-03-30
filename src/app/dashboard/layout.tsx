@@ -11,8 +11,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      {/* Nav is rendered per-page so it knows activePage + currentSiteId */}
-      {/* Sites are passed via a hidden script tag for client components to read */}
+      {/* Sites data injected for client components (AppNav reads this) */}
       <script
         id="__webgrade_sites__"
         type="application/json"
@@ -27,6 +26,7 @@ export default async function DashboardLayout({
           }))),
         }}
       />
+      <AppNav />
       {children}
     </div>
   );

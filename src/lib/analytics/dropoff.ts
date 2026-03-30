@@ -185,8 +185,17 @@ export async function computeDropOffAnalysis(params: {
   });
 
   if (pageViews.length === 0 || totalSessions === 0) {
-    // No real data — return demo-shaped response so the dashboard still works
-    return buildDemoAnalysis(siteId, periodStart, periodEnd);
+    return {
+      siteId,
+      periodStart,
+      periodEnd,
+      totalSessions: 0,
+      totalRevenueAtRisk: 0,
+      pages: [],
+      topBreakpoint: null,
+      dataSource: 'live' as const,
+      generatedAt: new Date(),
+    };
   }
 
   // ── 3. Aggregate by URL ──────────────────────────────────────────────────

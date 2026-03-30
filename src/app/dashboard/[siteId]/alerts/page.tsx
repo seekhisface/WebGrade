@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
 
 interface Alert {
   id: string;
@@ -43,8 +42,6 @@ export default function AlertCenterPage() {
   const [stats, setStats] = useState({ openCount: 0, criticalCount: 0, avgResolutionHours: 0 });
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
-
-  const sites = [{ id: siteId, name: 'WebGrade', domain: 'webgrade.io', hasWebWatch: true, hasWebOpp: true, hasInterimReport: true }];
 
   useEffect(() => { loadAlerts(); }, [siteId]); // eslint-disable-line
 
@@ -88,8 +85,6 @@ export default function AlertCenterPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
-      <AppNav currentSiteId={siteId} sites={sites} activePage="settings" />
-
       {/* Sub-header */}
       <div className="bg-white border-b border-[#e0f2fe] px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">

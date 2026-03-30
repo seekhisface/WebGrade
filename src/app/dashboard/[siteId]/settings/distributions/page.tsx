@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -447,8 +446,6 @@ export default function DistributionsPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff] text-slate-900">
-      <AppNav currentSiteId={siteId} sites={[]} activePage="settings" />
-
       <div className="max-w-3xl mx-auto px-6 py-7">
 
         {/* Breadcrumb */}

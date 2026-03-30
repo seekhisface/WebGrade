@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { AppNav } from '@/components/nav/AppNav';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,8 +51,6 @@ export default function AlertSettingsPage() {
   const [slackWebhook, setSlackWebhook] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testResult, setTestResult] = useState('');
-
-  const sites = [{ id: siteId, name: 'WebGrade', domain: 'webgrade.io', hasWebWatch: true, hasWebOpp: true, hasInterimReport: true }];
 
   useEffect(() => { loadSettings(); }, [siteId]); // eslint-disable-line
 
@@ -111,8 +108,6 @@ export default function AlertSettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
-      <AppNav currentSiteId={siteId} sites={sites} activePage="settings" />
-
       {/* Sub-header */}
       <div className="bg-white border-b border-[#e0f2fe] px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
