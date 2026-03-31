@@ -163,14 +163,20 @@ async function main() {
   }
   console.log('✓ Ad sources seeded');
 
-  // ── 7. Visitor Sessions (sample — 50 sessions) ───────────────────────────
-  const intentClasses: IntentClass[] = ['HIGH', 'HIGH', 'MEDIUM', 'MEDIUM', 'LOW', 'RESEARCHER', 'COMPETITOR', 'BOT'];
-  const pages = [
-    '/', '/features', '/pricing', '/about', '/blog/hr-onboarding-guide',
-    '/lp/google-branded', '/lp/bamboohr-alternative', '/demo', '/trial', '/trial/welcome',
-  ];
+  // ── 7. Visitor Sessions (1,250 sessions over 90 days with PageViews) ──────
+  const intentClasses: IntentClass[] = ['HIGH', 'HIGH', 'MEDIUM', 'MEDIUM', 'MEDIUM', 'LOW', 'LOW', 'LOW', 'LOW', 'RESEARCHER', 'COMPETITOR', 'BOT'];
+  const pageTitles: Record<string, string> = {
+    '/': 'Home', '/features': 'Features', '/pricing': 'Pricing', '/about': 'About',
+    '/blog/hr-onboarding-guide': 'HR Onboarding Guide', '/signup': 'Sign Up',
+    '/contact': 'Contact', '/demo': 'Request Demo',
+  };
+  const pageUrls = Object.keys(pageTitles);
 
-  for (let i = 0; i < 50; i++) {
+  const SESSION_COUNT = 1250;
+  const sessionBatch: any[] = [];
+  const pageViewBatch: any[] = [];
+
+  for (let i = 0; i < SESSION_COUNT; i++) {
     const intentClass = intentClasses[Math.floor(Math.random() * intentClasses.length)];
     const intentScore = intentClass === 'HIGH' ? 75 + Math.floor(Math.random() * 25)
       : intentClass === 'MEDIUM' ? 40 + Math.floor(Math.random() * 30)
@@ -179,32 +185,78 @@ async function main() {
       : 5 + Math.floor(Math.random() * 15);
 
     const converted = intentClass === 'HIGH' && Math.random() < 0.1;
-    const startedAt = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+    const startedAt = new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000);
+    const pageCount = 1 + Math.floor(Math.random() * 5);
+    const sessionId = `demo-session-${i}`;
+    const entryPage = pageUrls[Math.floor(Math.random() * 4)];
+    const exitPage = pageUrls[Math.floor(Math.random() * pageUrls.length)];
 
-    await prisma.visitorSession.create({
-      data: {
-        siteId: site.id,
-        sessionId: `demo-session-${i}`,
-        ipHash: `hash-${i}`,
-        country: ['US', 'CA', 'GB', 'AU'][Math.floor(Math.random() * 4)],
-        deviceType: ['desktop', 'mobile', 'tablet'][Math.floor(Math.random() * 3)],
-        utmSource: ['google', 'linkedin', 'direct', 'organic'][Math.floor(Math.random() * 4)],
-        utmMedium: ['cpc', 'paid', 'organic', null][Math.floor(Math.random() * 4)],
-        startedAt,
-        durationMs: 30000 + Math.floor(Math.random() * 300000),
-        intentScore,
-        intentClass,
-        isBotFiltered: intentClass === 'BOT',
-        pageCount: 1 + Math.floor(Math.random() * 6),
-        entryPage: pages[Math.floor(Math.random() * 4)],
-        exitPage: pages[Math.floor(Math.random() * pages.length)],
-        conversionGoalHit: converted,
-        convertedAt: converted ? new Date(startedAt.getTime() + 180000) : null,
-        adSourceId: Math.random() < 0.4 ? adSourceRecords[Math.floor(Math.random() * adSourceRecords.length)].id : null,
-      },
+    sessionBatch.push({
+      siteId: site.id,
+      sessionId,
+      ipHash: `hash-${i}`,
+      country: ['US', 'CA', 'GB', 'AU', 'DE', 'FR'][Math.floor(Math.random() * 6)],
+      deviceType: ['desktop', 'desktop', 'mobile', 'mobile', 'tablet'][Math.floor(Math.random() * 5)],
+      utmSource: ['google', 'linkedin', 'direct', 'organic', 'bing'][Math.floor(Math.random() * 5)],
+      utmMedium: ['cpc', 'paid', 'organic', null, null][Math.floor(Math.random() * 5)],
+      startedAt,
+      durationMs: 30000 + Math.floor(Math.random() * 300000),
+      intentScore,
+      intentClass,
+      isBotFiltered: intentClass === 'BOT',
+      pageCount,
+      entryPage,
+      exitPage,
+      conversionGoalHit: converted,
+      convertedAt: converted ? new Date(startedAt.getTime() + 180000) : null,
+      adSourceId: Math.random() < 0.4 ? adSourceRecords[Math.floor(Math.random() * adSourceRecords.length)].id : null,
     });
+
+    // Create pageviews for this session
+    for (let p = 0; p < pageCount; p++) {
+      const url = p === 0 ? entryPage : (p === pageCount - 1 ? exitPage : pageUrls[Math.floor(Math.random() * pageUrls.length)]);
+      const isExit = p === pageCount - 1;
+      const enteredAt = new Date(startedAt.getTime() + p * (30000 + Math.floor(Math.random() * 60000)));
+
+      pageViewBatch.push({
+        siteId: site.id,
+        sessionId,
+        url,
+        title: pageTitles[url] ?? url,
+        enteredAt,
+        exitedAt: isExit ? new Date(enteredAt.getTime() + 10000 + Math.floor(Math.random() * 120000)) : new Date(enteredAt.getTime() + 30000 + Math.floor(Math.random() * 60000)),
+        timeOnPageMs: 10000 + Math.floor(Math.random() * 180000),
+        maxScrollDepthPct: Math.floor(Math.random() * 100),
+        clickCount: Math.floor(Math.random() * 8),
+        rageClickCount: Math.random() < 0.05 ? 1 + Math.floor(Math.random() * 3) : 0,
+        hesitationCount: Math.random() < 0.15 ? 1 + Math.floor(Math.random() * 2) : 0,
+        isExit,
+        exitIntentDetected: isExit && Math.random() < 0.3,
+        isDropOffPage: isExit && Math.random() < 0.4,
+        storylineBreakpoint: isExit && Math.random() < 0.15,
+      });
+    }
   }
-  console.log('✓ Visitor sessions seeded');
+
+  // Batch insert sessions
+  await prisma.visitorSession.createMany({ data: sessionBatch });
+  console.log(`✓ ${SESSION_COUNT} visitor sessions seeded`);
+
+  // Fetch back session IDs to map pageviews correctly
+  const createdSessions = await prisma.visitorSession.findMany({
+    where: { siteId: site.id },
+    select: { id: true, sessionId: true },
+  });
+  const sessionIdMap = new Map(createdSessions.map(s => [s.sessionId, s.id]));
+
+  // Remap pageview sessionId from string to actual DB id
+  const mappedPageViews = pageViewBatch.map(pv => ({
+    ...pv,
+    sessionId: sessionIdMap.get(pv.sessionId) ?? pv.sessionId,
+  }));
+
+  await prisma.pageView.createMany({ data: mappedPageViews });
+  console.log(`✓ ${mappedPageViews.length} page views seeded`);
 
   // ── 8. Report ─────────────────────────────────────────────────────────────
   const existingReport = await prisma.report.findFirst({ where: { siteId: site.id } });
