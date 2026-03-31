@@ -14,6 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script src="https://www.webgrade.io/api/snippet?id=cmnf1qktr000313a6dovfcd55" async></script>
+      </head>
       <body className="antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -170,7 +170,7 @@ export function AppNav() {
                 </div>
                 <div className="border-t border-sky-100 py-1">
                   <Link
-                    href="/setup"
+                    href="/onboarding"
                     onClick={() => setSiteSwitcherOpen(false)}
                     className="flex items-center gap-2 px-3 py-2.5 hover:bg-sky-50 transition-colors"
                   >
