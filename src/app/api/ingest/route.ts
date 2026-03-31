@@ -13,6 +13,7 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { anonymizeRequest } from '@/lib/tracking/anonymize';
 import { prisma } from '@/lib/db/client';
 import { enqueueEvents } from '@/lib/tracking/posthog';
@@ -167,30 +168,30 @@ export async function POST(req: NextRequest) {
         conversionTime = new Date(event.ts);
         break;
     }
-
-    // Write individual events to DB for behavioral analysis
-    await prisma.sessionEvent.create({
-      data: {
-        sessionId: dbSessionId,
-        siteId: site.id,
-        eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
-        pageUrl: event.u,
-        timestamp: new Date(event.ts),
-        scrollDepthPct: event.pct,
-        elementTag: event.tag,
-        elementText: event.txt,
-        elementClass: event.cls,
-        isCtaClick: event.cta ?? false,
-        rageClickCount: event.rage ? 1 : 0,
-        hesitationMs: event.hms,
-        timeOnPageMs: event.ms,
-        metadata: event.metadata ?? undefined,
-      },
-    }).catch(() => {
-      // Non-fatal: log but don't fail the request
-      console.error('[ingest] Failed to write event:', event.t);
-    });
   }
+
+  // Write all events in a single batch instead of individual creates
+  // to reduce connection usage and improve throughput
+  await prisma.sessionEvent.createMany({
+    data: events.map(event => ({
+      sessionId: dbSessionId,
+      siteId: site.id,
+      eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
+      pageUrl: event.u,
+      timestamp: new Date(event.ts),
+      scrollDepthPct: event.pct,
+      elementTag: event.tag,
+      elementText: event.txt,
+      elementClass: event.cls,
+      isCtaClick: event.cta ?? false,
+      rageClickCount: event.rage ? 1 : 0,
+      hesitationMs: event.hms,
+      timeOnPageMs: event.ms,
+      metadata: (event.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+    })),
+  }).catch(() => {
+    console.error('[ingest] Failed to write events batch');
+  });
 
   // 9. Update session stats
   const sessionUpdates: Record<string, unknown> = {
