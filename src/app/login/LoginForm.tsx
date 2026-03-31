@@ -41,7 +41,7 @@ export default function LoginForm() {
     const res = await signIn('credentials', {
       redirect: false,
       email: 'demo@webgrade.io',
-      password: 'demo1234',
+      password: 'DemoPass2026!',
     });
     setLoading(false);
     if (res?.error) {
