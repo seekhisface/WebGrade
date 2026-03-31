@@ -226,7 +226,7 @@
     if (!el) return false;
     var tag = el.tagName.toLowerCase();
     var text = (el.innerText || el.value || '').toLowerCase();
-    var classList = (el.className || '').toLowerCase();
+    var classList = (typeof el.className === 'string' ? el.className : '').toLowerCase();
     var role = (el.getAttribute('role') || '').toLowerCase();
 
     // Button or link
@@ -265,7 +265,7 @@
     track('click', {
       tag: el.tagName ? el.tagName.toLowerCase() : null,
       txt: (el.innerText || '').slice(0, 100), // First 100 chars only
-      cls: (el.className || '').slice(0, 100),
+      cls: (typeof el.className === 'string' ? el.className : '').slice(0, 100),
       cta: isCta(el),
       rage: isRage,
       hms: window.__wg_hover_ms || null,       // Hesitation time
