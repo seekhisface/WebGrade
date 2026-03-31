@@ -473,6 +473,7 @@ model VisitorSession {
   adSource   AdSource?      @relation(fields: [adSourceId], references: [id])
   adSourceId String?
 
+  @@unique([siteId, sessionId])
   @@index([siteId, startedAt])
   @@index([siteId, intentClass])
   @@index([siteId, isBotFiltered])

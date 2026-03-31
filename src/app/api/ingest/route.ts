@@ -112,45 +112,8 @@ export async function POST(req: NextRequest) {
   const botCheck = detectBotFromUserAgent(userAgent);
   const deviceInfo = classifyDevice(userAgent);
 
-  // 6. Upsert visitor session
-  // sessionId from client is pseudonymous — we store it as-is
-  const existingSession = await prisma.visitorSession.findFirst({
-    where: { siteId: site.id, sessionId },
-    select: { id: true, pageCount: true },
-  });
-
-  let dbSessionId: string;
-  if (existingSession) {
-    dbSessionId = existingSession.id;
-  } else {
-    // Create new session — note: raw IP is NOT passed here
-    const newSession = await prisma.visitorSession.create({
-      data: {
-        siteId: site.id,
-        sessionId,
-        ipHash,        // DL-01 compliant hash only
-        country,
-        region,
-        userAgent: userAgent.slice(0, 500), // Truncate for storage
-        deviceType: deviceInfo.deviceType,
-        browser: deviceInfo.browser,
-        os: deviceInfo.os,
-        isBotFiltered: botCheck.isBot,
-        botReason: botCheck.reason,
-      },
-      select: { id: true },
-    });
-    dbSessionId = newSession.id;
-  }
-
-  // 7. If bot, acknowledge but don't process further
-  if (botCheck.isBot) {
-    return NextResponse.json({ ok: true, bot: true });
-  }
-
-  // 8. Process events
+  // 6. Classify events before DB work
   const pageViewEvents: Array<typeof events[0]> = [];
-  const exitEvents: Array<typeof events[0]> = [];
   let converted = false;
   let conversionTime: Date | undefined;
 
@@ -160,9 +123,6 @@ export async function POST(req: NextRequest) {
       case 'route_change':
         pageViewEvents.push(event);
         break;
-      case 'page_exit':
-        exitEvents.push(event);
-        break;
       case 'conversion':
         converted = true;
         conversionTime = new Date(event.ts);
@@ -170,69 +130,93 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Write all events in a single batch instead of individual creates
-  // to reduce connection usage and improve throughput
-  await prisma.sessionEvent.createMany({
-    data: events.map(event => ({
-      sessionId: dbSessionId,
-      siteId: site.id,
-      eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
-      pageUrl: event.u,
-      timestamp: new Date(event.ts),
-      scrollDepthPct: event.pct,
-      elementTag: event.tag,
-      elementText: event.txt,
-      elementClass: event.cls,
-      isCtaClick: event.cta ?? false,
-      rageClickCount: event.rage ? 1 : 0,
-      hesitationMs: event.hms,
-      timeOnPageMs: event.ms,
-      metadata: (event.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
-    })),
-  }).catch(() => {
-    console.error('[ingest] Failed to write events batch');
+  // 7. All DB writes in a single transaction (one connection held, not many)
+  const dbSessionId = await prisma.$transaction(async (tx) => {
+    // Upsert session — uses @@unique([siteId, sessionId])
+    const session = await tx.visitorSession.upsert({
+      where: { siteId_sessionId: { siteId: site.id, sessionId } },
+      create: {
+        siteId: site.id,
+        sessionId,
+        ipHash,
+        country,
+        region,
+        userAgent: userAgent.slice(0, 500),
+        deviceType: deviceInfo.deviceType,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        isBotFiltered: botCheck.isBot,
+        botReason: botCheck.reason,
+      },
+      update: {},
+      select: { id: true },
+    });
+
+    // If bot, skip event writes
+    if (botCheck.isBot) return session.id;
+
+    // Batch write all events
+    await tx.sessionEvent.createMany({
+      data: events.map(event => ({
+        sessionId: session.id,
+        siteId: site.id,
+        eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
+        pageUrl: event.u,
+        timestamp: new Date(event.ts),
+        scrollDepthPct: event.pct,
+        elementTag: event.tag,
+        elementText: event.txt,
+        elementClass: event.cls,
+        isCtaClick: event.cta ?? false,
+        rageClickCount: event.rage ? 1 : 0,
+        hesitationMs: event.hms,
+        timeOnPageMs: event.ms,
+        metadata: (event.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+      })),
+    });
+
+    // Update session stats
+    const sessionUpdates: Record<string, unknown> = {
+      pageCount: { increment: pageViewEvents.length },
+      endedAt: new Date(),
+    };
+
+    if (pageViewEvents.length > 0) {
+      sessionUpdates.exitPage = pageViewEvents[pageViewEvents.length - 1].u;
+    }
+
+    if (converted) {
+      const goalUrl = site.onboarding?.conversionGoalUrl;
+      const conversionEvent = events.find(e => e.t === 'conversion');
+      const isGoalHit = goalUrl
+        ? conversionEvent?.u?.includes(goalUrl) ?? false
+        : true;
+
+      if (isGoalHit) {
+        sessionUpdates.conversionGoalHit = true;
+        sessionUpdates.convertedAt = conversionTime;
+      }
+    }
+
+    await tx.visitorSession.update({
+      where: { id: session.id },
+      data: sessionUpdates,
+    });
+
+    return session.id;
   });
 
-  // 9. Update session stats
-  const sessionUpdates: Record<string, unknown> = {
-    pageCount: { increment: pageViewEvents.length },
-    endedAt: new Date(),
-  };
-
-  if (pageViewEvents.length > 0) {
-    sessionUpdates.exitPage = pageViewEvents[pageViewEvents.length - 1].u;
-    if (!existingSession) {
-      sessionUpdates.entryPage = pageViewEvents[0].u;
-    }
+  if (botCheck.isBot) {
+    return NextResponse.json({ ok: true, bot: true });
   }
 
-  if (converted) {
-    // Check if this is the actual conversion goal URL
-    const goalUrl = site.onboarding?.conversionGoalUrl;
-    const conversionEvent = events.find(e => e.t === 'conversion');
-    const isGoalHit = goalUrl
-      ? conversionEvent?.u?.includes(goalUrl) ?? false
-      : true;
-
-    if (isGoalHit) {
-      sessionUpdates.conversionGoalHit = true;
-      sessionUpdates.convertedAt = conversionTime;
-    }
-  }
-
-  await prisma.visitorSession.update({
-    where: { id: dbSessionId },
-    data: sessionUpdates,
-  });
-
-  // 10. Forward to PostHog pipeline for behavioral analysis
+  // 8. Forward to PostHog (non-blocking, outside transaction)
   await enqueueEvents({
     siteId: site.id,
     sessionId: dbSessionId,
     events,
     consentGiven,
   }).catch(() => {
-    // Non-fatal
     console.error('[ingest] PostHog enqueue failed');
   });
 
