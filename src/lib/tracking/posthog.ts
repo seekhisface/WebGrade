@@ -34,9 +34,16 @@ export async function enqueueEvents(params: EnqueueEventsParams): Promise<void> 
     },
   }));
 
-  await fetch(`${host}/batch/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, batch }),
-  });
+  try {
+    const res = await fetch(`${host}/batch/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, batch }),
+    });
+    if (!res.ok) {
+      console.error(`[PostHog] Forwarding failed: ${res.status} ${res.statusText}`);
+    }
+  } catch (err) {
+    console.error('[PostHog] Failed to forward events:', err);
+  }
 }

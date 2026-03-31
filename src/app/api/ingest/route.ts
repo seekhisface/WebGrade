@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       data: {
         sessionId: dbSessionId,
         siteId: site.id,
-        eventType: mapEventType(event.t),
+        eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
         pageUrl: event.u,
         timestamp: new Date(event.ts),
         scrollDepthPct: event.pct,

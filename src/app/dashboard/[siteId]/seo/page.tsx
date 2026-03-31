@@ -1,23 +1,66 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 // ---------------------------------------------------------------------------
-// Live SEO Dashboard — NovaPulse HR
-// Date range drives all metrics via a deterministic seed multiplier
+// Types
 // ---------------------------------------------------------------------------
 
 type Range = '7d' | '14d' | '30d' | '60d' | '90d' | 'custom';
 
-interface DateRange {
-  preset: Range;
-  from: string;
-  to: string;
+interface SeoKeyword {
+  keyword: string;
+  position: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  intent: string;
+  description: string | null;
+  trend: string;
+  positionDelta: number;
 }
 
-const TODAY = '2026-03-11';
+interface CwvPage {
+  url: string;
+  lcp: number | null;
+  fid: number | null;
+  cls: number | null;
+  ttfb: number | null;
+  mobileScore: number | null;
+  pass: boolean;
+}
+
+interface SeoData {
+  site: { id: string; name: string; domain: string };
+  days: number;
+  periodStart: string;
+  periodEnd: string;
+  organicSessions: number;
+  organicSessionsDelta: number;
+  clicks: number;
+  clicksDelta: number;
+  impressions: number;
+  impressionsDelta: number;
+  ctr: number;
+  ctrDelta: number;
+  avgPosition: number;
+  positionDelta: number;
+  keywordsTop3: number;
+  keywordsTop10: number;
+  keywordsTop30: number;
+  keywordsTotal: number;
+  indexedPages: number;
+  crawlErrors: number;
+  notIndexed: number;
+  newPagesFound: number;
+  keywords: SeoKeyword[];
+  cwv: { lcp: number; fid: number; cls: number; ttfb: number; pass: boolean };
+  cwvPages: CwvPage[];
+  crawlScores: { overall: number; technical: number; onPage: number; content: number; crawlability: number } | null;
+  sparkPoints: number[];
+}
 
 const PRESETS: { id: Range; label: string; days: number }[] = [
   { id: '7d',  label: 'Last 7 days',   days: 7  },
@@ -27,118 +70,8 @@ const PRESETS: { id: Range; label: string; days: number }[] = [
   { id: '90d', label: 'Last 90 days',  days: 90 },
 ];
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function daysBetween(a: string, b: string): number {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
-}
-
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-// Deterministic "random" based on seed — gives stable but varying numbers
-function seeded(seed: number, min: number, max: number, decimals = 0) {
-  const val = min + ((Math.sin(seed) * 0.5 + 0.5) * (max - min));
-  return parseFloat(val.toFixed(decimals));
-}
-
-// ---------------------------------------------------------------------------
-// Generate all metrics from a date range
-// Longer ranges → more sessions, better ranking trends, more crawl data
-// ---------------------------------------------------------------------------
-function computeMetrics(days: number, fromDate: string) {
-  const seed = days + new Date(fromDate).getDate();
-
-  // Core Web Vitals — vary slightly by range
-  const lcp  = seeded(seed * 1.1, 1.1, 2.8, 1);
-  const fid  = seeded(seed * 2.3, 8,   45,  0);
-  const cls  = seeded(seed * 0.7, 0.02, 0.14, 2);
-  const ttfb = seeded(seed * 3.1, 180,  620,  0);
-
-  const cwvPass = lcp < 2.5 && fid < 100 && cls < 0.1;
-
-  // Traffic
-  const baseSessions = Math.round(days * seeded(seed * 1.4, 62, 94, 0));
-  const organicSessions = Math.round(baseSessions * seeded(seed * 0.9, 0.52, 0.71, 2));
-  const organicPct = Math.round((organicSessions / baseSessions) * 100);
-  const clicks = Math.round(organicSessions * seeded(seed * 1.7, 0.8, 1.3, 2));
-  const impressions = Math.round(clicks * seeded(seed * 2.2, 18, 34, 0));
-  const ctr = seeded(seed * 3.3, 2.1, 5.8, 1);
-  const avgPosition = seeded(seed * 1.9, 8.2, 22.4, 1);
-
-  // Indexed pages
-  const indexedPages  = Math.round(seeded(seed * 4.1, 38, 72, 0));
-  const crawlErrors   = Math.round(seeded(seed * 2.8, 0, 7, 0));
-  const notIndexed    = Math.round(seeded(seed * 3.7, 4, 18, 0));
-  const newPagesFound = Math.round(seeded(seed * 1.2, 0, 4, 0));
-
-  // Keyword rankings
-  const top3  = Math.round(seeded(seed * 2.1, 1, 5, 0));
-  const top10 = Math.round(seeded(seed * 3.5, 4, 12, 0));
-  const top30 = Math.round(seeded(seed * 1.8, 8, 22, 0));
-  const rankingKeywords = top3 + top10 + top30 + Math.round(seeded(seed * 4.4, 30, 80, 0));
-
-  // MoM deltas — longer ranges show more movement
-  const factor = Math.min(days / 30, 2);
-  const sessionsDelta = seeded(seed * 5.1, -8, 28, 1) * factor;
-  const clicksDelta   = seeded(seed * 6.2, -12, 32, 1) * factor;
-  const positionDelta = seeded(seed * 2.9, -3.1, 1.8, 1); // negative = improvement
-
-  // Top keyword table
-  const KEYWORDS = [
-    { kw: 'hr software for small business',  basePos: 4,  baseClicks: 312, intent: 'Commercial', desc: 'High-intent buyers comparing HR tools for SMBs. Visitors arriving via this keyword convert at 3.4×–4.2× the site average — your highest-ROI organic keyword.' },
-    { kw: 'bamboohr alternative',             basePos: 6,  baseClicks: 187, intent: 'Commercial', desc: 'Competitor-switching keyword. These visitors are already sold on the category and actively evaluating alternatives — bottom-of-funnel, high close rate.' },
-    { kw: 'employee management software',     basePos: 9,  baseClicks: 143, intent: 'Commercial', desc: 'Broad category keyword. High volume, moderate intent. Visitors are early-to-mid funnel. Best converted via a comparison or feature-focused landing page.' },
-    { kw: 'hr onboarding software',           basePos: 12, baseClicks: 98,  intent: 'Commercial', desc: 'Feature-specific keyword targeting buyers who need onboarding functionality. Strong product-market fit signal — these visitors want what you have.' },
-    { kw: 'hr management system mid-market',  basePos: 15, baseClicks: 76,  intent: 'Commercial', desc: 'Segment-qualified keyword. "Mid-market" signals budget and scale. Visitors using this query are pre-qualified for your ICP — worth a dedicated landing page.' },
-    { kw: 'novapulse hr',                     basePos: 1,  baseClicks: 241, intent: 'Navigational', desc: 'Branded keyword — people searching directly for you. Position 1. No action needed. This traffic converts at the highest rate of any keyword.' },
-    { kw: 'hr software 100 employees',        basePos: 22, baseClicks: 44,  intent: 'Informational', desc: 'Long-tail keyword with strong ICP signal. Ranking #22 means low click share — a content piece targeting this specific segment could move it to page 1.' },
-    { kw: 'hris software comparison',         basePos: 31, baseClicks: 18,  intent: 'Commercial', desc: 'High-value comparison keyword currently off page 1. Competitors rank #2–7 here. A comparison landing page could recover 80–120 additional clicks/month.' },
-  ].map((k, i) => {
-    const posShift = seeded(seed * (i + 1) * 1.3, -4, 3, 0);
-    const pos = Math.max(1, k.basePos + posShift);
-    const clickScale = seeded(seed * (i + 1) * 2.1, 0.6, 1.5, 2);
-    const kClicks = Math.round(k.baseClicks * (days / 30) * clickScale);
-    const kImpr   = Math.round(kClicks * seeded(seed * i * 3, 12, 28, 0));
-    const kCtr    = seeded(seed * i * 1.7, 1.8, 8.2, 1);
-    const trend   = posShift < -1 ? 'up' : posShift > 1 ? 'down' : 'flat';
-    return { ...k, pos, clicks: kClicks, impressions: kImpr, ctr: kCtr, trend, posShift };
-  }).sort((a, b) => a.pos - b.pos);
-
-  // Hourly traffic for sparkline (last 14 days of buckets, scaled to range)
-  const sparkPoints = Array.from({ length: 14 }, (_, i) => {
-    const v = seeded(seed * (i + 7) * 1.1, 20, 140, 0);
-    return Math.round(v * (days / 30));
-  });
-
-  // Page CWV breakdown
-  const pages = [
-    { url: '/',                    lcp: lcp,               cls: cls,          fid: fid },
-    { url: '/pricing',             lcp: seeded(seed*1.5,1.0,3.2,1), cls: seeded(seed*2.1,0.01,0.18,2), fid: seeded(seed*3.2,5,60,0) },
-    { url: '/bamboohr-alternative',lcp: 1.3,               cls: 0.04,         fid: 12 },
-    { url: '/features',            lcp: seeded(seed*2.3,1.4,3.8,1), cls: seeded(seed*1.7,0.02,0.22,2), fid: seeded(seed*2.8,8,80,0) },
-    { url: '/blog',                lcp: seeded(seed*3.1,1.2,2.6,1), cls: seeded(seed*4.2,0.01,0.09,2), fid: seeded(seed*1.3,6,30,0) },
-  ].map(p => ({
-    ...p,
-    pass: p.lcp < 2.5 && p.cls < 0.1 && p.fid < 100,
-  }));
-
-  return {
-    lcp, fid, cls, ttfb, cwvPass,
-    baseSessions, organicSessions, organicPct,
-    clicks, impressions, ctr, avgPosition,
-    indexedPages, crawlErrors, notIndexed, newPagesFound,
-    top3, top10, top30, rankingKeywords,
-    sessionsDelta, clicksDelta, positionDelta,
-    keywords: KEYWORDS,
-    sparkPoints,
-    pages,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +110,7 @@ function CwvPill({ value, good, ok, unit, label }: {
 }
 
 function Sparkline({ data, color = '#10b981' }: { data: number[]; color?: string }) {
+  if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
@@ -198,7 +132,6 @@ function Sparkline({ data, color = '#10b981' }: { data: number[]; color?: string
       <path d={areaD} fill="url(#spark-grad)" />
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"
         strokeLinejoin="round" strokeLinecap="round" />
-      {/* Last point dot */}
       {(() => {
         const last = pts.split(' ').slice(-1)[0].split(',');
         return <circle cx={last[0]} cy={last[1]} r="2.5" fill={color} />;
@@ -214,7 +147,7 @@ function RankBadge({ pos }: { pos: number }) {
               :             'text-slate-400 bg-sky-50';
   return (
     <span className={`inline-flex items-center justify-center w-8 h-6 rounded text-xs font-bold ${color}`}>
-      {pos}
+      {Math.round(pos)}
     </span>
   );
 }
@@ -232,35 +165,47 @@ export default function LiveSEOPage() {
   const params = useParams();
   const siteId = params.siteId as string;
 
-  const [range, setRange] = useState<DateRange>({
-    preset: '30d',
-    from: addDays(TODAY, -30),
-    to: TODAY,
-  });
+  const [days, setDays] = useState(30);
+  const [rangePreset, setRangePreset] = useState<Range>('30d');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [hoveredKw, setHoveredKw] = useState<number | null>(null);
-  const [customFrom, setCustomFrom] = useState(addDays(TODAY, -30));
-  const [customTo, setCustomTo]     = useState(TODAY);
-  const [activeTab, setActiveTab]   = useState<'overview' | 'keywords' | 'cwv' | 'indexing'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'keywords' | 'cwv' | 'indexing'>('overview');
+  const [data, setData] = useState<SeoData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const days = useMemo(() => Math.max(1, daysBetween(range.from, range.to)), [range]);
-  const M    = useMemo(() => computeMetrics(days, range.from), [days, range.from]);
+  const fetchData = useCallback((d: number) => {
+    setLoading(true);
+    fetch(`/api/seo?siteId=${siteId}&days=${d}`)
+      .then(r => { if (!r.ok) throw new Error(`SEO API error: ${r.status}`); return r.json(); })
+      .then(setData)
+      .catch(err => console.error('[seo] Failed to load:', err))
+      .finally(() => setLoading(false));
+  }, [siteId]);
+
+  useEffect(() => { fetchData(days); }, [days, fetchData]);
 
   function applyPreset(p: typeof PRESETS[number]) {
-    setRange({ preset: p.id, from: addDays(TODAY, -p.days), to: TODAY });
+    setDays(p.days);
+    setRangePreset(p.id);
     setPickerOpen(false);
   }
 
-  function applyCustom() {
-    if (customFrom && customTo && customFrom <= customTo) {
-      setRange({ preset: 'custom', from: customFrom, to: customTo });
-    }
-    setPickerOpen(false);
+  const rangeLabel = PRESETS.find(p => p.id === rangePreset)?.label ?? `Last ${days} days`;
+
+  if (loading || !data) {
+    return (
+      <div className="min-h-screen bg-[#f0f9ff]">
+        <div className="max-w-6xl mx-auto px-6 py-8 animate-pulse">
+          <div className="h-8 w-48 bg-[#bae6fd] rounded-lg mb-6" />
+          <div className="grid grid-cols-6 gap-3 mb-6">
+            {[1,2,3,4,5,6].map(i => <div key={i} className="h-28 bg-white border border-[#bae6fd] rounded-xl" />)}
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const rangeLabel = range.preset === 'custom'
-    ? `${fmtDate(range.from)} – ${fmtDate(range.to)}`
-    : PRESETS.find(p => p.id === range.preset)?.label ?? '';
+  const M = data;
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
@@ -277,7 +222,7 @@ export default function LiveSEOPage() {
               <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Live SEO</span>
             </div>
             <span className="text-slate-300">·</span>
-            <span>novapulsehr.com</span>
+            <span>{M.site.domain}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -302,27 +247,11 @@ export default function LiveSEOPage() {
                     {PRESETS.map(p => (
                       <button key={p.id} onClick={() => applyPreset(p)}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                          range.preset === p.id ? 'bg-sky-100 text-sky-700' : 'text-slate-500 hover:bg-sky-50 hover:text-slate-700'
+                          rangePreset === p.id ? 'bg-sky-100 text-sky-700' : 'text-slate-500 hover:bg-sky-50 hover:text-slate-700'
                         }`}>
                         {p.label}
                       </button>
                     ))}
-                  </div>
-                  <div className="border-t border-sky-100 p-3">
-                    <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-2">Custom range</p>
-                    <div className="flex items-center gap-2 mb-2">
-                      <input type="date" value={customFrom} max={customTo}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomFrom(e.target.value)}
-                        className="flex-1 bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 focus:outline-none focus:border-sky-300 [color-scheme:light]" />
-                      <span className="text-slate-300 text-xs">→</span>
-                      <input type="date" value={customTo} min={customFrom} max={TODAY}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTo(e.target.value)}
-                        className="flex-1 bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 focus:outline-none focus:border-sky-300 [color-scheme:light]" />
-                    </div>
-                    <button onClick={applyCustom}
-                      className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors">
-                      Apply
-                    </button>
                   </div>
                 </div>
               )}
@@ -348,10 +277,10 @@ export default function LiveSEOPage() {
       <div className="max-w-6xl mx-auto px-6 pt-7 pb-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs text-[#64748b] uppercase tracking-wider mb-1">NovaPulse HR · Search Performance</p>
+            <p className="text-xs text-[#64748b] uppercase tracking-wider mb-1">{M.site.name} · Search Performance</p>
             <h1 className="text-2xl font-bold text-[#1e293b]">Live SEO</h1>
             <p className="text-sm text-[#64748b] mt-1">
-              {fmtDate(range.from)} – {fmtDate(range.to)} · {days} days
+              {fmtDate(M.periodStart)} – {fmtDate(M.periodEnd)} · {M.days} days
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-[#64748b]">
@@ -363,12 +292,12 @@ export default function LiveSEOPage() {
         {/* Top KPI strip */}
         <div className="grid grid-cols-6 gap-3 mt-6">
           {[
-            { label: 'Organic Sessions',  value: M.organicSessions.toLocaleString(), delta: M.sessionsDelta, unit: '%', spark: M.sparkPoints, color: '#10b981' },
-            { label: 'Total Clicks',      value: M.clicks.toLocaleString(),          delta: M.clicksDelta,   unit: '%', spark: M.sparkPoints.map((v: number) => Math.round(v * 0.9)), color: '#6366f1' },
-            { label: 'Impressions',       value: M.impressions.toLocaleString(),      delta: M.clicksDelta * 1.2, unit: '%', spark: M.sparkPoints.map((v: number) => Math.round(v * 1.4)), color: '#6366f1' },
-            { label: 'Avg CTR',           value: `${M.ctr}%`,                        delta: M.clicksDelta * 0.3, unit: '%', spark: M.sparkPoints.map((v: number) => v * 0.04 + 1), color: '#f59e0b' },
-            { label: 'Avg Position',      value: M.avgPosition.toFixed(1),           delta: M.positionDelta, unit: '', inverse: true, spark: M.sparkPoints.map((v: number) => 25 - v * 0.12), color: '#06b6d4' },
-            { label: 'Keywords Ranking',  value: M.rankingKeywords.toString(),        delta: M.sessionsDelta * 0.8, unit: '', spark: M.sparkPoints.map((v: number) => Math.round(v * 0.6 + 20)), color: '#a78bfa' },
+            { label: 'Organic Sessions',  value: M.organicSessions.toLocaleString(), delta: M.organicSessionsDelta, unit: '%', spark: M.sparkPoints, color: '#10b981' },
+            { label: 'Total Clicks',      value: M.clicks.toLocaleString(),          delta: M.clicksDelta,   unit: '%', spark: M.sparkPoints.map(v => Math.round(v * 0.9)), color: '#6366f1' },
+            { label: 'Impressions',       value: M.impressions.toLocaleString(),      delta: M.impressionsDelta, unit: '%', spark: M.sparkPoints.map(v => Math.round(v * 1.4)), color: '#6366f1' },
+            { label: 'Avg CTR',           value: `${M.ctr}%`,                        delta: M.ctrDelta, unit: '%', spark: M.sparkPoints.map(v => v * 0.04 + 1), color: '#f59e0b' },
+            { label: 'Avg Position',      value: M.avgPosition.toFixed(1),           delta: M.positionDelta, unit: '', inverse: true, spark: M.sparkPoints.map(v => 25 - v * 0.12), color: '#06b6d4' },
+            { label: 'Keywords Ranking',  value: M.keywordsTotal.toString(),          delta: 0, unit: '', spark: M.sparkPoints.map(v => Math.round(v * 0.6 + 20)), color: '#a78bfa' },
           ].map((kpi, i) => (
             <div key={i} className="p-4 bg-sky-50 border border-sky-100 rounded-xl">
               <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1 truncate">{kpi.label}</p>
@@ -391,22 +320,22 @@ export default function LiveSEOPage() {
           <>
             {/* CWV summary banner */}
             <div className={`p-4 border rounded-2xl flex items-center justify-between ${
-              M.cwvPass
+              M.cwv.pass
                 ? 'bg-emerald-500/5 border-emerald-500/20'
                 : 'bg-amber-500/5 border-amber-500/20'
             }`}>
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                  M.cwvPass ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                  M.cwv.pass ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
                 }`}>
-                  {M.cwvPass ? '✓' : '⚠'}
+                  {M.cwv.pass ? '✓' : '⚠'}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#1e293b]">
-                    Core Web Vitals — {M.cwvPass ? 'All pages passing' : 'Needs attention'}
+                    Core Web Vitals — {M.cwv.pass ? 'All pages passing' : 'Needs attention'}
                   </p>
                   <p className="text-xs text-[#64748b]">
-                    LCP {M.lcp}s · CLS {M.cls} · FID {M.fid}ms · TTFB {M.ttfb}ms
+                    LCP {M.cwv.lcp}s · CLS {M.cwv.cls} · FID {M.cwv.fid}ms · TTFB {M.cwv.ttfb}ms
                   </p>
                 </div>
               </div>
@@ -421,17 +350,17 @@ export default function LiveSEOPage() {
               <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Keyword Ranking Distribution</p>
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'Top 3',   value: M.top3,  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', bar: 'bg-emerald-500' },
-                  { label: 'Top 10',  value: M.top10, color: 'text-cyan-400',    bg: 'bg-cyan-500/10 border-cyan-500/20',       bar: 'bg-cyan-500' },
-                  { label: 'Top 30',  value: M.top30, color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',     bar: 'bg-amber-500' },
-                  { label: 'Total ranking', value: M.rankingKeywords, color: 'text-slate-800', bg: 'bg-sky-50 border-sky-100', bar: 'bg-indigo-500' },
+                  { label: 'Top 3',   value: M.keywordsTop3,  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', bar: 'bg-emerald-500' },
+                  { label: 'Top 10',  value: M.keywordsTop10, color: 'text-cyan-400',    bg: 'bg-cyan-500/10 border-cyan-500/20',       bar: 'bg-cyan-500' },
+                  { label: 'Top 30',  value: M.keywordsTop30, color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',     bar: 'bg-amber-500' },
+                  { label: 'Total ranking', value: M.keywordsTotal, color: 'text-slate-800', bg: 'bg-sky-50 border-sky-100', bar: 'bg-indigo-500' },
                 ].map((r, i) => (
                   <div key={i} className={`p-4 border rounded-xl ${r.bg}`}>
                     <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">{r.label}</p>
                     <p className={`text-2xl font-bold ${r.color} mb-2`}>{r.value}</p>
                     <div className="h-1 bg-sky-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${r.bar}`}
-                        style={{ width: `${Math.min(100, (r.value / M.rankingKeywords) * 100)}%` }} />
+                        style={{ width: `${M.keywordsTotal > 0 ? Math.min(100, (r.value / M.keywordsTotal) * 100) : 0}%` }} />
                     </div>
                   </div>
                 ))}
@@ -469,19 +398,19 @@ export default function LiveSEOPage() {
                 </button>
               </div>
               <div className="space-y-1.5">
-                {M.keywords.slice(0, 5).map((kw: typeof M.keywords[0], i: number) => (
+                {M.keywords.slice(0, 5).map((kw, i) => (
                   <div key={i} className="relative flex items-center gap-4 p-3 bg-sky-50 border border-sky-100 rounded-xl hover:bg-[#e0f2fe] transition-colors group"
                     onMouseEnter={() => setHoveredKw(100 + i)}
                     onMouseLeave={() => setHoveredKw(null)}>
-                    <RankBadge pos={kw.pos} />
-                    <p className="text-sm text-[#334155] flex-1 font-mono text-xs cursor-help">{kw.kw}</p>
-                    {hoveredKw === 100 + i && kw.desc && (
+                    <RankBadge pos={kw.position} />
+                    <p className="text-sm text-[#334155] flex-1 font-mono text-xs cursor-help">{kw.keyword}</p>
+                    {hoveredKw === 100 + i && kw.description && (
                       <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-[#1e293b] text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kw.intent === 'Commercial' ? 'bg-violet-500/30 text-violet-200' : kw.intent === 'Navigational' ? 'bg-blue-500/30 text-blue-200' : 'bg-slate-500/30 text-slate-300'}`}>{kw.intent}</span>
-                          <span className="font-semibold text-sky-300">#{Math.round(kw.pos)}</span>
+                          <span className="font-semibold text-sky-300">#{Math.round(kw.position)}</span>
                         </div>
-                        <p className="text-slate-200 leading-relaxed">{kw.desc}</p>
+                        <p className="text-slate-200 leading-relaxed">{kw.description}</p>
                       </div>
                     )}
                     <TrendArrow trend={kw.trend} />
@@ -503,7 +432,7 @@ export default function LiveSEOPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-[#1e293b]">Keyword Rankings</h2>
-                <p className="text-sm text-[#64748b]">{M.rankingKeywords} keywords tracked · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
+                <p className="text-sm text-[#64748b]">{M.keywordsTotal} keywords tracked · {fmtDate(M.periodStart)} – {fmtDate(M.periodEnd)}</p>
               </div>
               <div className="flex items-center gap-4 text-xs text-[#64748b]">
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded bg-emerald-500/40" />Top 3</div>
@@ -525,23 +454,23 @@ export default function LiveSEOPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {M.keywords.map((kw: typeof M.keywords[0], i: number) => (
+                  {M.keywords.map((kw, i) => (
                     <tr key={i} className="border-b border-sky-100 hover:bg-sky-50 transition-colors relative">
                       <td className="p-3 font-mono text-[#334155] relative"
                         onMouseEnter={() => setHoveredKw(i)}
                         onMouseLeave={() => setHoveredKw(null)}>
-                        <span className="cursor-help underline decoration-dotted decoration-[#94a3b8]">{kw.kw}</span>
-                        {hoveredKw === i && kw.desc && (
+                        <span className="cursor-help underline decoration-dotted decoration-[#94a3b8]">{kw.keyword}</span>
+                        {hoveredKw === i && kw.description && (
                           <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-[#1e293b] text-white text-xs rounded-xl shadow-xl p-4 pointer-events-none" style={{zIndex:100}}>
                             <div className="flex items-center gap-2 mb-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kw.intent === 'Commercial' ? 'bg-violet-500/30 text-violet-200' : kw.intent === 'Navigational' ? 'bg-blue-500/30 text-blue-200' : 'bg-slate-500/30 text-slate-300'}`}>{kw.intent}</span>
-                              <span className="font-semibold text-sky-300">#{Math.round(kw.pos)}</span>
+                              <span className="font-semibold text-sky-300">#{Math.round(kw.position)}</span>
                             </div>
-                            <p className="text-slate-200 leading-relaxed">{kw.desc}</p>
+                            <p className="text-slate-200 leading-relaxed">{kw.description}</p>
                           </div>
                         )}
                       </td>
-                      <td className="p-3 text-center"><RankBadge pos={kw.pos} /></td>
+                      <td className="p-3 text-center"><RankBadge pos={kw.position} /></td>
                       <td className="p-3 text-center"><TrendArrow trend={kw.trend} /></td>
                       <td className="p-3 text-right text-slate-800 font-medium">{kw.clicks.toLocaleString()}</td>
                       <td className="p-3 text-right text-[#64748b]">{kw.impressions.toLocaleString()}</td>
@@ -557,10 +486,9 @@ export default function LiveSEOPage() {
               <div className="flex items-start gap-3">
                 <span className="text-violet-400 text-sm mt-0.5">◆</span>
                 <div>
-                  <p className="text-sm font-semibold text-slate-800 mb-1">WebOpp has identified 6 keyword gaps in your market</p>
+                  <p className="text-sm font-semibold text-slate-800 mb-1">WebOpp has identified keyword gaps in your market</p>
                   <p className="text-xs text-slate-500 mb-2">
-                    Keywords like "hr software comparison" (8,400/mo) and "hr software for 50–200 employees" (2,900/mo)
-                    are high-value terms your competitors rank for that NovaPulse does not target.
+                    High-value terms your competitors rank for that {M.site.name} does not yet target.
                   </p>
                   <Link href={`/dashboard/${siteId}/webopp`}
                     className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
@@ -578,7 +506,7 @@ export default function LiveSEOPage() {
             <div>
               <h2 className="text-lg font-bold text-slate-800 mb-1">Core Web Vitals</h2>
               <p className="text-sm text-[#64748b]">
-                Field data for {fmtDate(range.from)} – {fmtDate(range.to)} · {days} days
+                Field data for {fmtDate(M.periodStart)} – {fmtDate(M.periodEnd)} · {M.days} days
               </p>
             </div>
 
@@ -586,10 +514,10 @@ export default function LiveSEOPage() {
             <div>
               <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3">Site-wide averages</p>
               <div className="grid grid-cols-4 gap-3">
-                <CwvPill value={M.lcp}  good={2.5}  ok={4.0}   unit="s"  label="LCP — Largest Contentful Paint" />
-                <CwvPill value={M.fid}  good={100}  ok={300}   unit="ms" label="FID — First Input Delay" />
-                <CwvPill value={M.cls}  good={0.1}  ok={0.25}  unit=""   label="CLS — Cumulative Layout Shift" />
-                <CwvPill value={M.ttfb} good={800}  ok={1800}  unit="ms" label="TTFB — Time to First Byte" />
+                <CwvPill value={M.cwv.lcp}  good={2.5}  ok={4.0}   unit="s"  label="LCP — Largest Contentful Paint" />
+                <CwvPill value={M.cwv.fid}  good={100}  ok={300}   unit="ms" label="FID — First Input Delay" />
+                <CwvPill value={M.cwv.cls}  good={0.1}  ok={0.25}  unit=""   label="CLS — Cumulative Layout Shift" />
+                <CwvPill value={M.cwv.ttfb} good={800}  ok={1800}  unit="ms" label="TTFB — Time to First Byte" />
               </div>
             </div>
 
@@ -608,16 +536,16 @@ export default function LiveSEOPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {M.pages.map((p: typeof M.pages[0], i: number) => (
+                    {M.cwvPages.map((p, i) => (
                       <tr key={i} className="border-b border-sky-100 hover:bg-sky-50 transition-colors">
                         <td className="p-3 font-mono text-slate-600">{p.url}</td>
-                        <td className={`p-3 text-right font-medium ${p.lcp < 2.5 ? 'text-emerald-400' : p.lcp < 4 ? 'text-amber-400' : 'text-red-400'}`}>
+                        <td className={`p-3 text-right font-medium ${(p.lcp ?? 99) < 2.5 ? 'text-emerald-400' : (p.lcp ?? 99) < 4 ? 'text-amber-400' : 'text-red-400'}`}>
                           {p.lcp}s
                         </td>
-                        <td className={`p-3 text-right ${p.cls < 0.1 ? 'text-emerald-400' : p.cls < 0.25 ? 'text-amber-400' : 'text-red-400'}`}>
+                        <td className={`p-3 text-right ${(p.cls ?? 99) < 0.1 ? 'text-emerald-400' : (p.cls ?? 99) < 0.25 ? 'text-amber-400' : 'text-red-400'}`}>
                           {p.cls}
                         </td>
-                        <td className={`p-3 text-right ${p.fid < 100 ? 'text-emerald-400' : p.fid < 300 ? 'text-amber-400' : 'text-red-400'}`}>
+                        <td className={`p-3 text-right ${(p.fid ?? 999) < 100 ? 'text-emerald-400' : (p.fid ?? 999) < 300 ? 'text-amber-400' : 'text-red-400'}`}>
                           {p.fid}ms
                         </td>
                         <td className="p-3 text-center">
@@ -641,7 +569,7 @@ export default function LiveSEOPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-lg font-bold text-slate-800 mb-1">Indexing & Crawl Status</h2>
-              <p className="text-sm text-[#64748b]">Google Search Console data · {fmtDate(range.from)} – {fmtDate(range.to)}</p>
+              <p className="text-sm text-[#64748b]">Google Search Console data · {fmtDate(M.periodStart)} – {fmtDate(M.periodEnd)}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -661,46 +589,50 @@ export default function LiveSEOPage() {
                       </div>
                       <div className="h-1.5 bg-sky-50 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${s.color}`}
-                          style={{ width: `${Math.min(100, (s.value / s.total) * 100)}%` }} />
+                          style={{ width: `${s.total > 0 ? Math.min(100, (s.value / s.total) * 100) : 0}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Recent crawl activity */}
+              {/* Crawl scores */}
               <div className="p-5 bg-sky-50 border border-sky-100 rounded-2xl">
-                <p className="text-xs text-[#64748b] mb-4">Recent crawl activity</p>
-                <div className="space-y-2">
-                  {[
-                    { url: '/',                     status: 'Indexed', date: 'Mar 11', ok: true },
-                    { url: '/pricing',              status: 'Indexed', date: 'Mar 10', ok: true },
-                    { url: '/bamboohr-alternative', status: 'Indexed', date: 'Mar 11', ok: true },
-                    { url: '/features',             status: 'Indexed', date: 'Mar 9',  ok: true },
-                    { url: '/blog/hr-onboarding',   status: M.crawlErrors > 2 ? 'Crawl error' : 'Indexed', date: 'Mar 8', ok: M.crawlErrors <= 2 },
-                    { url: '/sitemap.xml',          status: 'Submitted', date: 'Mar 1', ok: true },
-                  ].map((r, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-sky-100 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <span className="text-xs font-mono text-[#64748b]">{r.url}</span>
+                <p className="text-xs text-[#64748b] mb-4">Latest crawl scores</p>
+                {M.crawlScores ? (
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Overall SEO', value: M.crawlScores.overall, color: 'bg-indigo-500' },
+                      { label: 'Technical', value: M.crawlScores.technical, color: 'bg-cyan-500' },
+                      { label: 'On-Page', value: M.crawlScores.onPage, color: 'bg-emerald-500' },
+                      { label: 'Content', value: M.crawlScores.content, color: 'bg-amber-500' },
+                      { label: 'Crawlability', value: M.crawlScores.crawlability, color: 'bg-violet-500' },
+                    ].map((s, i) => (
+                      <div key={i}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-[#64748b]">{s.label}</span>
+                          <span className="text-sm font-bold text-[#1e293b]">{s.value}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-sky-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${s.color}`}
+                            style={{ width: `${s.value}%` }} />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[10px] ${r.ok ? 'text-emerald-400/70' : 'text-red-400'}`}>{r.status}</span>
-                        <span className="text-[10px] text-[#64748b]">{r.date}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {M.newPagesFound > 0 && (
-                  <div className="mt-3 p-2.5 bg-indigo-500/5 border border-indigo-500/15 rounded-lg">
-                    <p className="text-xs text-indigo-300">
-                      {M.newPagesFound} new page{M.newPagesFound > 1 ? 's' : ''} discovered in this period
-                    </p>
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-sm text-[#64748b]">No crawl data available yet.</p>
                 )}
               </div>
             </div>
+
+            {M.newPagesFound > 0 && (
+              <div className="p-3 bg-indigo-500/5 border border-indigo-500/15 rounded-lg">
+                <p className="text-xs text-indigo-600">
+                  {M.newPagesFound} new page{M.newPagesFound > 1 ? 's' : ''} discovered in this period
+                </p>
+              </div>
+            )}
           </div>
         )}
 

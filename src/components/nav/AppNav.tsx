@@ -102,6 +102,7 @@ export function AppNav() {
     { id: 'report',     label: 'Interim Report™', href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
     { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
     { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
+    { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
     { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAdmin },
   ].filter(tab => tab.show);
 
