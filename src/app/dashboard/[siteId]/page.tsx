@@ -92,14 +92,6 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
     );
   }
 
-  if (setup.mode === 'setup') {
-    return (
-      <div className="min-h-screen bg-[#f0f9ff]">
-        <SetupChecklist siteId={params.siteId} setup={setup} />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#f0f9ff]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {!setup.isDemo && <DataBanner siteId={params.siteId} tabName="behavioral" />}

@@ -23,6 +23,7 @@ interface Site {
 // ---------------------------------------------------------------------------
 
 function getActivePageFromPath(pathname: string) {
+  if (pathname.includes('/setup')) return 'setup';
   if (pathname.includes('/seo')) return 'seo';
   if (pathname.includes('/webwatch')) return 'webwatch';
   if (pathname.includes('/webopp')) return 'webopp';
@@ -81,6 +82,16 @@ export function AppNav() {
 
   const currentSite = sites.find(s => s.id === currentSiteId) ?? sites[0];
 
+  // Check if current site needs setup
+  const [needsSetup, setNeedsSetup] = useState(false);
+  useEffect(() => {
+    if (!currentSiteId || session?.user?.email === 'demo@webgrade.io') { setNeedsSetup(false); return; }
+    fetch(`/api/setup-state?siteId=${currentSiteId}`)
+      .then(r => r.json())
+      .then(data => setNeedsSetup(!data.snippetInstalled))
+      .catch(() => setNeedsSetup(false));
+  }, [currentSiteId, session]);
+
   // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -98,6 +109,7 @@ export function AppNav() {
   const isAdmin = session?.user?.email === 'demo@webgrade.io';
 
   const navTabs = [
+    { id: 'setup',      label: 'Setup',           href: `/dashboard/${currentSiteId}/setup`,     show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
     { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
     { id: 'seo',        label: 'Live SEO',        href: `/dashboard/${currentSiteId}/seo`,       show: !!currentSiteId },
     { id: 'report',     label: 'WebAudit™',       href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
