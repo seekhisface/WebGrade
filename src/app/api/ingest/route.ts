@@ -19,6 +19,7 @@ import { prisma } from '@/lib/db/client';
 import { enqueueEvents } from '@/lib/tracking/posthog';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { detectBotFromUserAgent, classifyDevice } from '@/lib/tracking/bot-filter';
+import { scoreSessionIntent } from '@/lib/tracking/intent-scoring';
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -217,6 +218,25 @@ export async function POST(req: NextRequest) {
       data: sessionUpdates,
     });
 
+    // Re-score intent inside the same transaction (no extra connections)
+    const fullSession = await tx.visitorSession.findUnique({
+      where: { id: session.id },
+      include: { events: true, pageViews: true },
+    });
+
+    if (fullSession) {
+      const conversionGoalUrl = site.onboarding?.conversionGoalUrl ?? null;
+      const { score, intentClass } = scoreSessionIntent(
+        { session: fullSession, events: fullSession.events, pageViews: fullSession.pageViews },
+        conversionGoalUrl,
+      );
+
+      await tx.visitorSession.update({
+        where: { id: session.id },
+        data: { intentScore: score, intentClass },
+      });
+    }
+
     return session.id;
   });
 
@@ -224,7 +244,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, bot: true });
   }
 
-  // 8. Forward to PostHog (non-blocking, outside transaction, no extra DB query)
+  // 9. Forward to PostHog (non-blocking, outside transaction, no extra DB query)
   await enqueueEvents({
     siteId: site.id,
     sessionId: dbSessionId,
