@@ -18,31 +18,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'siteId required' }, { status: 400 });
   }
 
-  // Verify the user has OWNER or ADMIN role on the site's org
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+  // Single query: verify user is OWNER/ADMIN on the site's org
+  const membership = await prisma.orgMember.findFirst({
+    where: {
+      user: { email: session.user.email },
+      org: { sites: { some: { id: siteId } } },
+      role: { in: ['OWNER', 'ADMIN'] },
+    },
     select: { id: true },
   });
 
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const site = await prisma.site.findUnique({
-    where: { id: siteId },
-    select: { orgId: true },
-  });
-
-  if (!site) {
-    return NextResponse.json({ error: 'Site not found' }, { status: 404 });
-  }
-
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId: site.orgId, userId: user.id } },
-    select: { role: true },
-  });
-
-  if (!membership || !['OWNER', 'ADMIN'].includes(membership.role)) {
+  if (!membership) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

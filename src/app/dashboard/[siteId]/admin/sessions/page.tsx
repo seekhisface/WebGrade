@@ -163,7 +163,7 @@ export default function SessionExplorerPage() {
   // Auto-refresh every 10 seconds
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(() => setRefreshKey(k => k + 1), 10000);
+    const interval = setInterval(() => setRefreshKey(k => k + 1), 30000);
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
@@ -199,7 +199,7 @@ export default function SessionExplorerPage() {
                 onChange={e => setAutoRefresh(e.target.checked)}
                 className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
               />
-              Auto (10s)
+              Auto (30s)
             </label>
             <label className="flex items-center gap-1.5 text-sm text-slate-600">
               <input
