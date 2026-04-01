@@ -136,10 +136,11 @@
       events: events,
     });
 
-    // Use sendBeacon for page exit events (guaranteed delivery)
-    // Fall back to fetch for regular events
+    // Use sendBeacon with Blob to ensure correct Content-Type
+    // sendBeacon without Blob sends as text/plain, which breaks JSON parsing
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(CONFIG.ingestUrl, payload);
+      var blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon(CONFIG.ingestUrl, blob);
     } else {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', CONFIG.ingestUrl, true);

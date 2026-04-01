@@ -28,20 +28,20 @@ const EventSchema = z.object({
   t: z.string(),                      // Event type
   ts: z.number(),                     // Timestamp (ms)
   u: z.string().url(),                // Current URL
-  ti: z.string().optional(),          // Page title
-  pct: z.number().min(0).max(100).optional(),  // Scroll depth
-  tag: z.string().optional(),         // Clicked element tag
-  txt: z.string().max(200).optional(), // Clicked element text
-  cls: z.string().max(200).optional(), // Clicked element class
-  cta: z.boolean().optional(),        // Is CTA click
-  rage: z.boolean().optional(),       // Is rage click
-  hms: z.number().optional(),         // Hesitation ms
-  ms: z.number().optional(),          // Time on page (exit events)
-  ref: z.string().optional(),         // Referrer
-  spa: z.boolean().optional(),        // SPA route change
-  type: z.string().optional(),        // Form input type
-  name: z.string().optional(),        // Form field name
-  metadata: z.record(z.unknown()).optional(),
+  ti: z.string().nullish(),           // Page title
+  pct: z.number().min(0).max(100).nullish(),  // Scroll depth
+  tag: z.string().nullish(),          // Clicked element tag
+  txt: z.string().max(200).nullish(), // Clicked element text
+  cls: z.string().max(200).nullish(), // Clicked element class
+  cta: z.boolean().nullish(),         // Is CTA click
+  rage: z.boolean().nullish(),        // Is rage click
+  hms: z.number().nullish(),          // Hesitation ms
+  ms: z.number().nullish(),           // Time on page (exit events)
+  ref: z.string().nullish(),          // Referrer
+  spa: z.boolean().nullish(),         // SPA route change
+  type: z.string().nullish(),         // Form input type
+  name: z.string().nullish(),         // Form field name
+  metadata: z.record(z.unknown()).nullish(),
 });
 
 const IngestPayloadSchema = z.object({
@@ -68,11 +68,17 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Parse and validate body
+  // sendBeacon may send as text/plain, so fall back to reading as text
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    try {
+      const text = await req.text();
+      body = JSON.parse(text);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
   }
 
   const parsed = IngestPayloadSchema.safeParse(body);
