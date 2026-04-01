@@ -232,46 +232,36 @@ export async function POST(req: NextRequest) {
       if (event.t === 'exit_intent') pg.exitIntent = true;
     }
 
-    // Upsert a PageView for each page URL in this batch
+    // Upsert a PageView for each page URL — uses @@unique([sessionId, siteId, url])
+    // Single upsert per URL instead of findFirst + conditional create/update
     for (const [url, pg] of pageUrlMap) {
-      const existing = await tx.pageView.findFirst({
-        where: { sessionId: session.id, siteId: site.id, url },
-        select: { id: true, maxScrollDepthPct: true, clickCount: true, rageClickCount: true, hesitationCount: true },
+      await tx.pageView.upsert({
+        where: { sessionId_siteId_url: { sessionId: session.id, siteId: site.id, url } },
+        create: {
+          sessionId: session.id,
+          siteId: site.id,
+          url,
+          title: pg.title ?? undefined,
+          enteredAt: pg.enteredAt,
+          maxScrollDepthPct: pg.scrollDepth || undefined,
+          clickCount: pg.clicks,
+          rageClickCount: pg.rageClicks,
+          hesitationCount: pg.hesitations,
+          timeOnPageMs: pg.timeOnPageMs ?? undefined,
+          isExit: pg.isExit,
+          exitIntentDetected: pg.exitIntent,
+          exitedAt: pg.isExit ? new Date() : undefined,
+        },
+        update: {
+          clickCount: { increment: pg.clicks },
+          rageClickCount: { increment: pg.rageClicks },
+          hesitationCount: { increment: pg.hesitations },
+          ...(pg.scrollDepth > 0 ? { maxScrollDepthPct: pg.scrollDepth } : {}),
+          ...(pg.timeOnPageMs ? { timeOnPageMs: pg.timeOnPageMs } : {}),
+          ...(pg.isExit ? { isExit: true, exitedAt: new Date() } : {}),
+          ...(pg.exitIntent ? { exitIntentDetected: true } : {}),
+        },
       });
-
-      if (existing) {
-        await tx.pageView.update({
-          where: { id: existing.id },
-          data: {
-            maxScrollDepthPct: Math.max(existing.maxScrollDepthPct ?? 0, pg.scrollDepth) || undefined,
-            clickCount: (existing.clickCount ?? 0) + pg.clicks,
-            rageClickCount: (existing.rageClickCount ?? 0) + pg.rageClicks,
-            hesitationCount: (existing.hesitationCount ?? 0) + pg.hesitations,
-            timeOnPageMs: pg.timeOnPageMs ?? undefined,
-            isExit: pg.isExit || undefined,
-            exitIntentDetected: pg.exitIntent || undefined,
-            exitedAt: pg.isExit ? new Date() : undefined,
-          },
-        });
-      } else {
-        await tx.pageView.create({
-          data: {
-            sessionId: session.id,
-            siteId: site.id,
-            url,
-            title: pg.title ?? undefined,
-            enteredAt: pg.enteredAt,
-            maxScrollDepthPct: pg.scrollDepth || undefined,
-            clickCount: pg.clicks,
-            rageClickCount: pg.rageClicks,
-            hesitationCount: pg.hesitations,
-            timeOnPageMs: pg.timeOnPageMs ?? undefined,
-            isExit: pg.isExit,
-            exitIntentDetected: pg.exitIntent,
-            exitedAt: pg.isExit ? new Date() : undefined,
-          },
-        });
-      }
     }
 
     // Update session stats

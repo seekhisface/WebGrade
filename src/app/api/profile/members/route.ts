@@ -21,23 +21,24 @@ export async function PUT(req: NextRequest) {
   const parsed = updateMemberSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  // Batch user + target lookup in one transaction
+  const [user, target] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+    prisma.orgMember.findUnique({ where: { id: parsed.data.memberId } }),
+  ]);
 
-  const target = await prisma.orgMember.findUnique({
-    where: { id: parsed.data.memberId },
-  });
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
 
-  // Only OWNER can change roles
+  // Permission check (needs target.orgId from above)
   const requester = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: target.orgId, userId: user.id } },
+    select: { role: true },
   });
   if (!requester || requester.role !== 'OWNER') {
     return NextResponse.json({ error: 'Only owners can change roles' }, { status: 403 });
   }
 
-  // Can't change own role or another owner's role
   if (target.userId === user.id) {
     return NextResponse.json({ error: 'Cannot change your own role' }, { status: 400 });
   }
@@ -66,16 +67,19 @@ export async function DELETE(req: NextRequest) {
   const parsed = removeMemberSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  // Batch user + target lookup in one transaction
+  const [user, target] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+    prisma.orgMember.findUnique({ where: { id: parsed.data.memberId } }),
+  ]);
 
-  const target = await prisma.orgMember.findUnique({
-    where: { id: parsed.data.memberId },
-  });
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
 
+  // Permission check (needs target.orgId from above)
   const requester = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: target.orgId, userId: user.id } },
+    select: { role: true },
   });
   if (!requester || requester.role !== 'OWNER') {
     return NextResponse.json({ error: 'Only owners can remove members' }, { status: 403 });
@@ -84,7 +88,6 @@ export async function DELETE(req: NextRequest) {
   if (target.userId === user.id) {
     return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 });
   }
-
   if (target.role === 'OWNER') {
     return NextResponse.json({ error: 'Cannot remove another owner' }, { status: 400 });
   }

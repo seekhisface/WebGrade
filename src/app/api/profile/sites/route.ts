@@ -27,18 +27,19 @@ export async function PUT(req: NextRequest) {
 
   const { siteId, ...updates } = parsed.data;
 
-  // Verify user has OWNER/ADMIN access to this site's org
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  // Batch user + site lookup in one transaction
+  const [user, site] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+    prisma.site.findUnique({ where: { id: siteId }, select: { orgId: true } }),
+  ]);
 
-  const site = await prisma.site.findUnique({
-    where: { id: siteId },
-    select: { orgId: true },
-  });
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
+  // Permission check (needs site.orgId from above)
   const membership = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: site.orgId, userId: user.id } },
+    select: { role: true },
   });
   if (!membership || membership.role === 'VIEWER') {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });

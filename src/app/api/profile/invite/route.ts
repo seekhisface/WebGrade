@@ -22,51 +22,58 @@ export async function POST(req: NextRequest) {
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+  // Batch all read queries in a single transaction
+  const [user, existingUser] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email } }),
+    prisma.user.findUnique({ where: { email: parsed.data.email } }),
+  ]);
+
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  // Only OWNER/ADMIN can invite
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId: parsed.data.orgId, userId: user.id } },
-  });
+  // Permission + duplicate check in one transaction
+  const [membership, existingMember] = await prisma.$transaction([
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId: parsed.data.orgId, userId: user.id } },
+    }),
+    ...(existingUser ? [
+      prisma.orgMember.findUnique({
+        where: { orgId_userId: { orgId: parsed.data.orgId, userId: existingUser.id } },
+      }),
+    ] : []),
+  ]);
+
   if (!membership || membership.role === 'VIEWER') {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
   }
-
-  // Check if already a member
-  const existingUser = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  if (existingUser) {
-    const existingMember = await prisma.orgMember.findUnique({
-      where: { orgId_userId: { orgId: parsed.data.orgId, userId: existingUser.id } },
-    });
-    if (existingMember) {
-      return NextResponse.json({ error: 'User is already a member of this organization' }, { status: 400 });
-    }
+  if (existingMember) {
+    return NextResponse.json({ error: 'User is already a member of this organization' }, { status: 400 });
   }
 
-  // Upsert invitation (replaces existing pending invite for same email)
+  // Upsert invitation + fetch org name in one transaction
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
+  expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const invitation = await prisma.orgInvitation.upsert({
-    where: { orgId_email: { orgId: parsed.data.orgId, email: parsed.data.email } },
-    create: {
-      orgId: parsed.data.orgId,
-      email: parsed.data.email,
-      role: parsed.data.role,
-      invitedBy: user.id,
-      expiresAt,
-    },
-    update: {
-      role: parsed.data.role,
-      invitedBy: user.id,
-      expiresAt,
-      token: undefined, // keep existing token
-    },
-  });
+  const [invitation, org] = await prisma.$transaction([
+    prisma.orgInvitation.upsert({
+      where: { orgId_email: { orgId: parsed.data.orgId, email: parsed.data.email } },
+      create: {
+        orgId: parsed.data.orgId,
+        email: parsed.data.email,
+        role: parsed.data.role,
+        invitedBy: user.id,
+        expiresAt,
+      },
+      update: {
+        role: parsed.data.role,
+        invitedBy: user.id,
+        expiresAt,
+        token: undefined,
+      },
+    }),
+    prisma.organization.findUnique({ where: { id: parsed.data.orgId }, select: { name: true } }),
+  ]);
 
-  // Send invitation email via Resend
-  const org = await prisma.organization.findUnique({ where: { id: parsed.data.orgId } });
+  // Send invitation email via Resend (non-blocking)
   const appUrl = process.env.NEXTAUTH_URL || 'https://www.webgrade.io';
   const inviteUrl = `${appUrl}/invite/${invitation.token}`;
 
@@ -99,7 +106,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('Failed to send invitation email:', e);
-    // Don't fail the request — invitation is saved, email is best-effort
   }
 
   return NextResponse.json({ success: true, invitation: { id: invitation.id, email: invitation.email, role: invitation.role } });
@@ -116,14 +122,19 @@ export async function DELETE(req: NextRequest) {
   const parsed = revokeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  // All reads in one transaction
+  const [user, invitation] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+    prisma.orgInvitation.findUnique({ where: { id: parsed.data.invitationId }, select: { id: true, orgId: true } }),
+  ]);
 
-  const invitation = await prisma.orgInvitation.findUnique({ where: { id: parsed.data.invitationId } });
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (!invitation) return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
 
+  // Permission check + delete in one transaction
   const membership = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: invitation.orgId, userId: user.id } },
+    select: { role: true },
   });
   if (!membership || membership.role === 'VIEWER') {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });

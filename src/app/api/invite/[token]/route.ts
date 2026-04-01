@@ -35,27 +35,26 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: 'Please sign in first' }, { status: 401 });
 
-  const invitation = await prisma.orgInvitation.findUnique({
-    where: { token: params.token },
-  });
+  // Batch all reads in one transaction
+  const [invitation, user] = await prisma.$transaction([
+    prisma.orgInvitation.findUnique({ where: { token: params.token } }),
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+  ]);
 
   if (!invitation) return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
   if (invitation.expiresAt < new Date()) return NextResponse.json({ error: 'Invitation has expired' }, { status: 410 });
-
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  // Check if already a member
+  // Check existing + add/cleanup in one transaction
   const existing = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId: invitation.orgId, userId: user.id } },
   });
+
   if (existing) {
-    // Already a member — just clean up the invitation and redirect
     await prisma.orgInvitation.delete({ where: { id: invitation.id } });
     return NextResponse.json({ success: true, alreadyMember: true });
   }
 
-  // Add to org and delete invitation in a transaction
   await prisma.$transaction([
     prisma.orgMember.create({
       data: {

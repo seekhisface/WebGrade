@@ -590,7 +590,7 @@ model PageView {
   session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId])
+  @@unique([sessionId, siteId, url])
   @@index([siteId, url])
   @@map("page_views")
 }
