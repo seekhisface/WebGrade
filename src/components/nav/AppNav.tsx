@@ -95,7 +95,9 @@ export function AppNav() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const isAdmin = session?.user?.email === 'demo@webgrade.io';
+  // Sessions and Win-Back tabs are visible to all authenticated users.
+  // The API routes enforce OWNER/ADMIN access server-side.
+  const isAuthenticated = !!session?.user?.email;
 
   const navTabs = [
     { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
@@ -104,8 +106,8 @@ export function AppNav() {
     { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
     { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
     { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
-    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAdmin },
-    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAdmin },
+    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAuthenticated },
+    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAuthenticated },
   ].filter(tab => tab.show);
 
   return (

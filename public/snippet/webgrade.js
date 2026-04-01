@@ -429,16 +429,19 @@
 
   // -------------------------------------------------------------------------
   // Section view tracking — hash navigation on single-page sites
-  // Captures clicks on anchor links (#pricing, #features) and browser
-  // back/forward through hash history
+  // hashchange fires for native anchor clicks that don't go through pushState.
+  // handleRouteChange already covers pushState/replaceState/popstate, so only
+  // handle hashchange when the URL wasn't already updated by those paths.
   // -------------------------------------------------------------------------
   window.addEventListener('hashchange', function () {
-    var section = getHashSection(window.location.href);
+    var newUrl = window.location.href;
+    if (newUrl === currentUrl) return; // Already handled by handleRouteChange
+    var section = getHashSection(newUrl);
     if (section) {
       track('section_view', {
         section: section,
       });
-      currentUrl = window.location.href;
+      currentUrl = newUrl;
     }
   });
 
