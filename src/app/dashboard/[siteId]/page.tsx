@@ -136,9 +136,20 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
           <div className="lg:col-span-3 bg-white rounded-2xl border border-[#bae6fd] p-6 shadow-sm">
             <h2 className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-5">Drop-off Map · AI Analysis</h2>
             <div className="space-y-3">
-              {data.dropOffPages.map(page => (
-                <DropOffRow key={page.url} page={page} expanded={expanded === page.url} onToggle={() => setExpanded(expanded === page.url ? null : page.url)} />
-              ))}
+              {data.dropOffPages.length > 0 ? (
+                data.dropOffPages.map(page => (
+                  <DropOffRow key={page.url} page={page} expanded={expanded === page.url} onToggle={() => setExpanded(expanded === page.url ? null : page.url)} />
+                ))
+              ) : (
+                <div className="px-4 py-6 text-center">
+                  <p className="text-sm text-[#64748b]">
+                    Drop-off analysis requires at least 10 unique sessions per page.
+                  </p>
+                  <p className="text-xs text-[#94a3b8] mt-1">
+                    Currently tracking {data.totalSessions} session{data.totalSessions !== 1 ? 's' : ''}.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
