@@ -157,7 +157,8 @@ export async function computeDropOffAnalysis(params: {
   periodStart.setDate(periodStart.getDate() - periodDays);
 
   // ── 1. Get all page views and section_view events in the period ──────────
-  const [pageViews, sectionEvents, totalSessions] = await Promise.all([
+  // Uses batch transaction to share a single DB connection for all 3 queries
+  const [pageViews, sectionEvents, totalSessions] = await prisma.$transaction([
     prisma.pageView.findMany({
       where: {
         siteId,
@@ -383,15 +384,16 @@ async function persistDropOffFlags(siteId: string, results: PageDropOffResult[])
   );
   const breakpointUrls = new Set(results.filter(r => r.isStorylineBreakpoint).map(r => r.url));
 
-  await prisma.pageView.updateMany({
-    where: { siteId, url: { in: [...dropOffUrls] } },
-    data: { isDropOffPage: true },
-  });
-
-  await prisma.pageView.updateMany({
-    where: { siteId, url: { in: [...breakpointUrls] } },
-    data: { storylineBreakpoint: true },
-  });
+  await prisma.$transaction([
+    prisma.pageView.updateMany({
+      where: { siteId, url: { in: [...dropOffUrls] } },
+      data: { isDropOffPage: true },
+    }),
+    prisma.pageView.updateMany({
+      where: { siteId, url: { in: [...breakpointUrls] } },
+      data: { storylineBreakpoint: true },
+    }),
+  ]);
 }
 
 // ---------------------------------------------------------------------------

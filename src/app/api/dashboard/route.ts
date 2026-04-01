@@ -53,83 +53,51 @@ export async function GET(req: NextRequest) {
     const prevStart = new Date(periodStart);
     prevStart.setDate(prevStart.getDate() - days);
 
-    // ── Parallel queries ────────────────────────────────────────────────
-    const [
+    // ── Dashboard stats in a single interactive transaction (1 connection) ──
+    const {
       totalSessions,
       prevSessions,
       intentAgg,
       prevIntentAgg,
       intentDistribution,
       latestHealth,
-      dropOff,
-    ] = await Promise.all([
-      // Current period sessions
-      prisma.visitorSession.count({
-        where: {
-          siteId,
-          startedAt: { gte: periodStart, lte: now },
-          isBotFiltered: false,
-        },
-      }),
+    } = await prisma.$transaction(async (tx) => {
+      const [ts, ps, ia, pia, id, lh] = await Promise.all([
+        tx.visitorSession.count({
+          where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false },
+        }),
+        tx.visitorSession.count({
+          where: { siteId, startedAt: { gte: prevStart, lt: periodStart }, isBotFiltered: false },
+        }),
+        tx.visitorSession.aggregate({
+          where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, intentScore: { not: null } },
+          _avg: { intentScore: true },
+        }),
+        tx.visitorSession.aggregate({
+          where: { siteId, startedAt: { gte: prevStart, lt: periodStart }, isBotFiltered: false, intentScore: { not: null } },
+          _avg: { intentScore: true },
+        }),
+        tx.visitorSession.groupBy({
+          by: ['intentClass'],
+          where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, intentClass: { not: null } },
+          _count: true,
+        }),
+        tx.siteHealthCheck.findFirst({
+          where: { siteId },
+          orderBy: { checkedAt: 'desc' },
+          select: { overallStatus: true },
+        }),
+      ]);
+      return { totalSessions: ts, prevSessions: ps, intentAgg: ia, prevIntentAgg: pia, intentDistribution: id, latestHealth: lh };
+    });
 
-      // Previous period sessions (for comparison)
-      prisma.visitorSession.count({
-        where: {
-          siteId,
-          startedAt: { gte: prevStart, lt: periodStart },
-          isBotFiltered: false,
-        },
-      }),
-
-      // Average intent score — current period
-      prisma.visitorSession.aggregate({
-        where: {
-          siteId,
-          startedAt: { gte: periodStart, lte: now },
-          isBotFiltered: false,
-          intentScore: { not: null },
-        },
-        _avg: { intentScore: true },
-      }),
-
-      // Average intent score — previous period
-      prisma.visitorSession.aggregate({
-        where: {
-          siteId,
-          startedAt: { gte: prevStart, lt: periodStart },
-          isBotFiltered: false,
-          intentScore: { not: null },
-        },
-        _avg: { intentScore: true },
-      }),
-
-      // Intent class distribution — current period
-      prisma.visitorSession.groupBy({
-        by: ['intentClass'],
-        where: {
-          siteId,
-          startedAt: { gte: periodStart, lte: now },
-          isBotFiltered: false,
-          intentClass: { not: null },
-        },
-        _count: true,
-      }),
-
-      // Latest health check
-      prisma.siteHealthCheck.findFirst({
-        where: { siteId },
-        orderBy: { checkedAt: 'desc' },
-        select: { overallStatus: true },
-      }),
-
-      // Drop-off analysis (reuses existing engine)
-      computeDropOffAnalysis({
-        siteId,
-        periodDays: days,
-        avgOrderValue: site.onboarding?.averageOrderValue ?? 500,
-        leadToWinRate: site.onboarding?.leadToWinRate ?? 0.08,
-      }),
-    ]);
+    // Drop-off runs after the transaction releases its connection
+    const dropOff = await computeDropOffAnalysis({
+      siteId,
+      periodDays: days,
+      avgOrderValue: site.onboarding?.averageOrderValue ?? 500,
+      leadToWinRate: site.onboarding?.leadToWinRate ?? 0.08,
+    });
 
     // ── Compute derived values ──────────────────────────────────────────
     const sessionChange = prevSessions > 0
