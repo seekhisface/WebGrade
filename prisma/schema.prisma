@@ -141,6 +141,10 @@ model Site {
   hasWebWatch      Boolean @default(false)
   hasWebOpp        Boolean @default(false)
 
+  // Integrations
+  posthogEnabled Boolean @default(false)
+  posthogApiKey  String? // Per-site PostHog project API key
+
   // Snippet
   snippetId String @unique @default(cuid()) // Public ID embedded in snippet
 
