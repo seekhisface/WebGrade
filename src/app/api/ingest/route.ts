@@ -190,6 +190,90 @@ export async function POST(req: NextRequest) {
       })),
     });
 
+    // Aggregate PageView records for drop-off analysis
+    // Group events by page URL to build per-page engagement metrics
+    const pageUrlMap = new Map<string, {
+      title: string | null | undefined;
+      enteredAt: Date;
+      scrollDepth: number;
+      clicks: number;
+      rageClicks: number;
+      hesitations: number;
+      timeOnPageMs: number | null | undefined;
+      isExit: boolean;
+      exitIntent: boolean;
+    }>();
+
+    for (const event of events) {
+      const url = event.u.split('?')[0]; // strip query params
+      if (!pageUrlMap.has(url)) {
+        pageUrlMap.set(url, {
+          title: event.ti,
+          enteredAt: new Date(event.ts),
+          scrollDepth: 0,
+          clicks: 0,
+          rageClicks: 0,
+          hesitations: 0,
+          timeOnPageMs: undefined,
+          isExit: false,
+          exitIntent: false,
+        });
+      }
+      const pg = pageUrlMap.get(url)!;
+
+      if (event.pct && event.pct > pg.scrollDepth) pg.scrollDepth = event.pct;
+      if (event.t === 'click') pg.clicks++;
+      if (event.t === 'click' && event.rage) pg.rageClicks++;
+      if (event.t === 'hesitation') pg.hesitations++;
+      if (event.t === 'page_exit') {
+        pg.isExit = true;
+        pg.timeOnPageMs = event.ms;
+      }
+      if (event.t === 'exit_intent') pg.exitIntent = true;
+    }
+
+    // Upsert a PageView for each page URL in this batch
+    for (const [url, pg] of pageUrlMap) {
+      const existing = await tx.pageView.findFirst({
+        where: { sessionId: session.id, siteId: site.id, url },
+        select: { id: true, maxScrollDepthPct: true, clickCount: true, rageClickCount: true, hesitationCount: true },
+      });
+
+      if (existing) {
+        await tx.pageView.update({
+          where: { id: existing.id },
+          data: {
+            maxScrollDepthPct: Math.max(existing.maxScrollDepthPct ?? 0, pg.scrollDepth) || undefined,
+            clickCount: (existing.clickCount ?? 0) + pg.clicks,
+            rageClickCount: (existing.rageClickCount ?? 0) + pg.rageClicks,
+            hesitationCount: (existing.hesitationCount ?? 0) + pg.hesitations,
+            timeOnPageMs: pg.timeOnPageMs ?? undefined,
+            isExit: pg.isExit || undefined,
+            exitIntentDetected: pg.exitIntent || undefined,
+            exitedAt: pg.isExit ? new Date() : undefined,
+          },
+        });
+      } else {
+        await tx.pageView.create({
+          data: {
+            sessionId: session.id,
+            siteId: site.id,
+            url,
+            title: pg.title ?? undefined,
+            enteredAt: pg.enteredAt,
+            maxScrollDepthPct: pg.scrollDepth || undefined,
+            clickCount: pg.clicks,
+            rageClickCount: pg.rageClicks,
+            hesitationCount: pg.hesitations,
+            timeOnPageMs: pg.timeOnPageMs ?? undefined,
+            isExit: pg.isExit,
+            exitIntentDetected: pg.exitIntent,
+            exitedAt: pg.isExit ? new Date() : undefined,
+          },
+        });
+      }
+    }
+
     // Update session stats
     const sessionUpdates: Record<string, unknown> = {
       pageCount: { increment: pageViewEvents.length },

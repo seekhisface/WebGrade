@@ -205,11 +205,53 @@ function classifyIntent(
 
   if (isResearcher) return 'RESEARCHER';
 
-  // Competitor: Very short session, visited pricing page, then left
-  // (heuristic — refine with IP range patterns in future)
-  const isLikelyCompetitor =
-    (session.durationMs ?? 0) < 90 * 1000 &&        // Under 90 sec
-    events.some(e => e.pageUrl?.toLowerCase().includes('pricing'));
+  // Competitor: Short session focused on pricing with no buying signals.
+  // Must meet ALL criteria to avoid mislabeling real prospects:
+  //   1. Under 90 seconds
+  //   2. Viewed pricing (URL path or #pricing section)
+  //   3. Zero interaction depth (no CTA clicks, form focus, or hesitation)
+  //   4. Didn't explore other content (fewer than 2 non-pricing pages/sections)
+  const durationMs = session.durationMs ?? 0;
+  const isShortVisit = durationMs < 90 * 1000;
+
+  const pricingKeywords = ['pricing', 'plans', 'packages', 'cost'];
+  const viewedPricing = events.some(e => {
+    const url = e.pageUrl?.toLowerCase() ?? '';
+    if (pricingKeywords.some(kw => url.includes(kw))) return true;
+    // Check section_view metadata for #pricing on single-page sites
+    if (e.eventType === 'SECTION_VIEW' && e.metadata) {
+      const meta = e.metadata as Record<string, unknown>;
+      const section = typeof meta.section === 'string' ? meta.section.toLowerCase() : '';
+      if (pricingKeywords.some(kw => section.includes(kw))) return true;
+    }
+    return false;
+  });
+
+  const ctaClicks = events.filter(e => e.isCtaClick).length;
+  const formInteractions = events.filter(e => e.eventType === 'FORM_FOCUS' || e.eventType === 'FORM_SUBMIT').length;
+  const hesitations = events.filter(e => e.eventType === 'HESITATION').length;
+  const noInteraction = ctaClicks === 0 && formInteractions === 0 && hesitations === 0;
+
+  // Count non-pricing content pages/sections visited
+  const nonPricingContent = new Set<string>();
+  for (const e of events) {
+    if (e.eventType === 'PAGE_VIEW' || e.eventType === 'ROUTE_CHANGE') {
+      const url = e.pageUrl?.toLowerCase() ?? '';
+      if (!pricingKeywords.some(kw => url.includes(kw))) {
+        nonPricingContent.add(url);
+      }
+    }
+    if (e.eventType === 'SECTION_VIEW' && e.metadata) {
+      const meta = e.metadata as Record<string, unknown>;
+      const section = typeof meta.section === 'string' ? meta.section.toLowerCase() : '';
+      if (section && !pricingKeywords.some(kw => section.includes(kw))) {
+        nonPricingContent.add(section);
+      }
+    }
+  }
+  const limitedExploration = nonPricingContent.size < 2;
+
+  const isLikelyCompetitor = isShortVisit && viewedPricing && noInteraction && limitedExploration;
 
   if (isLikelyCompetitor) return 'COMPETITOR';
 
