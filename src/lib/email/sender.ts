@@ -181,7 +181,7 @@ export function buildReportEmail(params: {
   customMessage?: string;
 }): string {
   const titles: Record<string, string> = {
-    INTERIM: 'WebGrade Interim Report™',
+    INTERIM: 'WebAudit™ Report',
     WEBWATCH: 'WebWatch™ Monthly Report',
     WEBOPP: 'WebOpp™ Market Intelligence',
     DIGEST: 'WebGrade Weekly Digest',

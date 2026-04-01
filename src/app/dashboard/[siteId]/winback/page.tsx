@@ -168,7 +168,7 @@ export default function WinbackPage() {
             <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3 flex items-start gap-2.5">
               <span className="text-sm mt-0.5">⚡</span>
               <div>
-                <p className="text-xs font-semibold text-[#1e293b] mb-0.5">AI generates this from your latest Interim Report</p>
+                <p className="text-xs font-semibold text-[#1e293b] mb-0.5">AI generates this from your latest WebAudit</p>
                 <p className="text-xs text-[#64748b]">Top findings, revenue at risk, and your site data are used to write a personalized teaser. ~30 seconds.</p>
               </div>
             </div>

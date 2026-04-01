@@ -113,12 +113,12 @@ export default function ReportPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-[#1e293b] mb-2">Generate Your Interim Report™</h1>
+          <h1 className="text-xl font-bold text-[#1e293b] mb-2">Generate Your WebAudit™</h1>
           <p className="text-sm text-[#64748b] mb-6 leading-relaxed">WebGrade analyzes your behavioral data, drop-off patterns, and GA4 baseline to generate a prioritized action plan with estimated revenue impact.</p>
           {error && <p className="text-sm text-red-500 mb-4 p-3 bg-red-50 rounded-lg">{error}</p>}
           <button onClick={generateReport} disabled={generating}
             className="w-full bg-[#0c4a6e] hover:bg-[#075985] disabled:opacity-60 text-white font-semibold py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2">
-            {generating ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Generating… (~30s)</> : <>⚡ Generate Interim Report™</>}
+            {generating ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Generating… (~30s)</> : <>⚡ Generate WebAudit™</>}
           </button>
           <p className="text-xs text-[#94a3b8] mt-3">AI-powered · Uses your behavioral data · ~30 seconds</p>
         </div>
@@ -135,7 +135,7 @@ export default function ReportPage() {
       {/* Sub-header */}
       <div className="bg-white border-b border-[#e0f2fe] px-6 py-2 flex items-center justify-between sticky top-[52px] z-10">
         <div className="flex items-center gap-3 text-sm">
-          <span className="font-semibold text-[#1e293b]">WebGrade Interim Report™</span>
+          <span className="font-semibold text-[#1e293b]">WebGrade WebAudit™</span>
           <span className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-semibold px-2 py-0.5 rounded-full">Complete</span>
           <span className="text-[#cbd5e1]">·</span>
           <span className="text-xs text-[#94a3b8]">{fmt(report.periodStart)} – {fmt(report.periodEnd)}</span>

@@ -99,7 +99,7 @@ export function AppNav() {
   const navTabs = [
     { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
     { id: 'seo',        label: 'Live SEO',        href: `/dashboard/${currentSiteId}/seo`,       show: !!currentSiteId },
-    { id: 'report',     label: 'Interim Report™', href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
+    { id: 'report',     label: 'WebAudit™',       href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
     { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
     { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
     { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },

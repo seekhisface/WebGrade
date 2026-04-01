@@ -74,7 +74,7 @@ const SCENARIOS = {
       'Today — 90-day GA4 baseline imported, keyword gaps identified',
       'Day 1 — Live intent scoring starts on every visitor',
       'Day 7 — First behavioral patterns and drop-off insights surface',
-      'Day 45 — Complete Interim Report™ with prioritized action list',
+      'Day 60 — Complete WebAudit™ with prioritized action list',
     ],
   },
   B: {

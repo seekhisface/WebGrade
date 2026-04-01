@@ -121,18 +121,9 @@ export function SetupChecklist({ siteId, setup }: Props) {
           })}
         </div>
 
-        <div className="p-5 bg-white border border-[#bae6fd] rounded-2xl flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-[#0c4a6e] mb-1">See what your report will look like</p>
-            <p className="text-xs text-[#64748b]">Download a sample Interim Report generated from real behavioral data.</p>
-          </div>
-          <a
-            href="/sample-report.pdf"
-            download
-            className="flex-shrink-0 px-4 py-2 bg-white border border-[#bae6fd] hover:bg-[#f0f9ff] text-[#0c4a6e] text-xs font-semibold rounded-lg transition-colors"
-          >
-            Sample Report
-          </a>
+        <div className="p-5 bg-[#f0f9ff] border border-[#bae6fd] rounded-2xl">
+          <p className="text-sm font-semibold text-[#0c4a6e] mb-1">Your WebAudit™ is building</p>
+          <p className="text-xs text-[#64748b]">Complete the steps above to start your 60-day WebAudit. Once the snippet is live, WebGrade begins collecting behavioral data immediately.</p>
         </div>
 
         <div className="mt-8">

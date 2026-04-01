@@ -87,7 +87,7 @@ const FREQUENCY_LABELS: Record<DigestFrequency, string> = {
 };
 
 const REPORT_LABELS = [
-  { key: 'receiveInterimReport', label: 'Interim Report™', description: '45-day forensic audit' },
+  { key: 'receiveInterimReport', label: 'WebAudit™', description: '60-day forensic audit' },
   { key: 'receiveWebWatch',      label: 'WebWatch™',       description: 'Monthly monitoring reports' },
   { key: 'receiveWebOpp',        label: 'WebOpp™',         description: 'Market intelligence reports' },
   { key: 'receiveWeeklyDigest',  label: 'Weekly Digest',   description: 'Summary of key metrics' },
