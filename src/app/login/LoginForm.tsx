@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -60,19 +61,15 @@ export default function LoginForm() {
 
         {/* Logo */}
         <div className="mb-10 text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-[#0c4a6e] rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-sm">W</span>
-            </div>
-            <span className="text-[#0c4a6e] font-bold text-xl tracking-tight">WebGrade</span>
+          <Link href="/" className="inline-block mb-3">
+            <Image src="/logos/webgrade_logo_light.svg" alt="WebGrade" width={240} height={44} className="h-10 w-auto" />
           </Link>
-          <p className="text-[#64748b] text-sm">Website intelligence for founders</p>
         </div>
 
         {/* Card */}
         <div className="bg-white border border-[#bae6fd] rounded-3xl p-8 shadow-sm">
           <h1 className="text-[#0c4a6e] font-black text-xl mb-1">Sign into your WebGrade dashboard</h1>
-          <p className="text-[#64748b] text-sm mb-7">No credit card required · Cancel anytime</p>
+          <p className="text-[#64748b] text-sm mb-7">Setup in minutes · Cancel anytime</p>
 
           {/* Google */}
           <button
@@ -96,16 +93,6 @@ export default function LoginForm() {
             <div className="flex-1 h-px bg-[#e0f2fe]" />
           </div>
 
-          {/* Demo account */}
-          <button
-            onClick={handleDemo}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-[#f0fdf4] hover:bg-[#dcfce7] border border-[#bbf7d0] text-[#166534] font-medium py-2.5 px-4 rounded-xl transition-colors mb-5 text-sm disabled:opacity-50"
-          >
-            <span className="w-2 h-2 bg-[#22c55e] rounded-full" />
-            Demo Account — NovaPulse HR · pre-loaded with data
-          </button>
-
           {/* Email/password form */}
           <form onSubmit={handleCredentials} className="space-y-4">
             <div>
@@ -120,7 +107,10 @@ export default function LoginForm() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#0c4a6e] mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-[#0c4a6e]">Password</label>
+                <Link href="/forgot-password" className="text-xs text-[#0891b2] hover:underline">Forgot password?</Link>
+              </div>
               <input
                 type="password"
                 value={password}
@@ -149,7 +139,12 @@ export default function LoginForm() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-[#94a3b8] mt-6">
+          <p className="text-center text-sm text-[#64748b] mt-6">
+            Don&apos;t have an account?{' '}
+            <Link href="/signup" className="text-[#0891b2] font-semibold hover:underline">Create an account</Link>
+          </p>
+
+          <p className="text-center text-xs text-[#94a3b8] mt-4">
             By signing in, you agree to our{' '}
             <Link href="/terms" className="text-[#0891b2] hover:underline">Terms of Service</Link>
             {' '}and{' '}
