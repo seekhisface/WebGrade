@@ -29,6 +29,7 @@ function getActivePageFromPath(pathname: string) {
   if (pathname.includes('/report')) return 'report';
   if (pathname.includes('/winback')) return 'winback';
   if (pathname.includes('/snippet')) return 'snippet';
+  if (pathname.includes('/admin')) return 'admin';
   if (pathname.includes('/settings')) return 'settings';
   if (pathname.includes('/alerts')) return 'settings';
   return 'behavioral';
@@ -104,6 +105,7 @@ export function AppNav() {
     { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
     { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
     { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAdmin },
+    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAdmin },
   ].filter(tab => tab.show);
 
   return (
@@ -239,7 +241,7 @@ export function AppNav() {
               </div>
               <div className="py-1">
                 <Link
-                  href="/settings"
+                  href={currentSiteId ? `/dashboard/${currentSiteId}/settings` : '/dashboard'}
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 hover:bg-sky-50 hover:text-slate-900 transition-colors"
                 >

@@ -18,49 +18,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'siteId required' }, { status: 400 });
   }
 
-  const site = await prisma.site.findFirst({
-    where: {
-      id: siteId,
-      org: { members: { some: { user: { email: session.user.email } } } },
-    },
-  });
+  // Single query: verify access and check for recent events in parallel
+  const since = new Date();
+  since.setHours(since.getHours() - 24);
+
+  const [site, recentEvent] = await Promise.all([
+    prisma.site.findFirst({
+      where: {
+        id: siteId,
+        org: { members: { some: { user: { email: session.user.email } } } },
+      },
+      select: { id: true },
+    }),
+    prisma.sessionEvent.findFirst({
+      where: { siteId, timestamp: { gte: since } },
+      select: { id: true },
+    }),
+  ]);
 
   if (!site) {
     return NextResponse.json({ error: 'Site not found' }, { status: 404 });
   }
 
-  // Check for recent events from this site
-  const since = new Date();
-  since.setHours(since.getHours() - 24);
-
-  const recentEvent = await prisma.sessionEvent.findFirst({
-    where: { siteId, timestamp: { gte: since } },
-    select: { id: true },
-  });
-
   const verified = !!recentEvent;
 
   if (verified) {
-    // Upsert installation record as VERIFIED
-    const existing = await prisma.siteInstallation.findUnique({
+    await prisma.siteInstallation.upsert({
       where: { siteId },
+      update: { status: 'VERIFIED', lastVerifiedAt: new Date() },
+      create: {
+        siteId,
+        method: 'MANUAL',
+        status: 'VERIFIED',
+        lastVerifiedAt: new Date(),
+      },
     });
-
-    if (existing) {
-      await prisma.siteInstallation.update({
-        where: { siteId },
-        data: { status: 'VERIFIED', lastVerifiedAt: new Date() },
-      });
-    } else {
-      await prisma.siteInstallation.create({
-        data: {
-          siteId,
-          method: 'MANUAL',
-          status: 'VERIFIED',
-          lastVerifiedAt: new Date(),
-        },
-      });
-    }
   }
 
   return NextResponse.json({ verified });

@@ -106,11 +106,25 @@ export function scoreSessionIntent(
   if (pageCount >= 2) pageSequenceScore += 5;
 
   // Visited a pricing, features, or product page (common buying signals)
+  // Check both page URLs and section_view events for single-page sites
   const buyingSignalPages = ['pricing', 'plans', 'features', 'product', 'buy', 'checkout'];
+  const sectionViews = events
+    .filter(e => e.eventType === 'SECTION_VIEW' && e.metadata)
+    .map(e => {
+      const meta = e.metadata as Record<string, unknown> | null;
+      return typeof meta?.section === 'string' ? meta.section.toLowerCase() : '';
+    })
+    .filter(Boolean);
+
   const visitedBuyingPage = pageViews.some(pv =>
     buyingSignalPages.some(keyword => pv.url.toLowerCase().includes(keyword))
+  ) || sectionViews.some(section =>
+    buyingSignalPages.some(keyword => section.includes(keyword))
   );
   if (visitedBuyingPage) pageSequenceScore += 10;
+
+  // Section navigation on single-page sites counts as page depth
+  if (sectionViews.length >= 2 && pageCount <= 1) pageSequenceScore += 5;
 
   // Visited the conversion goal page
   if (conversionGoalUrl && pageViews.some(pv => pv.url.includes(conversionGoalUrl))) {

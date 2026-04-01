@@ -104,115 +104,105 @@ interface SiteWithOnboarding {
 async function runHealthChecks(site: SiteWithOnboarding) {
   const results: Record<string, unknown> = {};
 
-  // HC-01: Snippet fire detection
-  // We check if we have received any events from this site in the last 10 minutes
-  const recentEvent = await prisma.sessionEvent.findFirst({
-    where: {
-      siteId: site.id,
-      timestamp: { gte: new Date(Date.now() - 10 * 60 * 1000) }
-    }
-  });
+  // Run all independent DB queries in parallel
+  const [
+    recentEvent,       // HC-01: Snippet fire
+    spaEvent,          // HC-02: SPA detection
+    conversionEvent,   // HC-03: Conversion goal
+    utmSessions,       // HC-04: UTM integrity
+    utmConversions,    // HC-04: UTM conversions
+    eventGroups,       // HC-05: Duplicate detection
+    nonBotSession,     // HC-06: Consent check
+    totalSessions,     // HC-07: Bot baseline (total)
+    botSessions,       // HC-07: Bot baseline (bots)
+    latestCrawl,       // HC-08: Page speed
+  ] = await Promise.all([
+    prisma.sessionEvent.findFirst({
+      where: { siteId: site.id, timestamp: { gte: new Date(Date.now() - 10 * 60 * 1000) } },
+    }),
+    prisma.sessionEvent.findFirst({
+      where: { siteId: site.id, eventType: 'ROUTE_CHANGE' },
+    }),
+    prisma.sessionEvent.findFirst({
+      where: { siteId: site.id, eventType: 'CONVERSION' },
+    }),
+    prisma.visitorSession.count({
+      where: { siteId: site.id, utmSource: { not: null } },
+    }),
+    prisma.visitorSession.count({
+      where: { siteId: site.id, utmSource: { not: null }, conversionGoalHit: true },
+    }),
+    prisma.sessionEvent.groupBy({
+      by: ['sessionId'],
+      where: { siteId: site.id },
+      _count: { id: true },
+    }),
+    prisma.visitorSession.findFirst({
+      where: { siteId: site.id, isBotFiltered: false },
+    }),
+    prisma.visitorSession.count({ where: { siteId: site.id } }),
+    prisma.visitorSession.count({
+      where: { siteId: site.id, isBotFiltered: true },
+    }),
+    prisma.seoCrawl.findFirst({
+      where: { siteId: site.id, crawlStatus: 'COMPLETED' },
+      orderBy: { startedAt: 'desc' },
+      include: { pageResults: { where: { url: site.url }, take: 1 } },
+    }),
+  ]);
 
+  // HC-01: Snippet fire detection
   results.snippetFires = recentEvent !== null;
-  results.snippetFireTimeMs = null; // Set by client-side check in production
-  results.snippetStatus = recentEvent ? 'GREEN' : 'YELLOW'; // YELLOW: not yet seen (new site)
+  results.snippetFireTimeMs = null;
+  results.snippetStatus = recentEvent ? 'GREEN' : 'YELLOW';
 
   // HC-02: SPA detection
-  // Check if we see ROUTE_CHANGE events (indicates SPA with proper tracking)
-  const spaEvent = await prisma.sessionEvent.findFirst({
-    where: { siteId: site.id, eventType: 'ROUTE_CHANGE' }
-  });
   results.spaRouteEventsWork = spaEvent !== null;
-  results.spaStatus = 'GREEN'; // Default GREEN; set YELLOW if SPA detected but no route events
+  results.spaStatus = 'GREEN';
 
   // HC-03: Conversion goal reachability
-  // Check if we have received any CONVERSION events
   if (site.onboarding?.conversionGoalUrl) {
-    const conversionEvent = await prisma.sessionEvent.findFirst({
-      where: {
-        siteId: site.id,
-        eventType: 'CONVERSION',
-      }
-    });
-
-    // Check if conversion goal URL is reachable (in production, do HTTP HEAD request)
-    results.conversionGoalReachable = true; // Optimistic default; real check uses fetch()
+    results.conversionGoalReachable = true;
     results.conversionGoalSnippetFires = conversionEvent !== null;
     results.conversionGoalStatus = conversionEvent ? 'GREEN' : 'YELLOW';
   } else {
-    // No conversion goal set yet — this is a blocker (OB-06)
     results.conversionGoalReachable = null;
     results.conversionGoalSnippetFires = null;
     results.conversionGoalStatus = 'RED';
   }
 
   // HC-04: UTM integrity
-  // Check if sessions with UTM params are preserving them through to the goal
-  const utmSessions = await prisma.visitorSession.count({
-    where: { siteId: site.id, utmSource: { not: null } }
-  });
-  const utmConversions = await prisma.visitorSession.count({
-    where: { siteId: site.id, utmSource: { not: null }, conversionGoalHit: true }
-  });
   results.utmPreservedToGoal = utmSessions > 0 ? utmConversions > 0 : null;
-  results.utmStrippingDetected = false; // Full check done by dedicated UTM monitor
+  results.utmStrippingDetected = false;
   results.utmStatus = utmSessions > 0 ? 'GREEN' : 'YELLOW';
 
   // HC-05: Duplicate script detection
-  // Check if we're seeing anomalously high event volumes per session (symptom of duplicate snippet)
-  const avgEventsPerSession = await prisma.sessionEvent.groupBy({
-    by: ['sessionId'],
-    where: { siteId: site.id },
-    _count: { id: true },
-  }).then(groups => {
-    if (groups.length === 0) return 0;
-    return groups.reduce((sum, g) => sum + g._count.id, 0) / groups.length;
-  });
-
-  const likelyDuplicate = avgEventsPerSession > 200; // >200 events/session suggests duplicate
+  const avgEventsPerSession = eventGroups.length === 0
+    ? 0
+    : eventGroups.reduce((sum, g) => sum + g._count.id, 0) / eventGroups.length;
+  const likelyDuplicate = avgEventsPerSession > 200;
   results.duplicateSnippetCount = likelyDuplicate ? 2 : 0;
   results.duplicateStatus = likelyDuplicate ? 'RED' : 'GREEN';
 
   // HC-06: Cookie consent interference
-  // This is detected by the snippet itself when consent_given=false but events still fire
-  const blockedByCookieConsent = await prisma.visitorSession.findFirst({
-    where: { siteId: site.id, isBotFiltered: false }
-  });
-  results.consentBannerDetected = null; // Detected client-side
-  results.consentBlocksSnippet = null;  // Detected client-side
-  results.consentStatus = blockedByCookieConsent ? 'GREEN' : 'YELLOW';
+  results.consentBannerDetected = null;
+  results.consentBlocksSnippet = null;
+  results.consentStatus = nonBotSession ? 'GREEN' : 'YELLOW';
 
   // HC-07: Bot traffic baseline
-  const totalSessions = await prisma.visitorSession.count({ where: { siteId: site.id } });
-  const botSessions = await prisma.visitorSession.count({
-    where: { siteId: site.id, isBotFiltered: true }
-  });
   const botPercent = totalSessions > 0 ? (botSessions / totalSessions) * 100 : 0;
   results.estimatedBotPercent = botPercent;
   results.botStatus = botPercent > 25 ? 'RED' : botPercent > 10 ? 'YELLOW' : 'GREEN';
 
-  // HC-08: Page speed (Lighthouse)
-  // In production, trigger a Lighthouse run via PageSpeed Insights API
-  // For now, check if we have a recent Lighthouse result
-  const latestCrawl = await prisma.seoCrawl.findFirst({
-    where: { siteId: site.id, crawlStatus: 'COMPLETED' },
-    orderBy: { startedAt: 'desc' },
-    include: {
-      pageResults: {
-        where: { url: site.url },
-        take: 1,
-      }
-    }
-  });
-
+  // HC-08: Page speed
   if (latestCrawl?.pageResults[0]) {
-    const page = latestCrawl.pageResults[0];
-    results.lighthouseLcp = page.lcp;
-    results.lighthouseFid = page.fid;
-    results.lighthouseCls = page.cls;
-    results.lighthouseScore = page.mobileScore;
-    results.pageSpeedStatus = (page.lcp ?? 99) > 4 ? 'RED'
-      : (page.lcp ?? 99) > 2.5 ? 'YELLOW'
+    const pg = latestCrawl.pageResults[0];
+    results.lighthouseLcp = pg.lcp;
+    results.lighthouseFid = pg.fid;
+    results.lighthouseCls = pg.cls;
+    results.lighthouseScore = pg.mobileScore;
+    results.pageSpeedStatus = (pg.lcp ?? 99) > 4 ? 'RED'
+      : (pg.lcp ?? 99) > 2.5 ? 'YELLOW'
       : 'GREEN';
   } else {
     results.pageSpeedStatus = 'UNKNOWN';

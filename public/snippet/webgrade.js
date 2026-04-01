@@ -136,10 +136,11 @@
       events: events,
     });
 
-    // Use sendBeacon for page exit events (guaranteed delivery)
-    // Fall back to fetch for regular events
+    // Use sendBeacon with Blob to ensure correct Content-Type
+    // sendBeacon without Blob sends as text/plain, which breaks JSON parsing
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(CONFIG.ingestUrl, payload);
+      var blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon(CONFIG.ingestUrl, blob);
     } else {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', CONFIG.ingestUrl, true);
@@ -250,8 +251,24 @@
     return false;
   }
 
+  // Walk up the DOM to find the nearest clickable ancestor (a, button, [role="button"])
+  // so we capture "Products" instead of a nested <span> or <svg> inside the link
+  function findClickableAncestor(el) {
+    var current = el;
+    var maxDepth = 5;
+    while (current && current !== document.body && maxDepth-- > 0) {
+      var tag = (current.tagName || '').toLowerCase();
+      if (tag === 'a' || tag === 'button' || (current.getAttribute && current.getAttribute('role') === 'button')) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return el; // Fall back to original target
+  }
+
   document.addEventListener('click', function (e) {
-    var el = e.target;
+    var rawEl = e.target;
+    var el = findClickableAncestor(rawEl);
     var now = Date.now();
 
     // Rage click detection
@@ -269,6 +286,7 @@
       cta: isCta(el),
       rage: isRage,
       hms: window.__wg_hover_ms || null,       // Hesitation time
+      href: el.href || null,                   // Capture link destination for nav clicks
     });
 
     window.__wg_hover_ms = null;
@@ -334,10 +352,43 @@
   // SPA route change detection (P1-03)
   // Supports React Router, Vue Router, Angular, Next.js App Router
   // -------------------------------------------------------------------------
+
+  // Check if two URLs differ only by hash
+  function isHashOnlyChange(oldUrl, newUrl) {
+    try {
+      var a = new URL(oldUrl);
+      var b = new URL(newUrl);
+      return a.origin === b.origin && a.pathname === b.pathname && a.search === b.search && a.hash !== b.hash;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getHashSection(url) {
+    try {
+      var hash = new URL(url).hash;
+      return hash ? hash.replace('#', '') : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function handleRouteChange(newUrl) {
     if (newUrl === currentUrl) return;
 
-    // Flush events for the old page
+    // Hash-only change on the same page = section navigation, not a new page
+    if (isHashOnlyChange(currentUrl, newUrl)) {
+      var section = getHashSection(newUrl);
+      if (section) {
+        track('section_view', {
+          section: section,
+        });
+      }
+      currentUrl = newUrl;
+      return;
+    }
+
+    // Full route change — flush old page events
     var pageEvents = queue.splice(0);
     pageEvents.push({
       t: 'page_exit',
@@ -374,6 +425,21 @@
 
   window.addEventListener('popstate', function () {
     handleRouteChange(window.location.href);
+  });
+
+  // -------------------------------------------------------------------------
+  // Section view tracking — hash navigation on single-page sites
+  // Captures clicks on anchor links (#pricing, #features) and browser
+  // back/forward through hash history
+  // -------------------------------------------------------------------------
+  window.addEventListener('hashchange', function () {
+    var section = getHashSection(window.location.href);
+    if (section) {
+      track('section_view', {
+        section: section,
+      });
+      currentUrl = window.location.href;
+    }
   });
 
   // -------------------------------------------------------------------------
