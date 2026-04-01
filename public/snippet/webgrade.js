@@ -352,10 +352,43 @@
   // SPA route change detection (P1-03)
   // Supports React Router, Vue Router, Angular, Next.js App Router
   // -------------------------------------------------------------------------
+
+  // Check if two URLs differ only by hash
+  function isHashOnlyChange(oldUrl, newUrl) {
+    try {
+      var a = new URL(oldUrl);
+      var b = new URL(newUrl);
+      return a.origin === b.origin && a.pathname === b.pathname && a.search === b.search && a.hash !== b.hash;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getHashSection(url) {
+    try {
+      var hash = new URL(url).hash;
+      return hash ? hash.replace('#', '') : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function handleRouteChange(newUrl) {
     if (newUrl === currentUrl) return;
 
-    // Flush events for the old page
+    // Hash-only change on the same page = section navigation, not a new page
+    if (isHashOnlyChange(currentUrl, newUrl)) {
+      var section = getHashSection(newUrl);
+      if (section) {
+        track('section_view', {
+          section: section,
+        });
+      }
+      currentUrl = newUrl;
+      return;
+    }
+
+    // Full route change — flush old page events
     var pageEvents = queue.splice(0);
     pageEvents.push({
       t: 'page_exit',
@@ -392,6 +425,21 @@
 
   window.addEventListener('popstate', function () {
     handleRouteChange(window.location.href);
+  });
+
+  // -------------------------------------------------------------------------
+  // Section view tracking — hash navigation on single-page sites
+  // Captures clicks on anchor links (#pricing, #features) and browser
+  // back/forward through hash history
+  // -------------------------------------------------------------------------
+  window.addEventListener('hashchange', function () {
+    var section = getHashSection(window.location.href);
+    if (section) {
+      track('section_view', {
+        section: section,
+      });
+      currentUrl = window.location.href;
+    }
   });
 
   // -------------------------------------------------------------------------

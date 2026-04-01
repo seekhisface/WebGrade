@@ -539,7 +539,8 @@ enum EventType {
   FORM_FOCUS
   FORM_SUBMIT
   CONVERSION
-  ROUTE_CHANGE // SPA navigation
+  ROUTE_CHANGE  // SPA navigation
+  SECTION_VIEW  // Hash/anchor navigation within same page
   CUSTOM
 }
 

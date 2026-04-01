@@ -156,33 +156,47 @@ export async function computeDropOffAnalysis(params: {
   const periodStart = new Date(periodEnd);
   periodStart.setDate(periodStart.getDate() - periodDays);
 
-  // ── 1. Get all page views in the period ──────────────────────────────────
-  const pageViews = await prisma.pageView.findMany({
-    where: {
-      siteId,
-      enteredAt: { gte: periodStart, lte: periodEnd },
-      session: { isBotFiltered: false },
-    },
-    select: {
-      url: true,
-      title: true,
-      maxScrollDepthPct: true,
-      timeOnPageMs: true,
-      isExit: true,
-      rageClickCount: true,
-      hesitationCount: true,
-      sessionId: true,
-    },
-  });
-
-  // ── 2. Get total non-bot sessions ────────────────────────────────────────
-  const totalSessions = await prisma.visitorSession.count({
-    where: {
-      siteId,
-      startedAt: { gte: periodStart, lte: periodEnd },
-      isBotFiltered: false,
-    },
-  });
+  // ── 1. Get all page views and section_view events in the period ──────────
+  const [pageViews, sectionEvents, totalSessions] = await Promise.all([
+    prisma.pageView.findMany({
+      where: {
+        siteId,
+        enteredAt: { gte: periodStart, lte: periodEnd },
+        session: { isBotFiltered: false },
+      },
+      select: {
+        url: true,
+        title: true,
+        maxScrollDepthPct: true,
+        timeOnPageMs: true,
+        isExit: true,
+        rageClickCount: true,
+        hesitationCount: true,
+        sessionId: true,
+      },
+    }),
+    // Section views for single-page sites — treat each #section as a virtual page
+    prisma.sessionEvent.findMany({
+      where: {
+        siteId,
+        eventType: 'SECTION_VIEW',
+        timestamp: { gte: periodStart, lte: periodEnd },
+        session: { isBotFiltered: false },
+      },
+      select: {
+        pageUrl: true,
+        metadata: true,
+        sessionId: true,
+      },
+    }),
+    prisma.visitorSession.count({
+      where: {
+        siteId,
+        startedAt: { gte: periodStart, lte: periodEnd },
+        isBotFiltered: false,
+      },
+    }),
+  ]);
 
   if (pageViews.length === 0 || totalSessions === 0) {
     return {
@@ -229,6 +243,45 @@ export async function computeDropOffAnalysis(params: {
     if (pv.timeOnPageMs !== null) entry.timesOnPage.push(pv.timeOnPageMs / 1000);
     if (pv.rageClickCount) entry.rageClicks += pv.rageClickCount;
     if (pv.hesitationCount) entry.hesitations += pv.hesitationCount;
+  }
+
+  // ── 3b. Inject section_view events as virtual pages ─────────────────────
+  // On single-page sites, #pricing and #features are meaningful navigation
+  // points that would otherwise be invisible in the drop-off analysis.
+  // Each section gets its own entry keyed as "baseUrl#section".
+  // Sessions that viewed a section but then exited count as exits for that section.
+  const sessionLastSection = new Map<string, string>(); // sessionId → last section key
+  for (const ev of sectionEvents) {
+    const meta = ev.metadata as Record<string, unknown> | null;
+    const section = typeof meta?.section === 'string' ? meta.section : null;
+    if (!section) continue;
+
+    const baseUrl = ev.pageUrl.split('?')[0].split('#')[0];
+    const key = `${baseUrl}#${section}`;
+    sessionLastSection.set(ev.sessionId, key);
+
+    if (!urlMap.has(key)) {
+      urlMap.set(key, {
+        title: `#${section}`,
+        sessions: new Set(),
+        exits: 0,
+        scrollDepths: [],
+        timesOnPage: [],
+        rageClicks: 0,
+        hesitations: 0,
+      });
+    }
+    urlMap.get(key)!.sessions.add(ev.sessionId);
+  }
+
+  // Mark exits: if the visitor's last section_view was this section and they
+  // exited the page, count it as an exit for the section
+  for (const pv of pageViews) {
+    if (!pv.isExit) continue;
+    const lastSection = sessionLastSection.get(pv.sessionId);
+    if (lastSection && urlMap.has(lastSection)) {
+      urlMap.get(lastSection)!.exits++;
+    }
   }
 
   // ── 4. Build results ─────────────────────────────────────────────────────

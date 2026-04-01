@@ -242,26 +242,45 @@ export const PAGE_BENCHMARKS: Record<PageCategory, PageBenchmark> = {
 // Classifier — maps a URL path to a PageCategory
 // ---------------------------------------------------------------------------
 export function classifyPageUrl(url: string): PageCategory {
-  const path = url.toLowerCase().replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+  const lower = url.toLowerCase().replace(/^https?:\/\/[^/]+/, '');
+  const path = lower.split('?')[0];
 
-  if (path === '/' || path === '') return 'home';
+  // For single-page sites: check the #hash fragment as a section name
+  // e.g. "/#pricing" or "/#features" should classify the same as "/pricing"
+  const hashIdx = path.indexOf('#');
+  const fragment = hashIdx >= 0 ? path.slice(hashIdx + 1) : null;
 
   const patterns: [RegExp, PageCategory][] = [
-    [/\/(pricing|plans?|packages?|cost|subscription)/i,   'pricing'],
-    [/\/(signup|sign-up|register|create-account|start|trial|free)/i, 'signup'],
-    [/\/(login|sign-in|signin|log-in)/i,                  'login'],
-    [/\/(features?|capabilities|how-it-works|product)/i,  'features'],
-    [/\/(demo|book-demo|schedule|request-demo)/i,         'demo'],
-    [/\/(about|team|story|company|mission|values)/i,      'about'],
-    [/\/(contact|get-in-touch|reach-us|support)/i,        'contact'],
-    [/\/(case-stud|customer|success-stor|testimonial)/i,  'case_study'],
-    [/\/(blog|news|insights|articles?|posts?)/i,          'blog'],
-    [/\/(docs?|documentation|guides?|help|kb|knowledge)/i,'docs'],
-    [/\/(lp\/|landing|campaign)/i,                        'landing'],
+    [/(pricing|plans?|packages?|cost|subscription)/i,   'pricing'],
+    [/(signup|sign-up|register|create-account|start|trial|free)/i, 'signup'],
+    [/(login|sign-in|signin|log-in)/i,                  'login'],
+    [/(features?|capabilities|how-it-works|product)/i,  'features'],
+    [/(demo|book-demo|schedule|request-demo)/i,         'demo'],
+    [/(about|team|story|company|mission|values)/i,      'about'],
+    [/(contact|get-in-touch|reach-us|support)/i,        'contact'],
+    [/(case-stud|customer|success-stor|testimonial)/i,  'case_study'],
+    [/(blog|news|insights|articles?|posts?)/i,          'blog'],
+    [/(docs?|documentation|guides?|help|kb|knowledge)/i,'docs'],
+    [/(lp\/|landing|campaign)/i,                        'landing'],
   ];
 
+  // Check hash fragment first (most specific for single-page sites)
+  if (fragment) {
+    for (const [pattern, category] of patterns) {
+      if (pattern.test(fragment)) return category;
+    }
+  }
+
+  // Then check the full path
+  const pathWithoutHash = hashIdx >= 0 ? path.slice(0, hashIdx) : path;
+  if (pathWithoutHash === '/' || pathWithoutHash === '') {
+    // Only classify as home if there's no meaningful hash
+    if (!fragment) return 'home';
+    return 'unknown';
+  }
+
   for (const [pattern, category] of patterns) {
-    if (pattern.test(path)) return category;
+    if (pattern.test(pathWithoutHash)) return category;
   }
 
   return 'unknown';

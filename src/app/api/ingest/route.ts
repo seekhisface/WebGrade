@@ -41,6 +41,8 @@ const EventSchema = z.object({
   spa: z.boolean().nullish(),         // SPA route change
   type: z.string().nullish(),         // Form input type
   name: z.string().nullish(),         // Form field name
+  section: z.string().nullish(),     // Hash section name (section_view events)
+  href: z.string().nullish(),        // Link destination (click events)
   metadata: z.record(z.unknown()).nullish(),
 });
 
@@ -177,7 +179,11 @@ export async function POST(req: NextRequest) {
         rageClickCount: event.rage ? 1 : 0,
         hesitationMs: event.hms,
         timeOnPageMs: event.ms,
-        metadata: (event.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+        metadata: ({
+          ...event.metadata,
+          ...(event.section ? { section: event.section } : {}),
+          ...(event.href ? { href: event.href } : {}),
+        }) as Prisma.InputJsonValue | undefined,
       })),
     });
 
@@ -245,6 +251,7 @@ function mapEventType(type: string): import('@prisma/client').EventType {
     'form_submit': 'FORM_SUBMIT',
     'conversion': 'CONVERSION',
     'route_change': 'ROUTE_CHANGE',
+    'section_view': 'SECTION_VIEW',
   };
   return map[type] ?? 'CUSTOM';
 }

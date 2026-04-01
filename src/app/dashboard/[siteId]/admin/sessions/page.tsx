@@ -98,6 +98,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   FORM_SUBMIT: 'bg-teal-100 text-teal-700',
   CONVERSION: 'bg-green-100 text-green-800 font-semibold',
   ROUTE_CHANGE: 'bg-indigo-100 text-indigo-700',
+  SECTION_VIEW: 'bg-violet-100 text-violet-700',
   CUSTOM: 'bg-gray-100 text-gray-700',
 };
 
@@ -407,6 +408,9 @@ function SessionRow({ session: s, expanded, onToggle }: {
 function EventRow({ event: e, sessionStart }: { event: SessionEvent; sessionStart: string }) {
   const details: string[] = [];
 
+  if (e.eventType === 'SECTION_VIEW' && e.metadata && (e.metadata as Record<string, unknown>).section) {
+    details.push(`#${(e.metadata as Record<string, unknown>).section}`);
+  }
   if (e.scrollDepthPct != null) details.push(`Scroll: ${e.scrollDepthPct}%`);
   if (e.elementTag) details.push(`<${e.elementTag}>`);
   if (e.elementText) details.push(`"${e.elementText.slice(0, 50)}"`);
