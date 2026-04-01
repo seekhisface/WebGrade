@@ -133,8 +133,11 @@ export default function SessionExplorerPage() {
   const [pageSize] = useState(25);
   const [showBots, setShowBots] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
-  useEffect(() => {
+  function fetchSessions() {
     setLoading(true);
     setError(null);
     fetch(`/api/admin/sessions?siteId=${siteId}&page=${page}&pageSize=${pageSize}&showBots=${showBots}`)
@@ -146,10 +149,23 @@ export default function SessionExplorerPage() {
         setSessions(data.sessions);
         setTotalPages(data.totalPages);
         setTotal(data.total);
+        setLastRefreshed(new Date());
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [siteId, page, pageSize, showBots]);
+  }
+
+  // Fetch on mount and when filters/page/refreshKey change
+  useEffect(() => {
+    fetchSessions();
+  }, [siteId, page, pageSize, showBots, refreshKey]);
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => setRefreshKey(k => k + 1), 10000);
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -162,15 +178,39 @@ export default function SessionExplorerPage() {
               {total} session{total !== 1 ? 's' : ''} recorded
             </p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={showBots}
-              onChange={e => { setShowBots(e.target.checked); setPage(1); }}
-              className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-            />
-            Show bot-filtered
-          </label>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-400">
+              Updated {lastRefreshed.toLocaleTimeString()}
+            </span>
+            <button
+              onClick={() => setRefreshKey(k => k + 1)}
+              disabled={loading}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+            >
+              <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+            <label className="flex items-center gap-1.5 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={e => setAutoRefresh(e.target.checked)}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              />
+              Auto (10s)
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={showBots}
+                onChange={e => { setShowBots(e.target.checked); setPage(1); }}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              />
+              Show bots
+            </label>
+          </div>
         </div>
 
         {/* Error */}
