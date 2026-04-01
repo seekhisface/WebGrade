@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
       isActive: true,
       hasWebWatch: true,
       hasInterimReport: true,
+      posthogEnabled: true,
+      posthogApiKey: true,
       onboarding: {
         select: { conversionGoalUrl: true }
       }
@@ -222,12 +224,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, bot: true });
   }
 
-  // 8. Forward to PostHog (non-blocking, outside transaction)
+  // 8. Forward to PostHog (non-blocking, outside transaction, no extra DB query)
   await enqueueEvents({
     siteId: site.id,
     sessionId: dbSessionId,
     events,
     consentGiven,
+    posthogEnabled: site.posthogEnabled,
+    posthogApiKey: site.posthogApiKey,
   }).catch(() => {
     console.error('[ingest] PostHog enqueue failed');
   });

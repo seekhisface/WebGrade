@@ -1,29 +1,22 @@
 /**
  * PostHog event forwarding
  * Sends behavioral events to PostHog for pipeline processing.
- * Controlled per-site via the posthogEnabled flag and posthogApiKey in the Site model.
+ * Controlled per-site via posthogEnabled/posthogApiKey passed from the caller
+ * to avoid an extra DB query on every ingest request.
  */
-
-import { prisma } from '@/lib/db/client';
 
 interface EnqueueEventsParams {
   siteId: string;
   sessionId: string;
   events: Array<{ t: string; ts: number; u: string; [key: string]: unknown }>;
   consentGiven: boolean;
+  posthogEnabled: boolean;
+  posthogApiKey: string | null;
 }
 
 export async function enqueueEvents(params: EnqueueEventsParams): Promise<void> {
-  // Don't forward events without consent
   if (!params.consentGiven) return;
-
-  // Check site-level PostHog config
-  const site = await prisma.site.findUnique({
-    where: { id: params.siteId },
-    select: { posthogEnabled: true, posthogApiKey: true },
-  });
-
-  if (!site?.posthogEnabled || !site.posthogApiKey) return;
+  if (!params.posthogEnabled || !params.posthogApiKey) return;
 
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://app.posthog.com';
 
@@ -42,7 +35,7 @@ export async function enqueueEvents(params: EnqueueEventsParams): Promise<void> 
     const res = await fetch(`${host}/batch/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: site.posthogApiKey, batch }),
+      body: JSON.stringify({ api_key: params.posthogApiKey, batch }),
     });
     if (!res.ok) {
       console.error(`[PostHog] Forwarding failed: ${res.status} ${res.statusText}`);
