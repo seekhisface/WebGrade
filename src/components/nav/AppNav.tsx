@@ -70,9 +70,9 @@ export function AppNav() {
   const params = useParams();
   const { data: session } = useSession();
 
-  const currentSiteId = params.siteId as string | undefined;
-  const activePage = getActivePageFromPath(pathname);
   const sites = useSitesFromLayout();
+  const currentSiteId = (params.siteId as string | undefined) ?? sites[0]?.id;
+  const activePage = getActivePageFromPath(pathname);
 
   const [siteSwitcherOpen, setSiteSwitcherOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
