@@ -251,8 +251,24 @@
     return false;
   }
 
+  // Walk up the DOM to find the nearest clickable ancestor (a, button, [role="button"])
+  // so we capture "Products" instead of a nested <span> or <svg> inside the link
+  function findClickableAncestor(el) {
+    var current = el;
+    var maxDepth = 5;
+    while (current && current !== document.body && maxDepth-- > 0) {
+      var tag = (current.tagName || '').toLowerCase();
+      if (tag === 'a' || tag === 'button' || (current.getAttribute && current.getAttribute('role') === 'button')) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return el; // Fall back to original target
+  }
+
   document.addEventListener('click', function (e) {
-    var el = e.target;
+    var rawEl = e.target;
+    var el = findClickableAncestor(rawEl);
     var now = Date.now();
 
     // Rage click detection
@@ -270,6 +286,7 @@
       cta: isCta(el),
       rage: isRage,
       hms: window.__wg_hover_ms || null,       // Hesitation time
+      href: el.href || null,                   // Capture link destination for nav clicks
     });
 
     window.__wg_hover_ms = null;
