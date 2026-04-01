@@ -8,7 +8,8 @@
 // =============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -37,6 +38,7 @@ model User {
   // App relationships
   orgMemberships OrgMember[]
   dpaAcceptances DpaAcceptance[]
+  sentInvitations OrgInvitation[]
 
   @@map("users")
 }
@@ -92,6 +94,7 @@ model Organization {
   members             OrgMember[]
   sites               Site[]
   reportDistributions ReportDistribution[]
+  invitations         OrgInvitation[]
 
   @@map("organizations")
 }
@@ -114,6 +117,23 @@ enum OrgRole {
   OWNER
   ADMIN
   VIEWER
+}
+
+model OrgInvitation {
+  id        String   @id @default(cuid())
+  orgId     String
+  email     String
+  role      OrgRole  @default(VIEWER)
+  token     String   @unique @default(cuid())
+  invitedBy String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  inviter User         @relation(fields: [invitedBy], references: [id])
+
+  @@unique([orgId, email])
+  @@map("org_invitations")
 }
 
 // =============================================================================

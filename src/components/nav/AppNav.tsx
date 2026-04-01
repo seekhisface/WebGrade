@@ -241,6 +241,13 @@ export function AppNav() {
               </div>
               <div className="py-1">
                 <Link
+                  href="/dashboard/profile"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 hover:bg-sky-50 hover:text-slate-900 transition-colors"
+                >
+                  Profile & Team
+                </Link>
+                <Link
                   href={currentSiteId ? `/dashboard/${currentSiteId}/settings` : '/dashboard'}
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 hover:bg-sky-50 hover:text-slate-900 transition-colors"
