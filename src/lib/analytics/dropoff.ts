@@ -68,6 +68,7 @@ export interface DropOffAnalysis {
   totalRevenueAtRisk: number;
   pages: PageDropOffResult[];
   topBreakpoint: PageDropOffResult | null;
+  topPageSessions: { url: string; sessions: number } | null; // Most visited page (even if below threshold)
   dataSource: 'live' | 'demo';
   generatedAt: Date;
 }
@@ -208,6 +209,7 @@ export async function computeDropOffAnalysis(params: {
       totalRevenueAtRisk: 0,
       pages: [],
       topBreakpoint: null,
+      topPageSessions: null,
       dataSource: 'live' as const,
       generatedAt: new Date(),
     };
@@ -287,6 +289,14 @@ export async function computeDropOffAnalysis(params: {
 
   // ── 4. Build results ─────────────────────────────────────────────────────
   const rawResults: Omit<PageDropOffResult, 'revenueImpactRank'>[] = [];
+
+  // Find the most visited page (even if below threshold)
+  let topPageSessions: { url: string; sessions: number } | null = null;
+  for (const [url, agg] of urlMap.entries()) {
+    if (!topPageSessions || agg.sessions.size > topPageSessions.sessions) {
+      topPageSessions = { url, sessions: agg.sessions.size };
+    }
+  }
 
   for (const [url, agg] of urlMap.entries()) {
     const sessions = agg.sessions.size;
@@ -370,6 +380,7 @@ export async function computeDropOffAnalysis(params: {
     totalRevenueAtRisk,
     pages: results,
     topBreakpoint,
+    topPageSessions,
     dataSource: 'live',
     generatedAt: new Date(),
   };
@@ -482,6 +493,7 @@ export function buildDemoAnalysis(
     totalRevenueAtRisk: 41200,
     pages,
     topBreakpoint: pages[0],
+    topPageSessions: { url: '/features', sessions: 1820 },
     dataSource: 'demo',
     generatedAt: new Date(),
   };

@@ -145,6 +145,7 @@ export async function GET(req: NextRequest) {
       revenueAtRisk: Math.round(dropOff.totalRevenueAtRisk),
       intentDistribution: intentDist,
       dropOffPages,
+      topPageSessions: dropOff.topPageSessions,
       healthStatus: latestHealth?.overallStatus ?? 'YELLOW',
       dataSource: dropOff.dataSource,
       prevSessions,

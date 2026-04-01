@@ -23,6 +23,7 @@ interface DashboardData {
   revenueAtRisk: number;
   intentDistribution: IntentDistribution;
   dropOffPages: DropOffPage[];
+  topPageSessions: { url: string; sessions: number } | null;
   healthStatus: 'GREEN' | 'YELLOW' | 'RED';
 }
 
@@ -145,9 +146,15 @@ export default function DashboardPage({ params }: { params: { siteId: string } }
                   <p className="text-sm text-[#64748b]">
                     Drop-off analysis requires at least 10 unique sessions per page.
                   </p>
-                  <p className="text-xs text-[#94a3b8] mt-1">
-                    Currently tracking {data.totalSessions} session{data.totalSessions !== 1 ? 's' : ''}.
-                  </p>
+                  {data.topPageSessions ? (
+                    <p className="text-xs text-[#94a3b8] mt-1">
+                      Most visited page has {data.topPageSessions.sessions} of 10 sessions needed — <span className="font-mono">{data.topPageSessions.url}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-[#94a3b8] mt-1">
+                      No page view data recorded yet.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
