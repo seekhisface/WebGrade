@@ -23,13 +23,14 @@ datasource db {
 // =============================================================================
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  image          String?
+  hashedPassword String?
+  emailVerified  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // NextAuth
   accounts Account[]
@@ -590,7 +591,7 @@ model PageView {
   session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId])
+  @@unique([sessionId, siteId, url])
   @@index([siteId, url])
   @@map("page_views")
 }

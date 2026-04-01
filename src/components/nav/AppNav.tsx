@@ -71,9 +71,9 @@ export function AppNav() {
   const params = useParams();
   const { data: session } = useSession();
 
-  const currentSiteId = params.siteId as string | undefined;
-  const activePage = getActivePageFromPath(pathname);
   const sites = useSitesFromLayout();
+  const currentSiteId = (params.siteId as string | undefined) ?? sites[0]?.id;
+  const activePage = getActivePageFromPath(pathname);
 
   const [siteSwitcherOpen, setSiteSwitcherOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -106,7 +106,9 @@ export function AppNav() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const isAdmin = session?.user?.email === 'demo@webgrade.io';
+  // Sessions and Win-Back tabs are visible to all authenticated users.
+  // The API routes enforce OWNER/ADMIN access server-side.
+  const isAuthenticated = !!session?.user?.email;
 
   const navTabs = [
     { id: 'setup',      label: 'Setup',           href: `/dashboard/${currentSiteId}/setup`,     show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
@@ -116,8 +118,8 @@ export function AppNav() {
     { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
     { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
     { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
-    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAdmin },
-    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAdmin },
+    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAuthenticated },
+    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAuthenticated },
   ].filter(tab => tab.show);
 
   return (

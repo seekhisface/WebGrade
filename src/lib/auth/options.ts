@@ -3,6 +3,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/db/client';
+import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -23,6 +24,8 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
         if (!user) return null;
+
+        // Demo account — plain-text password check
         if (credentials.email === 'demo@webgrade.io') {
           const demoPass = process.env.DEMO_PASSWORD ?? 'DemoPass2026!';
           if (credentials.password === demoPass) {
@@ -30,6 +33,15 @@ export const authOptions: NextAuthOptions = {
           }
           return null;
         }
+
+        // Password-based login — bcrypt hash comparison
+        if (user.hashedPassword) {
+          const valid = await bcrypt.compare(credentials.password, user.hashedPassword);
+          if (valid) {
+            return { id: user.id, email: user.email, name: user.name, image: user.image };
+          }
+        }
+
         return null;
       },
     }),
