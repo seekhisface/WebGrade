@@ -462,11 +462,8 @@ function OnboardingFlow() {
 
 function Logo() {
   return (
-    <div className="mb-8 flex items-center gap-2">
-      <div className="w-7 h-7 bg-brand-600 rounded-md flex items-center justify-center">
-        <span className="text-white font-bold text-xs">W</span>
-      </div>
-      <span className="text-white font-semibold text-sm">WebGrade</span>
+    <div className="mb-8">
+      <img src="/logos/webgrade_logo_dark.svg" alt="WebGrade" className="h-10 w-auto" />
     </div>
   );
 }

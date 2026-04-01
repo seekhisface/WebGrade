@@ -111,11 +111,8 @@ export function AppNav() {
       {/* Left: logo + site switcher + tabs */}
       <div className="flex items-center gap-2 md:gap-6 min-w-0 flex-1">
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-7 h-7 bg-[#0284c7] rounded-md flex items-center justify-center">
-            <span className="text-white font-bold text-xs">W</span>
-          </div>
-          <span className="font-semibold text-white text-sm hidden sm:block">WebGrade</span>
+        <Link href="/dashboard" className="flex-shrink-0">
+          <img src="/logos/webgrade_logo_dark.svg" alt="WebGrade" className="h-10 w-auto" />
         </Link>
 
         {/* Site switcher */}
