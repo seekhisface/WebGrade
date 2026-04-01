@@ -545,25 +545,8 @@ export default function MarketingPage() {
         onOpenDeliverables={() => setShowDeliverables(true)}
       />
 
-      {/* STATS */}
-      <section ref={statsRef} className="bg-[#0c4a6e] py-16 mt-8">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map((s, i) => (
-              <div key={i} className="text-center">
-                <p className="text-4xl font-black text-white mb-2">
-                  {animatedStats[i]}{s.suffix}
-                </p>
-                <p className="text-xs text-sky-300 leading-relaxed">{s.label}</p>
-                <p className="text-[10px] text-sky-500/60 mt-1">{s.source}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* TRUST BAR */}
-      <section className="bg-[#f0fdf4] border-y border-[#bbf7d0] py-6">
+      <section className="bg-[#f0fdf4] border-y border-[#bbf7d0] py-8 mt-8">
         <div className="max-w-4xl mx-auto px-4">
           <div className="grid md:grid-cols-3 gap-6 text-center">
             <div className="flex flex-col items-center gap-1.5 text-sm text-[#166534]">
@@ -575,10 +558,10 @@ export default function MarketingPage() {
             </div>
             <div className="flex flex-col items-center gap-1.5 text-sm text-[#166534]">
               <svg className="w-5 h-5 text-[#0d9488]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <span><strong>Exportable PDF reports</strong></span>
-              <span className="text-xs text-[#166534]/70">Share with your team or board</span>
+              <span><strong>Auto-distribute to your team</strong></span>
+              <span className="text-xs text-[#166534]/70">Reports, alerts, and performance updates delivered to execs automatically</span>
             </div>
             <div className="flex flex-col items-center gap-1.5 text-sm text-[#166534]">
               <svg className="w-5 h-5 text-[#0d9488]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -587,6 +570,23 @@ export default function MarketingPage() {
               <span><strong>24/7 monitoring</strong></span>
               <span className="text-xs text-[#166534]/70">Hourly and daily performance tracking</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* STATS */}
+      <section ref={statsRef} className="bg-[#0c4a6e] py-16">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {STATS.map((s, i) => (
+              <div key={i} className="text-center">
+                <p className="text-4xl font-black text-white mb-2">
+                  {animatedStats[i]}{s.suffix}
+                </p>
+                <p className="text-xs text-sky-300 leading-relaxed">{s.label}</p>
+                <p className="text-[10px] text-sky-500/60 mt-1">{s.source}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
