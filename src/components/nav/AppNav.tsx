@@ -113,10 +113,8 @@ export function AppNav() {
   const navTabs = [
     { id: 'setup',      label: 'Setup',           href: `/dashboard/${currentSiteId}/setup`,     show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
     { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
-    { id: 'seo',        label: 'Live SEO',        href: `/dashboard/${currentSiteId}/seo`,       show: !!currentSiteId },
-    { id: 'report',     label: 'WebAudit™',       href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId && (currentSite?.hasInterimReport ?? true) },
-    { id: 'webwatch',   label: 'WebWatch™',       href: `/dashboard/${currentSiteId}/webwatch`,  show: !!currentSiteId && (currentSite?.hasWebWatch ?? true) },
-    { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId && (currentSite?.hasWebOpp ?? true), badge: 'New' },
+    { id: 'report',     label: 'Reports',         href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId },
+    { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
     { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
     { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAuthenticated },
     { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAuthenticated },
