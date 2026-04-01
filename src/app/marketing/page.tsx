@@ -789,7 +789,15 @@ export default function MarketingPage() {
           <p className="text-lg text-sky-300 mb-8 leading-relaxed">
             Most sites have significant recoverable revenue sitting in their behavioral data. WebGrade finds it and tells you exactly how to fix it.
           </p>
-          <DemoButton size="lg" className="mx-auto" onClick={openModal} />
+          <button
+            onClick={openModal}
+            className="inline-flex items-center gap-2 bg-white hover:bg-sky-50 text-[#0c4a6e] font-bold px-8 py-4 text-base rounded-xl transition-all shadow-lg hover:shadow-xl mx-auto"
+          >
+            Sign up for a demo
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </button>
           <p className="text-xs text-sky-400 mt-4">Setup in minutes · Cancel anytime · Results in weeks</p>
         </div>
       </section>
@@ -797,11 +805,10 @@ export default function MarketingPage() {
       {/* FOOTER */}
       <footer className="bg-[#082f49] py-10">
         <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <Image src="/logos/webgrade_logo_dark.svg" alt="WebGrade" width={180} height={32} className="h-7 w-auto" />
+          <Image src="/logos/webgrade_logo_dark.svg" alt="WebGrade" width={300} height={56} className="h-14 w-auto" />
           <div className="flex flex-wrap items-center gap-6 text-xs text-sky-400">
             <a href="#products" className="hover:text-white transition-colors">Products</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-            <Link href="/login" className="hover:text-white transition-colors">Sign in</Link>
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
           </div>
