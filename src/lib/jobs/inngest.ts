@@ -215,6 +215,145 @@ export const sendWeeklyDigest = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// BL-01: Monthly baseline capture — 1st of every month at 2am UTC
+// Captures previous month's metrics for WebWatch/WebOpp sites
+// ---------------------------------------------------------------------------
+export const captureMonthlyBaseline = inngest.createFunction(
+  { id: 'capture-monthly-baseline', retries: 2 },
+  { cron: '0 2 1 * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+    const { captureBaseline } = await import('@/lib/baseline/engine');
+
+    const sites = await step.run('load-webwatch-sites', async () => {
+      return prisma.site.findMany({
+        where: {
+          isActive: true,
+          subscriptionTier: { in: ['WEBWATCH', 'WEBWATCH_WEBOPP'] },
+        },
+        select: { id: true },
+      });
+    });
+
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const period = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    let captured = 0;
+    for (const site of sites) {
+      await step.run(`baseline-${site.id}`, async () => {
+        return captureBaseline(site.id, period, 'webgrade_calculated', 30);
+      }).catch(() => null);
+      captured++;
+    }
+
+    return { sitesCaptured: captured, period };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// BL-02: Annual baseline reset — runs daily at 3am UTC
+// Resets baselines for sites past their anniversary date
+// ---------------------------------------------------------------------------
+export const annualBaselineReset = inngest.createFunction(
+  { id: 'annual-baseline-reset', retries: 2 },
+  { cron: '0 3 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+    const { captureBaseline, shouldResetBaseline } = await import('@/lib/baseline/engine');
+
+    const sites = await step.run('load-sites-due-reset', async () => {
+      return prisma.site.findMany({
+        where: {
+          isActive: true,
+          subscriptionTier: { in: ['WEBWATCH', 'WEBWATCH_WEBOPP'] },
+        },
+        select: { id: true, baselineResetDate: true, webwatchStartDate: true },
+      });
+    });
+
+    let resets = 0;
+    for (const site of sites) {
+      if (!shouldResetBaseline(site)) continue;
+
+      await step.run(`reset-${site.id}`, async () => {
+        const year = new Date().getFullYear();
+        await captureBaseline(site.id, `${year}-annual`, 'webgrade_calculated', 365);
+
+        // Set next reset date to one year from now
+        const nextReset = new Date();
+        nextReset.setFullYear(nextReset.getFullYear() + 1);
+        await prisma.site.update({
+          where: { id: site.id },
+          data: { baselineResetDate: nextReset },
+        });
+      }).catch(() => null);
+      resets++;
+    }
+
+    return { sitesReset: resets };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// BL-03: WebAudit snapshots — Day 30 and Day 60 checkpoints
+// Runs daily at 4am UTC
+// ---------------------------------------------------------------------------
+export const webauditSnapshot = inngest.createFunction(
+  { id: 'webaudit-snapshot', retries: 2 },
+  { cron: '0 4 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+    const { captureBaseline } = await import('@/lib/baseline/engine');
+
+    const sites = await step.run('load-webaudit-sites', async () => {
+      return prisma.site.findMany({
+        where: {
+          isActive: true,
+          subscriptionTier: 'WEBAUDIT',
+          webauditStartDate: { not: null },
+        },
+        select: { id: true, webauditStartDate: true },
+      });
+    });
+
+    let snapshots = 0;
+    const now = new Date();
+
+    for (const site of sites) {
+      if (!site.webauditStartDate) continue;
+      const daysSinceStart = Math.floor(
+        (now.getTime() - new Date(site.webauditStartDate).getTime()) / 86400000
+      );
+
+      if (daysSinceStart === 30) {
+        await step.run(`snapshot-30d-${site.id}`, async () => {
+          return captureBaseline(site.id, 'webaudit_30d', 'webgrade_calculated', 30);
+        }).catch(() => null);
+        snapshots++;
+      }
+
+      if (daysSinceStart === 60) {
+        await step.run(`snapshot-60d-${site.id}`, async () => {
+          await captureBaseline(site.id, 'webaudit_baseline', 'webgrade_calculated', 60);
+          // Expire the WebAudit subscription
+          await prisma.site.update({
+            where: { id: site.id },
+            data: {
+              subscriptionTier: 'WEBAUDIT_EXPIRED',
+              webauditEndDate: now,
+            },
+          });
+        }).catch(() => null);
+        snapshots++;
+      }
+    }
+
+    return { snapshotsTaken: snapshots };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Export all functions for the Inngest handler
 // ---------------------------------------------------------------------------
 export const inngestFunctions = [
@@ -223,4 +362,7 @@ export const inngestFunctions = [
   runScheduledSeoCrawl,
   runAlertRules,
   sendWeeklyDigest,
+  captureMonthlyBaseline,
+  annualBaselineReset,
+  webauditSnapshot,
 ];

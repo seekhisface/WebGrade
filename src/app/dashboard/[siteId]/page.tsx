@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import SubscriptionBanner from '@/components/dashboard/SubscriptionBanner';
 
 // =============================================================================
 // Types
@@ -18,6 +19,14 @@ interface DashboardData {
   dropOffPages: DropOffPage[];
   topPageSessions: { url: string; sessions: number } | null;
   healthStatus: 'GREEN' | 'YELLOW' | 'RED';
+  subscription?: {
+    tier: 'WEBAUDIT' | 'WEBAUDIT_EXPIRED' | 'WEBWATCH' | 'WEBWATCH_WEBOPP';
+    webauditStartDate: string | null;
+    webauditEndDate: string | null;
+    webwatchStartDate: string | null;
+    hasWebOpp: boolean;
+  };
+  baselineComparison?: Record<string, { current: number; baseline: number; change: number; changePercent: number }>;
 }
 
 interface DropOffPage {
@@ -270,6 +279,17 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+        {/* ── Subscription Banner ── */}
+        {D?.subscription && (
+          <SubscriptionBanner
+            tier={D.subscription.tier}
+            webauditStartDate={D.subscription.webauditStartDate}
+            webauditEndDate={D.subscription.webauditEndDate}
+            webwatchStartDate={D.subscription.webwatchStartDate}
+            hasWebOpp={D.subscription.hasWebOpp}
+          />
+        )}
 
         {/* ── SECTION 1: Hero KPI Cards ── */}
         <div ref={kpiRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { computeDropOffAnalysis } from '@/lib/analytics/dropoff';
+import { getBaselineComparison } from '@/lib/baseline/engine';
 
 export const runtime = 'nodejs';
 
@@ -131,6 +132,22 @@ export async function GET(req: NextRequest) {
       isStorylineBreakpoint: p.isStorylineBreakpoint,
     }));
 
+    // ── Baseline comparison (non-blocking) ──────────────────────────────
+    let baselineComparison = {};
+    try {
+      const currentMetrics = {
+        sessions: totalSessions,
+        bounce_rate: totalSessions > 0
+          ? ((await prisma.visitorSession.count({
+              where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, pageCount: { lte: 1 } },
+            })) / totalSessions) * 100
+          : 0,
+        intent_score: avgIntent,
+        revenue_at_risk: Math.round(dropOff.totalRevenueAtRisk),
+      };
+      baselineComparison = await getBaselineComparison(siteId, currentMetrics);
+    } catch { /* baselines not available yet — skip */ }
+
     const response = {
       site: {
         id: site.id,
@@ -149,6 +166,15 @@ export async function GET(req: NextRequest) {
       healthStatus: latestHealth?.overallStatus ?? 'YELLOW',
       dataSource: dropOff.dataSource,
       prevSessions,
+      // Subscription state
+      subscription: {
+        tier: site.subscriptionTier ?? 'WEBAUDIT',
+        webauditStartDate: site.webauditStartDate?.toISOString() ?? null,
+        webauditEndDate: site.webauditEndDate?.toISOString() ?? null,
+        webwatchStartDate: site.webwatchStartDate?.toISOString() ?? null,
+        hasWebOpp: site.hasWebOpp ?? false,
+      },
+      baselineComparison,
     };
     return NextResponse.json(response);
   } catch (err) {
