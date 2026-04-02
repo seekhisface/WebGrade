@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import SubscriptionBanner from '@/components/dashboard/SubscriptionBanner';
+import { useSetupState } from '@/hooks/useSetupState';
 
 // =============================================================================
 // Types
