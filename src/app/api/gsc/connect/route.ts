@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db/client';
 import { z } from 'zod';
 import { listGscProperties } from '@/lib/gsc/client';
 
-// GET /api/gsc/connect?siteId=xxx — list available GSC properties
+// GET /api/gsc/connect?siteId=xxx — list available GSC properties or return auth URL
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  // Get user + check Google account exists
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: { id: true, accounts: { where: { provider: 'google' }, select: { id: true } } },
@@ -24,11 +23,13 @@ export async function GET(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+  // No Google account — return the standalone OAuth URL
   if (!user.accounts.length) {
+    const appUrl = process.env.NEXTAUTH_URL || 'https://www.webgrade.io';
     return NextResponse.json({
       needsGoogleAuth: true,
+      authorizeUrl: `${appUrl}/api/gsc/authorize?siteId=${siteId}`,
       properties: [],
-      message: 'Sign in with Google to connect Search Console',
     });
   }
 
@@ -37,10 +38,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ properties, needsGoogleAuth: false });
   } catch (err) {
     console.error('[gsc/connect] Failed to list properties:', err);
+    const appUrl = process.env.NEXTAUTH_URL || 'https://www.webgrade.io';
     return NextResponse.json({
       needsGoogleAuth: true,
+      authorizeUrl: `${appUrl}/api/gsc/authorize?siteId=${siteId}`,
       properties: [],
-      message: 'Google access expired. Please sign in with Google again.',
+      message: 'Google access expired. Please reconnect.',
     });
   }
 }

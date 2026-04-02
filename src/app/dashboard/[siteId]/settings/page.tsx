@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ interface GscProperty {
 
 export default function SettingsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const siteId = params.siteId as string;
 
   const [settings, setSettings] = useState<IntegrationSettings | null>(null);
@@ -45,6 +46,21 @@ export default function SettingsPage() {
   const [gscLoading, setGscLoading] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState('');
   const [syncing, setSyncing] = useState(false);
+
+  // Auto-load GSC properties after returning from Google OAuth
+  useEffect(() => {
+    if (searchParams.get('gsc') === 'connected') {
+      setSaveMessage('Google account connected — select a property below');
+      setTimeout(() => setSaveMessage(null), 5000);
+      // Load properties now that Google account is linked
+      fetch(`/api/gsc/connect?siteId=${siteId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.properties?.length) setGscProperties(data.properties);
+        })
+        .catch(() => {});
+    }
+  }, [searchParams, siteId]);
 
   useEffect(() => {
     fetch(`/api/settings/integrations?siteId=${siteId}`)
@@ -149,8 +165,12 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/gsc/connect?siteId=${siteId}`);
       const data = await res.json();
-      if (data.needsGoogleAuth) {
-        setSaveMessage(data.message || 'Sign in with Google to connect Search Console');
+      if (data.needsGoogleAuth && data.authorizeUrl) {
+        // Redirect to Google OAuth consent — works for any login method
+        window.location.href = data.authorizeUrl;
+        return;
+      } else if (data.needsGoogleAuth) {
+        setSaveMessage(data.message || 'Unable to connect to Google');
         setTimeout(() => setSaveMessage(null), 5000);
       } else {
         setGscProperties(data.properties);
