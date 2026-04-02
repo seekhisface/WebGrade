@@ -354,6 +354,94 @@ export const webauditSnapshot = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// RA-01: Monthly report archival — 2nd of every month at 5am UTC
+// Auto-archives the latest report for WebWatch sites
+// ---------------------------------------------------------------------------
+export const archiveMonthlyReport = inngest.createFunction(
+  { id: 'archive-monthly-report', retries: 2 },
+  { cron: '0 5 2 * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-webwatch-sites', async () => {
+      return prisma.site.findMany({
+        where: {
+          isActive: true,
+          subscriptionTier: { in: ['WEBWATCH', 'WEBWATCH_WEBOPP'] },
+        },
+        select: { id: true, name: true },
+      });
+    });
+
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0); // last day of prev month
+    const monthLabel = prevMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    let archived = 0;
+
+    for (const site of sites) {
+      await step.run(`archive-${site.id}`, async () => {
+        // Find the latest complete report
+        const latestReport = await prisma.report.findFirst({
+          where: { siteId: site.id, status: 'COMPLETE' },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (!latestReport) return null;
+
+        // Compute KPI snapshot
+        const sessions = await prisma.visitorSession.findMany({
+          where: {
+            siteId: site.id,
+            isBotFiltered: false,
+            startedAt: { gte: prevMonth, lte: periodEnd },
+          },
+          select: { intentScore: true, pageCount: true },
+        });
+
+        const totalSessions = sessions.length;
+        const bounceCount = sessions.filter(s => s.pageCount <= 1).length;
+        const intentScores = sessions.filter(s => s.intentScore != null).map(s => s.intentScore!);
+        const avgIntent = intentScores.length > 0
+          ? intentScores.reduce((a, b) => a + b, 0) / intentScores.length
+          : 0;
+
+        const kpiSnapshot = {
+          sessions: totalSessions,
+          bounceRate: totalSessions > 0 ? (bounceCount / totalSessions) * 100 : 0,
+          intentScore: Math.round(avgIntent * 10) / 10,
+          revenueAtRisk: latestReport.estimatedImpact ? parseFloat(latestReport.estimatedImpact) || 0 : 0,
+        };
+
+        // Check for duplicate archive for this month
+        const existing = await prisma.archivedReport.findFirst({
+          where: { siteId: site.id, title: `WebWatch — ${monthLabel}` },
+        });
+        if (existing) return null;
+
+        return prisma.archivedReport.create({
+          data: {
+            siteId: site.id,
+            type: 'webwatch',
+            title: `WebWatch — ${monthLabel}`,
+            periodStart: prevMonth,
+            periodEnd,
+            summary: latestReport.executiveSummary ?? '',
+            kpiSnapshot,
+            findings: latestReport.topFindings ?? [],
+            actionItems: latestReport.topRecommendations ?? [],
+          },
+        });
+      }).catch(() => null);
+      archived++;
+    }
+
+    return { sitesArchived: archived, month: monthLabel };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Export all functions for the Inngest handler
 // ---------------------------------------------------------------------------
 export const inngestFunctions = [
@@ -365,4 +453,5 @@ export const inngestFunctions = [
   captureMonthlyBaseline,
   annualBaselineReset,
   webauditSnapshot,
+  archiveMonthlyReport,
 ];

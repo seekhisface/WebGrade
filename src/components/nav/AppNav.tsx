@@ -24,16 +24,14 @@ interface Site {
 
 function getActivePageFromPath(pathname: string) {
   if (pathname.includes('/setup')) return 'setup';
-  if (pathname.includes('/seo')) return 'seo';
-  if (pathname.includes('/webwatch')) return 'webwatch';
   if (pathname.includes('/webopp')) return 'webopp';
   if (pathname.includes('/report')) return 'report';
-  if (pathname.includes('/winback')) return 'winback';
   if (pathname.includes('/snippet')) return 'snippet';
+  if (pathname.includes('/winback')) return 'winback';
   if (pathname.includes('/admin')) return 'admin';
   if (pathname.includes('/settings')) return 'settings';
   if (pathname.includes('/alerts')) return 'settings';
-  return 'behavioral';
+  return 'dashboard';
 }
 
 // ---------------------------------------------------------------------------
@@ -111,13 +109,13 @@ export function AppNav() {
   const isAuthenticated = !!session?.user?.email;
 
   const navTabs = [
-    { id: 'setup',      label: 'Setup',           href: `/dashboard/${currentSiteId}/setup`,     show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
-    { id: 'behavioral', label: 'Dashboard',      href: `/dashboard/${currentSiteId}`,           show: !!currentSiteId },
-    { id: 'report',     label: 'Reports',         href: `/dashboard/${currentSiteId}/report`,    show: !!currentSiteId },
-    { id: 'webopp',     label: 'WebOpp™',         href: `/dashboard/${currentSiteId}/webopp`,    show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
-    { id: 'snippet',    label: 'Installation',     href: `/dashboard/${currentSiteId}/snippet`,   show: !!currentSiteId },
-    { id: 'winback',    label: 'Win-Back',         href: `/dashboard/${currentSiteId}/winback`,   show: !!currentSiteId && isAuthenticated },
-    { id: 'admin',      label: 'Sessions',         href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAuthenticated },
+    { id: 'setup',     label: 'Setup',        href: `/dashboard/${currentSiteId}/setup`,          show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
+    { id: 'dashboard', label: 'Dashboard',    href: `/dashboard/${currentSiteId}`,                show: !!currentSiteId },
+    { id: 'webopp',    label: 'WebOpp™',      href: `/dashboard/${currentSiteId}/webopp`,         show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
+    { id: 'snippet',   label: 'Installation', href: `/dashboard/${currentSiteId}/snippet`,        show: !!currentSiteId },
+    { id: 'winback',   label: 'Win-Back',     href: `/dashboard/${currentSiteId}/winback`,        show: !!currentSiteId && isAuthenticated },
+    { id: 'admin',     label: 'Sessions',     href: `/dashboard/${currentSiteId}/admin/sessions`, show: !!currentSiteId && isAuthenticated },
+    { id: 'settings',  label: 'Settings',     href: `/dashboard/${currentSiteId}/settings`,       show: !!currentSiteId && isAuthenticated },
   ].filter(tab => tab.show);
 
   return (
