@@ -12,6 +12,14 @@ interface IntegrationSettings {
   posthogEnabled: boolean;
   posthogApiKey: string | null;
   posthogApiKeySet: boolean;
+  gscConnected: boolean;
+  gscPropertyUrl: string | null;
+  gscLastSyncAt: string | null;
+}
+
+interface GscProperty {
+  siteUrl: string;
+  permissionLevel: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -27,10 +35,16 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  // Form state
+  // PostHog state
   const [posthogEnabled, setPosthogEnabled] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [editingKey, setEditingKey] = useState(false);
+
+  // GSC state
+  const [gscProperties, setGscProperties] = useState<GscProperty[]>([]);
+  const [gscLoading, setGscLoading] = useState(false);
+  const [selectedProperty, setSelectedProperty] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetch(`/api/settings/integrations?siteId=${siteId}`)
@@ -127,6 +141,89 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
       setTimeout(() => setSaveMessage(null), 3000);
+    }
+  }
+
+  async function handleLoadGscProperties() {
+    setGscLoading(true);
+    try {
+      const res = await fetch(`/api/gsc/connect?siteId=${siteId}`);
+      const data = await res.json();
+      if (data.needsGoogleAuth) {
+        setSaveMessage(data.message || 'Sign in with Google to connect Search Console');
+        setTimeout(() => setSaveMessage(null), 5000);
+      } else {
+        setGscProperties(data.properties);
+      }
+    } catch {
+      setSaveMessage('Failed to load GSC properties');
+      setTimeout(() => setSaveMessage(null), 3000);
+    } finally {
+      setGscLoading(false);
+    }
+  }
+
+  async function handleConnectGsc() {
+    if (!selectedProperty) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/gsc/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, propertyUrl: selectedProperty }),
+      });
+      if (res.ok) {
+        setSettings(prev => prev ? { ...prev, gscConnected: true, gscPropertyUrl: selectedProperty } : prev);
+        setGscProperties([]);
+        setSaveMessage('Search Console connected');
+      } else {
+        setSaveMessage('Failed to connect');
+      }
+    } catch {
+      setSaveMessage('Failed to connect');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  }
+
+  async function handleDisconnectGsc() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/gsc/connect?siteId=${siteId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSettings(prev => prev ? { ...prev, gscConnected: false, gscPropertyUrl: null, gscLastSyncAt: null } : prev);
+        setSaveMessage('Search Console disconnected');
+      }
+    } catch {
+      setSaveMessage('Failed to disconnect');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  }
+
+  async function handleSyncGsc() {
+    setSyncing(true);
+    setSaveMessage(null);
+    try {
+      const res = await fetch('/api/gsc/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSaveMessage(`Synced ${data.daysImported} days, ${data.keywordsImported} keyword records`);
+        setSettings(prev => prev ? { ...prev, gscLastSyncAt: new Date().toISOString() } : prev);
+      } else {
+        setSaveMessage(data.error || 'Sync failed');
+      }
+    } catch {
+      setSaveMessage('Sync failed');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSaveMessage(null), 5000);
     }
   }
 
@@ -286,6 +383,114 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Google Search Console integration card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-lg border border-slate-200 flex items-center justify-center">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Google Search Console</h3>
+                  <p className="text-sm text-slate-500">Import keyword rankings, clicks, and impressions from GSC</p>
+                </div>
+              </div>
+
+              {settings?.gscConnected && (
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full">
+                  Connected
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            {settings?.gscConnected ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-700 font-medium font-mono">{settings.gscPropertyUrl}</p>
+                    {settings.gscLastSyncAt && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Last synced: {new Date(settings.gscLastSyncAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSyncGsc}
+                      disabled={syncing}
+                      className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                      {syncing ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Syncing...
+                        </>
+                      ) : 'Sync Now'}
+                    </button>
+                    <button
+                      onClick={handleDisconnectGsc}
+                      disabled={saving}
+                      className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {gscProperties.length > 0 ? (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Select a property
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={selectedProperty}
+                        onChange={e => setSelectedProperty(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      >
+                        <option value="">Choose a property...</option>
+                        {gscProperties.map(p => (
+                          <option key={p.siteUrl} value={p.siteUrl}>{p.siteUrl}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleConnectGsc}
+                        disabled={saving || !selectedProperty}
+                        className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleLoadGscProperties}
+                    disabled={gscLoading}
+                    className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                  >
+                    {gscLoading ? 'Loading...' : 'Connect Search Console'}
+                  </button>
+                )}
+                <p className="text-xs text-slate-400">
+                  Requires a Google account with Search Console access. Your account must be verified as a site owner or have read access.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

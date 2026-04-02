@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
     select: {
       posthogEnabled: true,
       posthogApiKey: true,
+      gscConnected: true,
+      gscPropertyUrl: true,
+      gscLastSyncAt: true,
     },
   });
 
@@ -28,7 +31,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Site not found' }, { status: 404 });
   }
 
-  // Mask the API key for display — only show last 4 chars
   const maskedKey = site.posthogApiKey
     ? `${'*'.repeat(Math.max(0, site.posthogApiKey.length - 4))}${site.posthogApiKey.slice(-4)}`
     : null;
@@ -37,6 +39,9 @@ export async function GET(req: NextRequest) {
     posthogEnabled: site.posthogEnabled,
     posthogApiKey: maskedKey,
     posthogApiKeySet: !!site.posthogApiKey,
+    gscConnected: site.gscConnected,
+    gscPropertyUrl: site.gscPropertyUrl,
+    gscLastSyncAt: site.gscLastSyncAt,
   });
 }
 

@@ -162,16 +162,16 @@ model Site {
   hasWebWatch      Boolean @default(false)
   hasWebOpp        Boolean @default(false)
 
-  // Subscription lifecycle
-  subscriptionTier  SubscriptionTier @default(WEBAUDIT)
-  webauditStartDate DateTime?
-  webauditEndDate   DateTime?
-  webwatchStartDate DateTime?
-  baselineResetDate DateTime? // annual anniversary for baseline reset
-
-  // Integrations
+  // Integrations — PostHog
   posthogEnabled Boolean @default(false)
-  posthogApiKey  String? // Per-site PostHog project API key
+  posthogApiKey  String?
+
+  // Integrations — Google Search Console
+  gscConnected       Boolean   @default(false)
+  gscPropertyUrl     String?   // e.g. "sc-domain:example.com" or "https://example.com/"
+  gscConnectedAt     DateTime?
+  gscLastSyncAt      DateTime?
+  gscConnectedByUserId String? // User.id who connected GSC (for token lookup)
 
   // Snippet
   snippetId String @unique @default(cuid()) // Public ID embedded in snippet
@@ -181,7 +181,6 @@ model Site {
   // Relationships across all modules
   onboarding               SiteOnboarding?
   baselines                SiteBaseline[]
-  archivedReports          ArchivedReport[]
   healthChecks             SiteHealthCheck[]
   visitorSessions          VisitorSession[]
   seoPageResults           SeoPageResult[]
@@ -294,32 +293,6 @@ model SiteBaseline {
 
   @@index([siteId, metricKey])
   @@map("site_baselines")
-}
-
-model ArchivedReport {
-  id          String   @id @default(cuid())
-  siteId      String
-  type        String   // 'webaudit' | 'webwatch' | 'webopp'
-  periodStart DateTime
-  periodEnd   DateTime
-  title       String   // "WebAudit Baseline" or "March 2026"
-  summary     String   @db.Text
-  kpiSnapshot Json     // frozen KPIs at time of report
-  findings    Json     // findings array
-  actionItems Json     // action items array
-  createdAt   DateTime @default(now())
-
-  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
-
-  @@index([siteId, createdAt])
-  @@map("archived_reports")
-}
-
-enum SubscriptionTier {
-  WEBAUDIT
-  WEBAUDIT_EXPIRED
-  WEBWATCH
-  WEBWATCH_WEBOPP
 }
 
 // OB-04: Competitor snapshots (Puppeteer crawl, refreshed monthly)
@@ -765,8 +738,8 @@ model SeoKeywordRanking {
   site  Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
   crawl SeoCrawl? @relation(fields: [crawlId], references: [id], onDelete: SetNull)
 
+  @@unique([siteId, keyword, date])
   @@index([siteId, date])
-  @@index([siteId, keyword])
   @@map("seo_keyword_rankings")
 }
 

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const snippetInstalled = site.siteInstallations?.[0]?.status === 'VERIFIED' || sessionCount > 0;
   const ga4Connected = false;
-  const gscConnected = false;
+  const gscConnected = site.gscConnected ?? false;
   const businessContextComplete = !!(
     site.onboarding?.businessDescription &&
     site.onboarding?.conversionGoalUrl

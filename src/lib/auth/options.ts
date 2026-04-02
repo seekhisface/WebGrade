@@ -1,7 +1,6 @@
-﻿import { NextAuthOptions } from 'next-auth';
+import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/db/client';
 import bcrypt from 'bcryptjs';
 
@@ -13,6 +12,13 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          scope: 'openid email profile https://www.googleapis.com/auth/webmasters.readonly',
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
     }),
     CredentialsProvider({
       name: 'credentials',
@@ -64,7 +70,6 @@ export const authOptions: NextAuthOptions = {
             where: { email: profile.email },
           });
 
-          // Create user if they don't exist
           if (!dbUser) {
             dbUser = await prisma.user.create({
               data: {
@@ -75,7 +80,7 @@ export const authOptions: NextAuthOptions = {
             });
           }
 
-          // Ensure Google account is linked
+          // Ensure Google account is linked (upsert to also refresh tokens)
           const existingAccount = await prisma.account.findFirst({
             where: { provider: 'google', providerAccountId: account.providerAccountId },
           });
@@ -95,13 +100,24 @@ export const authOptions: NextAuthOptions = {
                 id_token: account.id_token,
               },
             });
+          } else {
+            // Update tokens on re-auth (e.g., when GSC scope is added)
+            await prisma.account.update({
+              where: { id: existingAccount.id },
+              data: {
+                access_token: account.access_token,
+                refresh_token: account.refresh_token ?? existingAccount.refresh_token,
+                expires_at: account.expires_at,
+                scope: account.scope,
+              },
+            });
           }
 
           // Attach the DB user id so the jwt callback picks it up
           (user as Record<string, unknown>).id = dbUser.id;
         } catch (err) {
           console.error('[auth] Google signIn callback error:', err);
-          return true; // still allow sign-in even if linking fails
+          return true;
         }
       }
       return true;
