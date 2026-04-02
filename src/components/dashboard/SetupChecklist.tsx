@@ -22,7 +22,7 @@ const STEPS = [
     title: 'Install tracking snippet',
     description: 'A lightweight script that captures behavioral signals: intent, drop-off, scroll depth.',
     alwaysDone: false,
-    action: { label: 'Get snippet code', path: 'setup/snippet' },
+    action: { label: 'Get snippet code', path: 'snippet' },
     key: 'snippetInstalled' as keyof SetupState,
   },
   {
@@ -30,7 +30,7 @@ const STEPS = [
     title: 'Connect Google Analytics 4',
     description: 'Imports your 90-day baseline. Every recommendation benchmarks against this.',
     alwaysDone: false,
-    action: { label: 'Connect GA4', path: 'setup/ga4' },
+    action: { label: 'Connect GA4', path: 'settings' },
     key: 'ga4Connected' as keyof SetupState,
   },
   {
@@ -38,7 +38,7 @@ const STEPS = [
     title: 'Connect Google Search Console',
     description: 'Unlocks keyword intelligence and WebOpp market analysis.',
     alwaysDone: false,
-    action: { label: 'Connect Search Console', path: 'setup/gsc' },
+    action: { label: 'Connect Search Console', path: 'settings' },
     key: 'gscConnected' as keyof SetupState,
   },
   {
