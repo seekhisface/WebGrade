@@ -6,7 +6,8 @@ import { prisma } from '@/lib/db/client';
 import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // NOTE: PrismaAdapter removed — it throws OAuthAccountNotLinked before callbacks
+  // can handle linking. User/Account management is handled in the signIn callback instead.
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -55,26 +56,34 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Handle OAuthAccountNotLinked: if a user with this email exists
-      // but has no linked Google account, link it automatically
-      if (account?.provider === 'google' && user.email) {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: user.email },
-        });
+    async signIn({ user, account, profile }) {
+      // For Google OAuth: find or create user, link account if needed
+      if (account?.provider === 'google' && profile?.email) {
+        try {
+          let dbUser = await prisma.user.findUnique({
+            where: { email: profile.email },
+          });
 
-        if (existingUser) {
+          // Create user if they don't exist
+          if (!dbUser) {
+            dbUser = await prisma.user.create({
+              data: {
+                email: profile.email,
+                name: profile.name ?? user.name,
+                image: user.image,
+              },
+            });
+          }
+
+          // Ensure Google account is linked
           const existingAccount = await prisma.account.findFirst({
-            where: {
-              userId: existingUser.id,
-              provider: account.provider,
-            },
+            where: { provider: 'google', providerAccountId: account.providerAccountId },
           });
 
           if (!existingAccount) {
             await prisma.account.create({
               data: {
-                userId: existingUser.id,
+                userId: dbUser.id,
                 type: account.type,
                 provider: account.provider,
                 providerAccountId: account.providerAccountId,
@@ -87,6 +96,12 @@ export const authOptions: NextAuthOptions = {
               },
             });
           }
+
+          // Attach the DB user id so the jwt callback picks it up
+          (user as Record<string, unknown>).id = dbUser.id;
+        } catch (err) {
+          console.error('[auth] Google signIn callback error:', err);
+          return true; // still allow sign-in even if linking fails
         }
       }
       return true;
