@@ -58,18 +58,22 @@ const IngestPayloadSchema = z.object({
 // CORS — the snippet runs on customer sites, so all origins must be allowed
 // ---------------------------------------------------------------------------
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status, headers: corsHeaders });
+function getCorsHeaders(req?: NextRequest) {
+  const origin = req?.headers.get('origin') ?? '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Credentials': 'true',
+  };
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
+function json(data: unknown, status = 200, req?: NextRequest) {
+  return NextResponse.json(data, { status, headers: getCorsHeaders(req) });
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: getCorsHeaders(req) });
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +89,7 @@ export async function POST(req: NextRequest) {
 
   const rateLimitOk = await checkRateLimit(rawIpForRateLimit, 'ingest', 100); // 100 req/min
   if (!rateLimitOk) {
-    return json({ error: 'Rate limit exceeded' }, 429);
+    return json({ error: 'Rate limit exceeded' }, 429, req);
   }
 
   // 2. Parse and validate body
@@ -98,13 +102,13 @@ export async function POST(req: NextRequest) {
       const text = await req.text();
       body = JSON.parse(text);
     } catch {
-      return json({ error: 'Invalid JSON' }, 400);
+      return json({ error: 'Invalid JSON' }, 400, req);
     }
   }
 
   const parsed = IngestPayloadSchema.safeParse(body);
   if (!parsed.success) {
-    return json({ error: 'Validation failed', issues: parsed.error.issues }, 400);
+    return json({ error: 'Validation failed', issues: parsed.error.issues }, 400, req);
   }
 
   const { snippetId, sessionId, consentGiven, events } = parsed.data;
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (!site || !site.isActive) {
-    return json({ error: 'Unknown snippet ID' }, 404);
+    return json({ error: 'Unknown snippet ID' }, 404, req);
   }
 
   // 4. DL-01: Anonymize IP — must happen before any DB write
@@ -330,7 +334,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (botCheck.isBot) {
-    return json({ ok: true, bot: true });
+    return json({ ok: true, bot: true }, 200, req);
   }
 
   // 9. Forward to PostHog (non-blocking, outside transaction, no extra DB query)
@@ -345,7 +349,7 @@ export async function POST(req: NextRequest) {
     console.error('[ingest] PostHog enqueue failed');
   });
 
-  return json({ ok: true });
+  return json({ ok: true }, 200, req);
 }
 
 // ---------------------------------------------------------------------------
