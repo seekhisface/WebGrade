@@ -12,13 +12,8 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
-      authorization: {
-        params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/webmasters.readonly',
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
+      // NOTE: GSC scope (webmasters.readonly) must NOT be here — it requires Google
+      // app verification. Request it separately via /api/gsc/authorize when user connects GSC.
     }),
     CredentialsProvider({
       name: 'credentials',
