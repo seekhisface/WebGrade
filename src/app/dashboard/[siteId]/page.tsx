@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import SubscriptionBanner from '@/components/dashboard/SubscriptionBanner';
+import ReportModal from '@/components/dashboard/ReportModal';
 import { useSetupState } from '@/hooks/useSetupState';
 
 // =============================================================================
@@ -16,6 +17,7 @@ interface DashboardData {
   totalSessions: number; totalSessionsChange: number;
   avgIntentScore: number; avgIntentScoreChange: number;
   revenueAtRisk: number;
+  hasRevenueData?: boolean;
   intentDistribution: Record<string, number>;
   dropOffPages: DropOffPage[];
   topPageSessions: { url: string; sessions: number } | null;
@@ -96,14 +98,14 @@ function useCountUp(target: number, duration = 1600, trigger = true): number {
 // Sub-components
 // =============================================================================
 
-function HealthBadge({ status, siteId }: { status: 'GREEN' | 'YELLOW' | 'RED'; siteId?: string }) {
+function HealthBadge({ status, onShowReport }: { status: 'GREEN' | 'YELLOW' | 'RED'; onShowReport?: () => void }) {
   const c = { GREEN: { bg: 'bg-[#f0fdf4]', border: 'border-[#bbf7d0]', dot: 'bg-[#0d9488]', text: 'text-[#0d9488]', label: 'Healthy' }, YELLOW: { bg: 'bg-[#fffbeb]', border: 'border-[#fde68a]', dot: 'bg-[#b45309]', text: 'text-[#b45309]', label: 'Attention needed' }, RED: { bg: 'bg-[#fef2f2]', border: 'border-[#fecaca]', dot: 'bg-[#b91c1c]', text: 'text-[#b91c1c]', label: 'Issues detected' } }[status];
-  const isClickable = status !== 'GREEN' && siteId;
+  const isClickable = status !== 'GREEN' && onShowReport;
   const handleClick = () => {
     if (isClickable) {
       const el = document.getElementById('drop-off-section');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
-      else window.location.href = `/dashboard/${siteId}/report`;
+      else onShowReport?.();
     }
   };
   return (
@@ -116,11 +118,10 @@ function HealthBadge({ status, siteId }: { status: 'GREEN' | 'YELLOW' | 'RED'; s
   );
 }
 
-function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, reportLink }: {
-  label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; reportLink?: string;
+function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, onReportClick }: {
+  label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; onReportClick?: () => void;
 }) {
   const positive = (change ?? 0) >= 0;
-  // Severity-based change arrow: green for positive, amber for mild negative, red for steep negative
   const changeColor = change === undefined ? '' : positive ? 'text-[#0d9488]' : Math.abs(change) > 15 ? 'text-[#b91c1c]' : 'text-[#b45309]';
   return (
     <div className="bg-[#f0fdfa]/60 border border-[#99f6e4] rounded-2xl p-5 shadow-sm">
@@ -135,10 +136,10 @@ function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueCol
           <span className="text-[#94a3b8] font-normal ml-1">{changeLabel ?? 'vs baseline'}</span>
         </div>
       )}
-      {reportLink && (
-        <Link href={reportLink} className="text-[10px] text-[#0891b2] hover:underline font-medium mt-2 inline-block">
+      {onReportClick && (
+        <button onClick={onReportClick} className="text-[10px] text-[#0891b2] hover:underline font-medium mt-2 inline-block">
           View in report →
-        </Link>
+        </button>
       )}
     </div>
   );
@@ -213,6 +214,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [seoTab, setSeoTab] = useState<'overview' | 'keywords' | 'cwv' | 'indexing'>('overview');
   const [triggered, setTriggered] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const kpiRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback((d: number) => {
@@ -276,7 +278,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-black text-[#0c4a6e]">Dashboard</h1>
-            {D && <HealthBadge status={D.healthStatus} siteId={params.siteId} />}
+            {D && <HealthBadge status={D.healthStatus} onShowReport={() => setShowReport(true)} />}
             {D && <span className="text-sm text-[#64748b]">{D.site.domain}</span>}
           </div>
           <div className="flex items-center gap-3">
@@ -338,10 +340,10 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
               )}
             </div>
             {/* View Report button */}
-            <Link href={`/dashboard/${params.siteId}/report`}
+            <button onClick={() => setShowReport(true)}
               className="px-4 py-1.5 bg-[#0c4a6e] hover:bg-[#075985] text-white text-xs font-bold rounded-lg transition-colors">
               View Report →
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -363,16 +365,20 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         {/* ── SECTION 1: Hero KPI Cards ── */}
         <div ref={kpiRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard label="Total Sessions" value={sessions.toLocaleString()} change={D?.totalSessionsChange} baseline=""
-            valueColor="#0c4a6e" reportLink={`/dashboard/${params.siteId}/report`} />
+            valueColor="#0c4a6e" onReportClick={() => setShowReport(true)} />
           <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline=""
             valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#dc2626'}
-            reportLink={`/dashboard/${params.siteId}/report`} />
-          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
-            valueColor={revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e'}
-            reportLink={`/dashboard/${params.siteId}/report`} />
+            onReportClick={() => setShowReport(true)} />
+          <KpiCard
+            label={D?.hasRevenueData ? 'Revenue at Risk' : 'Disengaged Leads'}
+            value={D?.hasRevenueData ? `$${revenueRisk.toLocaleString()}` : revenueRisk.toLocaleString()}
+            suffix={D?.hasRevenueData ? '/mo' : 'visitors'}
+            change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
+            valueColor={D?.hasRevenueData ? (revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e') : '#b45309'}
+            onReportClick={() => setShowReport(true)} />
           <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.bounceRate != null && D.bounceRate > 65 ? '#dc2626' : D?.bounceRate != null && D.bounceRate > 45 ? '#b45309' : '#0d9488'}
-            reportLink={`/dashboard/${params.siteId}/report`} />
+            onReportClick={() => setShowReport(true)} />
         </div>
 
         {/* ── SECTION 2: Live SEO KPIs ── */}
@@ -546,10 +552,10 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                           <li>No sitemap submitted to Google Search Console</li>
                           <li>Domain verification not completed in GSC</li>
                         </ul>
-                        <Link href={`/dashboard/${params.siteId}/report?section=seo`}
+                        <button onClick={() => setShowReport(true)}
                           className="text-xs font-semibold text-red-700 hover:text-red-900 underline">
                           View SEO findings in report →
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -557,7 +563,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                 {S.indexedPages > 0 && S.notIndexed > S.indexedPages && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-center gap-3">
                     <span className="text-amber-500"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" /></svg></span>
-                    <p className="text-xs text-amber-800 flex-1"><strong>{S.notIndexed} pages not indexed</strong> — more pages are excluded than included. <Link href={`/dashboard/${params.siteId}/report?section=seo`} className="text-amber-700 underline font-semibold">See recommendations →</Link></p>
+                    <p className="text-xs text-amber-800 flex-1"><strong>{S.notIndexed} pages not indexed</strong> — more pages are excluded than included. <button onClick={() => setShowReport(true)} className="text-amber-700 underline font-semibold">See recommendations →</button></p>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">
@@ -650,9 +656,9 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                               <p className="text-sm text-[#94a3b8] italic">More traffic data needed for AI analysis. Check back after additional sessions are recorded on this page.</p>
                             )}
                           </div>
-                          <Link href={`/dashboard/${params.siteId}/report`} className="text-[10px] text-[#0891b2] font-semibold hover:underline mt-2 inline-block">
+                          <button onClick={() => setShowReport(true)} className="text-[10px] text-[#0891b2] font-semibold hover:underline mt-2 inline-block">
                             View full findings in report →
-                          </Link>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -702,6 +708,11 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         </div>
 
       </div>
+
+      {/* Report Modal */}
+      {showReport && (
+        <ReportModal siteId={params.siteId} days={days} onClose={() => setShowReport(false)} />
+      )}
     </div>
   );
 }

@@ -167,6 +167,7 @@ export async function GET(req: NextRequest) {
       avgIntentScore: avgIntent,
       avgIntentScoreChange: Math.round(intentChange * 10) / 10,
       revenueAtRisk: Math.round(dropOff.totalRevenueAtRisk),
+      hasRevenueData: !!(site.onboarding?.averageOrderValue && site.onboarding?.leadToWinRate),
       bounceRate,
       intentDistribution: intentDist,
       dropOffPages,
