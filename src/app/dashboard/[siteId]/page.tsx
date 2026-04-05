@@ -9,7 +9,7 @@ import { useSetupState } from '@/hooks/useSetupState';
 // Types
 // =============================================================================
 
-type Range = '7d' | '14d' | '30d' | '60d' | '90d';
+type Range = '7d' | '14d' | '30d' | '60d' | '90d' | 'custom';
 
 interface DashboardData {
   site: { id: string; name: string; domain: string; url: string };
@@ -96,9 +96,24 @@ function useCountUp(target: number, duration = 1600, trigger = true): number {
 // Sub-components
 // =============================================================================
 
-function HealthBadge({ status }: { status: 'GREEN' | 'YELLOW' | 'RED' }) {
+function HealthBadge({ status, siteId }: { status: 'GREEN' | 'YELLOW' | 'RED'; siteId?: string }) {
   const c = { GREEN: { bg: 'bg-[#f0fdf4]', border: 'border-[#bbf7d0]', dot: 'bg-[#0d9488]', text: 'text-[#0d9488]', label: 'Healthy' }, YELLOW: { bg: 'bg-[#fffbeb]', border: 'border-[#fde68a]', dot: 'bg-[#b45309]', text: 'text-[#b45309]', label: 'Attention needed' }, RED: { bg: 'bg-[#fef2f2]', border: 'border-[#fecaca]', dot: 'bg-[#b91c1c]', text: 'text-[#b91c1c]', label: 'Issues detected' } }[status];
-  return (<div className={`flex items-center gap-1.5 px-2.5 py-1 ${c.bg} border ${c.border} rounded-full`}><div className={`w-1.5 h-1.5 rounded-full ${c.dot} animate-pulse`} /><span className={`text-xs font-semibold ${c.text}`}>{c.label}</span></div>);
+  const isClickable = status !== 'GREEN' && siteId;
+  const handleClick = () => {
+    if (isClickable) {
+      const el = document.getElementById('drop-off-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      else window.location.href = `/dashboard/${siteId}/report`;
+    }
+  };
+  return (
+    <div onClick={handleClick}
+      className={`flex items-center gap-1.5 px-2.5 py-1 ${c.bg} border ${c.border} rounded-full ${isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''}`}>
+      <div className={`w-1.5 h-1.5 rounded-full ${c.dot} animate-pulse`} />
+      <span className={`text-xs font-semibold ${c.text}`}>{c.label}</span>
+      {isClickable && <span className={`text-[10px] ${c.text} ml-0.5`}>→</span>}
+    </div>
+  );
 }
 
 function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor }: {
@@ -185,6 +200,9 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const [days, setDays] = useState(30);
   const [rangePreset, setRangePreset] = useState<Range>('30d');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [seoTab, setSeoTab] = useState<'overview' | 'keywords' | 'cwv' | 'indexing'>('overview');
   const [triggered, setTriggered] = useState(false);
@@ -215,7 +233,17 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const intentScore = useCountUp(dashData?.avgIntentScore ?? 0, 1400, triggered);
   const revenueRisk = useCountUp(dashData?.revenueAtRisk ?? 0, 1800, triggered);
 
-  function applyPreset(p: typeof PRESETS[number]) { setDays(p.days); setRangePreset(p.id); setPickerOpen(false); }
+  function applyPreset(p: typeof PRESETS[number]) { setDays(p.days); setRangePreset(p.id); setPickerOpen(false); setShowCustom(false); }
+  function applyCustomRange() {
+    if (!customStart || !customEnd) return;
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    const diff = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+    setDays(diff);
+    setRangePreset('custom');
+    setPickerOpen(false);
+    setShowCustom(false);
+  }
 
   if (setup.loading || loading) {
     return (
@@ -241,32 +269,63 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-black text-[#0c4a6e]">Dashboard</h1>
-            {D && <HealthBadge status={D.healthStatus} />}
+            {D && <HealthBadge status={D.healthStatus} siteId={params.siteId} />}
             {D && <span className="text-sm text-[#64748b]">{D.site.domain}</span>}
           </div>
           <div className="flex items-center gap-3">
             {/* Date range picker */}
             <div className="relative">
-              <button onClick={() => setPickerOpen(o => !o)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-[#f0f9ff] border border-[#bae6fd] hover:border-[#7dd3fc] rounded-lg text-xs text-[#334155] transition-all">
-                <svg className="w-3.5 h-3.5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Last {PRESETS.find(p => p.id === rangePreset)?.days ?? days} days
-                <svg className={`w-3 h-3 text-[#64748b] transition-transform ${pickerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+              {(() => {
+                const endDate = new Date();
+                const startDate = new Date(endDate.getTime() - days * 86400000);
+                const fmtShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return (
+                  <button onClick={() => setPickerOpen(o => !o)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-[#f0f9ff] border border-[#bae6fd] hover:border-[#7dd3fc] rounded-lg text-xs text-[#334155] transition-all">
+                    <svg className="w-3.5 h-3.5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {fmtShort(startDate)} – {fmtShort(endDate)}
+                    <svg className={`w-3 h-3 text-[#64748b] transition-transform ${pickerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                );
+              })()}
               {pickerOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setPickerOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-[#bae6fd] rounded-xl shadow-xl z-50 overflow-hidden p-1">
+                  <div className="fixed inset-0 z-40" onClick={() => { setPickerOpen(false); setShowCustom(false); }} />
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#bae6fd] rounded-xl shadow-xl z-50 overflow-hidden p-1">
                     {PRESETS.map(p => (
                       <button key={p.id} onClick={() => applyPreset(p)}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${rangePreset === p.id ? 'bg-[#e0f2fe] text-[#0c4a6e] font-semibold' : 'text-[#64748b] hover:bg-[#f0f9ff]'}`}>
                         Last {p.days} days
                       </button>
                     ))}
+                    <div className="border-t border-[#e0f2fe] mt-1 pt-1">
+                      <button onClick={() => setShowCustom(c => !c)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${rangePreset === 'custom' ? 'bg-[#e0f2fe] text-[#0c4a6e] font-semibold' : 'text-[#0891b2] hover:bg-[#f0f9ff] font-medium'}`}>
+                        Custom range…
+                      </button>
+                      {showCustom && (
+                        <div className="px-3 py-2 space-y-2">
+                          <div>
+                            <label className="text-[10px] text-[#64748b] uppercase font-bold">Start</label>
+                            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+                              className="w-full mt-0.5 px-2 py-1 border border-[#bae6fd] rounded-lg text-xs text-[#334155] focus:outline-none focus:ring-1 focus:ring-[#0891b2]" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-[#64748b] uppercase font-bold">End</label>
+                            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+                              className="w-full mt-0.5 px-2 py-1 border border-[#bae6fd] rounded-lg text-xs text-[#334155] focus:outline-none focus:ring-1 focus:ring-[#0891b2]" />
+                          </div>
+                          <button onClick={applyCustomRange} disabled={!customStart || !customEnd}
+                            className="w-full px-3 py-1.5 bg-[#0c4a6e] text-white text-xs font-semibold rounded-lg hover:bg-[#075985] disabled:opacity-40 transition-colors">
+                            Apply
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -507,7 +566,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             </div>
 
             {/* ── SECTION 4: Drop-Off Analysis ── */}
-            <div className="lg:col-span-3 bg-white rounded-2xl border border-[#bae6fd] p-6 shadow-sm">
+            <div id="drop-off-section" className="lg:col-span-3 bg-white rounded-2xl border border-[#bae6fd] p-6 shadow-sm">
               <h2 className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-5">Drop-off Analysis</h2>
               <div className="space-y-3">
                 {D.dropOffPages.length > 0 ? D.dropOffPages.map(page => {

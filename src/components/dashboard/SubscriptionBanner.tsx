@@ -22,7 +22,10 @@ export default function SubscriptionBanner({
   if (tier === 'WEBAUDIT') {
     const start = webauditStartDate ? new Date(webauditStartDate) : now;
     const dayElapsed = Math.max(0, differenceInDays(now, start));
+    const daysRemaining = Math.max(0, 60 - dayElapsed);
     const progress = Math.min(100, (dayElapsed / 60) * 100);
+    const endDate = new Date(start);
+    endDate.setDate(endDate.getDate() + 60);
 
     return (
       <div className="bg-gradient-to-r from-sky-50 to-sky-100 border border-sky-200 rounded-xl px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -33,14 +36,15 @@ export default function SubscriptionBanner({
             </svg>
             <span className="text-sm font-bold text-slate-800">WebAudit™ Active</span>
             <span className="text-xs text-sky-700 font-medium">— Day {dayElapsed} of 60</span>
+            <span className="text-xs text-slate-400 ml-1">({daysRemaining} days remaining · ends {format(endDate, 'MMM d, yyyy')})</span>
           </div>
           <div className="w-full max-w-xs bg-sky-200/50 rounded-full h-1.5 mb-1.5">
             <div className="bg-sky-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-xs text-slate-500">Reports generated at Day 30 and Day 60</p>
         </div>
-        <a href="#upgrade" className="text-xs font-semibold px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors whitespace-nowrap flex-shrink-0">
-          Upgrade to WebWatch™ →
+        <a href="#upgrade" className="text-[11px] font-medium px-3 py-1.5 bg-white border border-sky-300 text-sky-700 rounded-lg hover:bg-sky-50 transition-colors whitespace-nowrap flex-shrink-0">
+          Keep the reports going →
         </a>
       </div>
     );
