@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 // =============================================================================
 // Types
@@ -151,7 +152,9 @@ const severityColors = { HIGH: 'bg-red-100 text-red-700', MEDIUM: 'bg-amber-100 
 
 export default function ReportPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const siteId = params.siteId as string;
+  const fromDashboard = searchParams.get('section') !== null;
   const [activeView, setActiveView] = useState<'executive' | 'action' | 'growth'>('executive');
   const [report, setReport] = useState<ReportPayload | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -268,6 +271,9 @@ export default function ReportPage() {
             </>
           ) : (
             <>
+              {fromDashboard && (
+                <Link href={`/dashboard/${siteId}`} className="text-xs text-white/60 hover:text-white/90 font-medium mb-2 inline-block">← Back to Dashboard</Link>
+              )}
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">WebGrade Intelligence Report</p>
               <h2 className="text-2xl font-black text-white">WebAudit™ Report</h2>
               <p className="text-sm text-white/70 mt-1">{fmt(report.periodStart)} – {fmt(report.periodEnd)}</p>
@@ -565,6 +571,17 @@ export default function ReportPage() {
                   {growthPlays.map(play => <GrowthPlayCard key={play.rank} play={play} />)}
                 </div>
               )}
+          </div>
+        )}
+
+        {/* Back to Dashboard floating button */}
+        {fromDashboard && (
+          <div className="mt-8 text-center">
+            <Link href={`/dashboard/${siteId}`}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0c4a6e] text-white text-sm font-semibold rounded-xl hover:bg-[#075985] transition-colors shadow-lg">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              Back to Dashboard
+            </Link>
           </div>
         )}
       </div>

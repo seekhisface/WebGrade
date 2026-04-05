@@ -116,8 +116,8 @@ function HealthBadge({ status, siteId }: { status: 'GREEN' | 'YELLOW' | 'RED'; s
   );
 }
 
-function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor }: {
-  label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string;
+function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, reportLink }: {
+  label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; reportLink?: string;
 }) {
   const positive = (change ?? 0) >= 0;
   return (
@@ -132,6 +132,11 @@ function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueCol
           <span>{positive ? '↑' : '↓'}</span><span>{Math.abs(change).toFixed(1)}%</span>
           <span className="text-[#94a3b8] font-normal ml-1">{changeLabel ?? 'vs baseline'}</span>
         </div>
+      )}
+      {reportLink && (
+        <Link href={reportLink} className="text-[10px] text-[#0891b2] hover:underline font-medium mt-2 inline-block">
+          View in report →
+        </Link>
       )}
     </div>
   );
@@ -354,11 +359,15 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
 
         {/* ── SECTION 1: Hero KPI Cards ── */}
         <div ref={kpiRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Total Sessions" value={sessions.toLocaleString()} change={D?.totalSessionsChange} baseline="28,400 baseline" />
-          <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline="38 baseline"
-            valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#b91c1c'} />
-          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={-11.1} changeLabel="vs last month" baseline="$43,200 baseline" valueColor="#b91c1c" />
-          <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline="" valueColor={D?.bounceRate != null && D.bounceRate > 60 ? '#b91c1c' : '#b45309'} />
+          <KpiCard label="Total Sessions" value={sessions.toLocaleString()} change={D?.totalSessionsChange} baseline=""
+            reportLink={`/dashboard/${params.siteId}/report`} />
+          <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline=""
+            valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#b91c1c'}
+            reportLink={`/dashboard/${params.siteId}/report`} />
+          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={-11.1} changeLabel="vs last month" baseline="" valueColor="#b91c1c"
+            reportLink={`/dashboard/${params.siteId}/report`} />
+          <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline="" valueColor={D?.bounceRate != null && D.bounceRate > 60 ? '#b91c1c' : '#b45309'}
+            reportLink={`/dashboard/${params.siteId}/report`} />
         </div>
 
         {/* ── SECTION 2: Live SEO KPIs ── */}
@@ -503,7 +512,39 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             )}
 
             {seoTab === 'indexing' && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
+                {/* Alert when indexing is low */}
+                {S.indexedPages === 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-red-500 mt-0.5">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-red-800 mb-1">No pages indexed by Google</p>
+                        <p className="text-xs text-red-700 leading-relaxed mb-2">Google hasn&apos;t indexed any pages yet. This means your site won&apos;t appear in search results. Common causes:</p>
+                        <ul className="text-xs text-red-700 space-y-1 mb-3 list-disc pl-4">
+                          <li>Site is too new and hasn&apos;t been crawled yet</li>
+                          <li>robots.txt is blocking Googlebot</li>
+                          <li>Pages have <code className="bg-red-100 px-1 rounded">noindex</code> meta tags</li>
+                          <li>No sitemap submitted to Google Search Console</li>
+                          <li>Domain verification not completed in GSC</li>
+                        </ul>
+                        <Link href={`/dashboard/${params.siteId}/report?section=seo`}
+                          className="text-xs font-semibold text-red-700 hover:text-red-900 underline">
+                          View SEO findings in report →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {S.indexedPages > 0 && S.notIndexed > S.indexedPages && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-center gap-3">
+                    <span className="text-amber-500"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" /></svg></span>
+                    <p className="text-xs text-amber-800 flex-1"><strong>{S.notIndexed} pages not indexed</strong> — more pages are excluded than included. <Link href={`/dashboard/${params.siteId}/report?section=seo`} className="text-amber-700 underline font-semibold">See recommendations →</Link></p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
                 <div className="p-5 bg-white border border-[#bae6fd] rounded-2xl">
                   <p className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-4">Page Indexing</p>
                   <div className="space-y-3">
@@ -538,6 +579,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                     </div>
                   </div>
                 )}
+              </div>
               </div>
             )}
           </div>
