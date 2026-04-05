@@ -111,6 +111,7 @@ export function AppNav() {
   const navTabs = [
     { id: 'setup',     label: 'Setup',        href: `/dashboard/${currentSiteId}/setup`,            show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
     { id: 'dashboard', label: 'Dashboard',    href: `/dashboard/${currentSiteId}`,                show: !!currentSiteId },
+    { id: 'report',    label: 'Reports',      href: `/dashboard/${currentSiteId}/report`,         show: !!currentSiteId },
     { id: 'webopp',    label: 'WebOpp™',      href: `/dashboard/${currentSiteId}/webopp`,         show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
     { id: 'snippet',   label: 'Installation', href: `/dashboard/${currentSiteId}/snippet`,        show: !!currentSiteId },
     { id: 'winback',   label: 'Win-Back',     href: `/dashboard/${currentSiteId}/winback`,        show: !!currentSiteId && isAuthenticated },
