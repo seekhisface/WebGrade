@@ -354,6 +354,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             webauditEndDate={D.subscription.webauditEndDate}
             webwatchStartDate={D.subscription.webwatchStartDate}
             hasWebOpp={D.subscription.hasWebOpp}
+            viewingDays={days}
           />
         )}
 

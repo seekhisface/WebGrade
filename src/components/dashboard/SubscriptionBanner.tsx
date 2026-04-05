@@ -10,6 +10,7 @@ interface SubscriptionBannerProps {
   webauditEndDate?: string | null;
   webwatchStartDate?: string | null;
   hasWebOpp?: boolean;
+  viewingDays?: number;
 }
 
 export default function SubscriptionBanner({
@@ -17,6 +18,7 @@ export default function SubscriptionBanner({
   webauditStartDate,
   webauditEndDate,
   webwatchStartDate,
+  viewingDays,
 }: SubscriptionBannerProps) {
   const now = new Date();
   const [showUpsell, setShowUpsell] = useState(false);
@@ -30,34 +32,43 @@ export default function SubscriptionBanner({
     const endDate = new Date(start);
     endDate.setDate(endDate.getDate() + 60);
 
+    const viewEnd = now;
+    const viewStart = new Date(viewEnd.getTime() - (viewingDays ?? 30) * 86400000);
+
     return (
       <div className="bg-gradient-to-r from-sky-50 to-sky-100 border border-sky-200 rounded-xl px-6 py-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-2">
               <svg className="w-4 h-4 text-sky-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span className="text-sm font-bold text-slate-800">WebAudit™ Active</span>
-              <span className="text-xs text-sky-700 font-medium">— Day {dayElapsed} of 60</span>
             </div>
-            <div className="w-full max-w-xs bg-sky-200/50 rounded-full h-1.5 mb-1.5">
-              <div className="bg-sky-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+            {/* 60-day audit countdown */}
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-full max-w-xs bg-sky-200/50 rounded-full h-1.5">
+                <div className="bg-sky-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="text-xs text-sky-700 font-semibold whitespace-nowrap">Day {dayElapsed}/60</span>
+            </div>
+            {/* Info row: audit window + viewing window */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <strong className="text-slate-600">Audit:</strong> {format(start, 'MMM d')} – {format(endDate, 'MMM d, yyyy')}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="flex items-center gap-1">
+                <strong className="text-slate-600">Viewing:</strong> {format(viewStart, 'MMM d')} – {format(viewEnd, 'MMM d, yyyy')}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>{daysRemaining} days remaining · Reports at Day 30 and 60</span>
             </div>
           </div>
           <button onClick={() => setShowUpsell(true)} className="text-[11px] font-medium px-3 py-1.5 bg-white border border-sky-300 text-sky-700 rounded-lg hover:bg-sky-50 transition-colors whitespace-nowrap flex-shrink-0">
             Keep the reports going →
           </button>
-        </div>
-        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            {format(start, 'MMM d, yyyy')} – {format(endDate, 'MMM d, yyyy')}
-          </span>
-          <span>·</span>
-          <span>{daysRemaining} days remaining</span>
-          <span>·</span>
-          <span>Reports at Day 30 and Day 60</span>
         </div>
         {showUpsell && (
           <WebWatchUpsellModal onClose={() => setShowUpsell(false)} daysRemaining={daysRemaining} dayElapsed={dayElapsed} />
