@@ -132,16 +132,22 @@ export async function GET(req: NextRequest) {
       isStorylineBreakpoint: p.isStorylineBreakpoint,
     }));
 
+    // ── Bounce rate ─────────────────────────────────────────────────────
+    const bounceCount = totalSessions > 0
+      ? await prisma.visitorSession.count({
+          where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, pageCount: { lte: 1 } },
+        })
+      : 0;
+    const bounceRate = totalSessions > 0
+      ? Math.round((bounceCount / totalSessions) * 1000) / 10
+      : 0;
+
     // ── Baseline comparison (non-blocking) ──────────────────────────────
     let baselineComparison = {};
     try {
       const currentMetrics = {
         sessions: totalSessions,
-        bounce_rate: totalSessions > 0
-          ? ((await prisma.visitorSession.count({
-              where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, pageCount: { lte: 1 } },
-            })) / totalSessions) * 100
-          : 0,
+        bounce_rate: bounceRate,
         intent_score: avgIntent,
         revenue_at_risk: Math.round(dropOff.totalRevenueAtRisk),
       };
@@ -160,6 +166,7 @@ export async function GET(req: NextRequest) {
       avgIntentScore: avgIntent,
       avgIntentScoreChange: Math.round(intentChange * 10) / 10,
       revenueAtRisk: Math.round(dropOff.totalRevenueAtRisk),
+      bounceRate,
       intentDistribution: intentDist,
       dropOffPages,
       topPageSessions: dropOff.topPageSessions,

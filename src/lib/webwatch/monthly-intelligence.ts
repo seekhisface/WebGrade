@@ -326,11 +326,11 @@ async function getMetricsForPeriod(
   }
 
   const topExitPages = Object.entries(exitCounts)
-    .map(([url, exits]) => ({
-      url,
-      exitRate: exits / (sessionCounts[url] ?? exits),
-      sessions: sessionCounts[url] ?? exits,
-    }))
+    .map(([url, exits]) => {
+      const sess = sessionCounts[url] ?? exits;
+      const rate = sess > 0 ? Math.min((exits / sess) * 100, 100) : 0;
+      return { url, exitRate: Math.round(rate * 10) / 10, sessions: sess };
+    })
     .filter(p => p.sessions >= 10) // Only pages with meaningful traffic
     .sort((a, b) => b.exitRate - a.exitRate)
     .slice(0, 5);

@@ -302,9 +302,9 @@ export async function computeDropOffAnalysis(params: {
     const sessions = agg.sessions.size;
     if (sessions < 10) continue; // skip low-traffic pages — not statistically meaningful
 
-    const exitRate = Math.round((agg.exits / sessions) * 100);
+    const exitRate = Math.min(100, Math.round((agg.exits / sessions) * 100));
     const avgScrollDepth = agg.scrollDepths.length > 0
-      ? Math.round(agg.scrollDepths.reduce((a, b) => a + b, 0) / agg.scrollDepths.length)
+      ? Math.min(100, Math.round(agg.scrollDepths.reduce((a, b) => a + b, 0) / agg.scrollDepths.length))
       : 0;
     const avgTimeOnPageSec = agg.timesOnPage.length > 0
       ? Math.round(agg.timesOnPage.reduce((a, b) => a + b, 0) / agg.timesOnPage.length)

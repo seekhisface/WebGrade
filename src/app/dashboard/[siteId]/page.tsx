@@ -19,6 +19,7 @@ interface DashboardData {
   intentDistribution: Record<string, number>;
   dropOffPages: DropOffPage[];
   topPageSessions: { url: string; sessions: number } | null;
+  bounceRate?: number;
   healthStatus: 'GREEN' | 'YELLOW' | 'RED';
   subscription?: {
     tier: 'WEBAUDIT' | 'WEBAUDIT_EXPIRED' | 'WEBWATCH' | 'WEBWATCH_WEBOPP';
@@ -298,7 +299,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
           <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline="38 baseline"
             valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#b91c1c'} />
           <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={-11.1} changeLabel="vs last month" baseline="$43,200 baseline" valueColor="#b91c1c" />
-          <KpiCard label="Bounce Rate" value={D ? `${(64.2).toFixed(1)}%` : '—'} change={-4.8} changeLabel="vs baseline" baseline="68% baseline" valueColor="#b45309" />
+          <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline="" valueColor={D?.bounceRate != null && D.bounceRate > 60 ? '#b91c1c' : '#b45309'} />
         </div>
 
         {/* ── SECTION 2: Live SEO KPIs ── */}
