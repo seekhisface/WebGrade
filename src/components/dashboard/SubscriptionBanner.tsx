@@ -66,7 +66,8 @@ export default function SubscriptionBanner({
               <span>{daysRemaining} days remaining · Reports at Day 30 and 60</span>
             </div>
           </div>
-          <button onClick={() => setShowUpsell(true)} className="text-[11px] font-medium px-3 py-1.5 bg-white border border-sky-300 text-sky-700 rounded-lg hover:bg-sky-50 transition-colors whitespace-nowrap flex-shrink-0">
+          <button onClick={() => setShowUpsell(true)}
+            className="text-[11px] font-semibold px-4 py-2 bg-gradient-to-r from-teal-500 to-sky-600 text-white rounded-lg hover:from-teal-600 hover:to-sky-700 transition-all whitespace-nowrap flex-shrink-0 shadow-md hover:shadow-lg animate-pulse hover:animate-none">
             Keep the reports going →
           </button>
         </div>

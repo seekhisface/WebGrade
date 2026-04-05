@@ -162,6 +162,13 @@ model Site {
   hasWebWatch      Boolean @default(false)
   hasWebOpp        Boolean @default(false)
 
+  // Subscription lifecycle
+  subscriptionTier  SubscriptionTier @default(WEBAUDIT)
+  webauditStartDate DateTime?
+  webauditEndDate   DateTime?
+  webwatchStartDate DateTime?
+  baselineResetDate DateTime?
+
   // Integrations — PostHog
   posthogEnabled Boolean @default(false)
   posthogApiKey  String?
@@ -205,6 +212,7 @@ model Site {
   reportDistributions      ReportDistribution[]
   retentionTargets         SnippetRetentionTarget[]
   MonthlyPerformanceReport MonthlyPerformanceReport[]
+  archivedReports          ArchivedReport[]
 
   @@index([orgId])
   @@index([domain])
@@ -225,6 +233,32 @@ enum SitePlatform {
 enum DataRegion {
   US
   EU
+}
+
+enum SubscriptionTier {
+  WEBAUDIT
+  WEBAUDIT_EXPIRED
+  WEBWATCH
+  WEBWATCH_WEBOPP
+}
+
+model ArchivedReport {
+  id          String   @id @default(cuid())
+  siteId      String
+  type        String // 'webaudit' | 'webwatch' | 'webopp'
+  periodStart DateTime
+  periodEnd   DateTime
+  title       String
+  summary     String   @db.Text
+  kpiSnapshot Json
+  findings    Json
+  actionItems Json
+  createdAt   DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
+  @@map("archived_reports")
 }
 
 // =============================================================================

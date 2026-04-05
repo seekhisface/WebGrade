@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       hasInterimReport: true,
       hasWebWatch: true,
       hasWebOpp: true,
+      webauditStartDate: new Date(),
       onboarding: {
         create: {
           conversionGoalUrl: conversionGoalUrl || null,
