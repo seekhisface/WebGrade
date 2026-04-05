@@ -364,7 +364,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
           <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline=""
             valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#b91c1c'}
             reportLink={`/dashboard/${params.siteId}/report`} />
-          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={-11.1} changeLabel="vs last month" baseline="" valueColor="#b91c1c"
+          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline="" valueColor="#b91c1c"
             reportLink={`/dashboard/${params.siteId}/report`} />
           <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline="" valueColor={D?.bounceRate != null && D.bounceRate > 60 ? '#b91c1c' : '#b45309'}
             reportLink={`/dashboard/${params.siteId}/report`} />
@@ -453,31 +453,42 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
               </div>
             )}
 
-            {seoTab === 'keywords' && S.keywords.length > 0 && (
-              <div className="bg-white border border-[#bae6fd] rounded-2xl overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-[#f0f9ff] border-b border-[#e0f2fe] text-[#64748b]">
-                      <th className="text-left p-3 font-medium">Keyword</th>
-                      <th className="text-center p-3 font-medium w-16">Rank</th>
-                      <th className="text-right p-3 font-medium">Clicks</th>
-                      <th className="text-right p-3 font-medium">Impressions</th>
-                      <th className="text-right p-3 font-medium">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {S.keywords.map((kw, i) => (
-                      <tr key={i} className="border-b border-[#f1f5f9] hover:bg-[#f0f9ff] transition-colors">
-                        <td className="p-3 font-mono text-[#334155]">{kw.keyword}</td>
-                        <td className="p-3 text-center"><RankBadge pos={kw.position} /></td>
-                        <td className="p-3 text-right font-medium text-[#1e293b]">{kw.clicks.toLocaleString()}</td>
-                        <td className="p-3 text-right text-[#64748b]">{kw.impressions.toLocaleString()}</td>
-                        <td className="p-3 text-right text-[#64748b]">{kw.ctr}%</td>
+            {seoTab === 'keywords' && (
+              S.keywords.length > 0 ? (
+                <div className="bg-white border border-[#bae6fd] rounded-2xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[#f0f9ff] border-b border-[#e0f2fe] text-[#64748b]">
+                        <th className="text-left p-3 font-medium">Keyword</th>
+                        <th className="text-center p-3 font-medium w-16">Rank</th>
+                        <th className="text-right p-3 font-medium">Clicks</th>
+                        <th className="text-right p-3 font-medium">Impressions</th>
+                        <th className="text-right p-3 font-medium">CTR</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {S.keywords.map((kw, i) => (
+                        <tr key={i} className="border-b border-[#f1f5f9]">
+                          <td className="p-3 font-mono text-[#334155]">{kw.keyword}</td>
+                          <td className="p-3 text-center"><RankBadge pos={kw.position} /></td>
+                          <td className="p-3 text-right font-medium text-[#1e293b]">{kw.clicks.toLocaleString()}</td>
+                          <td className="p-3 text-right text-[#64748b]">{kw.impressions.toLocaleString()}</td>
+                          <td className="p-3 text-right text-[#64748b]">{kw.ctr}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-white border border-[#bae6fd] rounded-2xl p-8 text-center">
+                  <svg className="w-10 h-10 text-[#bae6fd] mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <p className="text-sm font-semibold text-[#1e293b] mb-1">No keyword rankings found</p>
+                  <p className="text-xs text-[#64748b] mb-3">Keyword tracking requires Google Search Console to be connected.</p>
+                  <Link href={`/dashboard/${params.siteId}/settings`} className="text-xs text-[#0891b2] font-semibold hover:underline">
+                    Connect Google Search Console →
+                  </Link>
+                </div>
+              )
             )}
 
             {seoTab === 'cwv' && (
@@ -624,19 +635,31 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                         </div>
                         <div className="text-right flex-shrink-0"><p className="text-xs text-[#64748b]">Scroll</p><p className="text-sm font-bold text-[#1e293b]">{page.avgScrollDepth}%</p></div>
                       </button>
-                      {expanded === page.url && page.aiExplanation && (
+                      {expanded === page.url && (
                         <div className="px-4 pb-4 border-t border-[#e0f2fe]">
                           <div className="mt-3 p-4 bg-[#f0f9ff] border border-[#bae6fd] rounded-xl">
                             <div className="flex items-center gap-2 mb-2"><div className="w-5 h-5 bg-[#0c4a6e] rounded flex items-center justify-center"><span className="text-white text-[9px] font-black">AI</span></div><span className="text-xs font-bold text-[#0c4a6e]">WebGrade Analysis</span></div>
-                            <p className="text-sm text-[#334155] leading-relaxed">{page.aiExplanation}</p>
+                            {page.aiExplanation ? (
+                              <p className="text-sm text-[#334155] leading-relaxed">{page.aiExplanation}</p>
+                            ) : (
+                              <p className="text-sm text-[#94a3b8] italic">More traffic data needed for AI analysis. Check back after additional sessions are recorded on this page.</p>
+                            )}
                           </div>
+                          <Link href={`/dashboard/${params.siteId}/report`} className="text-[10px] text-[#0891b2] font-semibold hover:underline mt-2 inline-block">
+                            View full findings in report →
+                          </Link>
                         </div>
                       )}
                     </div>
                   );
                 }) : (
-                  <div className="px-4 py-6 text-center">
-                    <p className="text-sm text-[#64748b]">Drop-off analysis requires at least 10 unique sessions per page.</p>
+                  <div className="px-4 py-8 text-center">
+                    <svg className="w-10 h-10 text-[#bae6fd] mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
+                    <p className="text-sm font-semibold text-[#1e293b] mb-1">Gathering drop-off data</p>
+                    <p className="text-xs text-[#64748b] mb-3">Analysis activates once pages reach 10+ unique sessions. Keep your tracking snippet installed — data is being collected.</p>
+                    <Link href={`/dashboard/${params.siteId}/snippet`} className="text-xs text-[#0891b2] font-semibold hover:underline">
+                      Check snippet installation →
+                    </Link>
                   </div>
                 )}
               </div>

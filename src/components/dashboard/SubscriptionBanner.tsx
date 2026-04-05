@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { differenceInDays, format } from 'date-fns';
+import WebWatchUpsellModal from './WebWatchUpsellModal';
 
 interface SubscriptionBannerProps {
   tier: 'WEBAUDIT' | 'WEBAUDIT_EXPIRED' | 'WEBWATCH' | 'WEBWATCH_WEBOPP';
@@ -17,6 +19,7 @@ export default function SubscriptionBanner({
   webwatchStartDate,
 }: SubscriptionBannerProps) {
   const now = new Date();
+  const [showUpsell, setShowUpsell] = useState(false);
 
   // ── WEBAUDIT active ──────────────────────────────────────────────────
   if (tier === 'WEBAUDIT') {
@@ -43,9 +46,12 @@ export default function SubscriptionBanner({
           </div>
           <p className="text-xs text-slate-500">Reports generated at Day 30 and Day 60</p>
         </div>
-        <a href="#upgrade" className="text-[11px] font-medium px-3 py-1.5 bg-white border border-sky-300 text-sky-700 rounded-lg hover:bg-sky-50 transition-colors whitespace-nowrap flex-shrink-0">
+        <button onClick={() => setShowUpsell(true)} className="text-[11px] font-medium px-3 py-1.5 bg-white border border-sky-300 text-sky-700 rounded-lg hover:bg-sky-50 transition-colors whitespace-nowrap flex-shrink-0">
           Keep the reports going →
-        </a>
+        </button>
+        {showUpsell && (
+          <WebWatchUpsellModal onClose={() => setShowUpsell(false)} daysRemaining={daysRemaining} dayElapsed={dayElapsed} />
+        )}
       </div>
     );
   }
@@ -65,9 +71,12 @@ export default function SubscriptionBanner({
           </div>
           <p className="text-xs text-slate-500">Your data is frozen. Upgrade to WebWatch™ for continuous monitoring.</p>
         </div>
-        <a href="#upgrade" className="text-xs font-semibold px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors whitespace-nowrap flex-shrink-0">
-          Upgrade to WebWatch™
-        </a>
+        <button onClick={() => setShowUpsell(true)} className="text-xs font-semibold px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors whitespace-nowrap flex-shrink-0">
+          Keep the reports going →
+        </button>
+        {showUpsell && (
+          <WebWatchUpsellModal onClose={() => setShowUpsell(false)} daysRemaining={0} dayElapsed={60} />
+        )}
       </div>
     );
   }
