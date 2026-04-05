@@ -120,15 +120,17 @@ function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueCol
   label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; reportLink?: string;
 }) {
   const positive = (change ?? 0) >= 0;
+  // Severity-based change arrow: green for positive, amber for mild negative, red for steep negative
+  const changeColor = change === undefined ? '' : positive ? 'text-[#0d9488]' : Math.abs(change) > 15 ? 'text-[#b91c1c]' : 'text-[#b45309]';
   return (
-    <div className="bg-white border border-[#bae6fd] rounded-2xl p-5 shadow-sm">
+    <div className="bg-[#f0fdfa]/60 border border-[#99f6e4] rounded-2xl p-5 shadow-sm">
       <p className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-3">{label}</p>
       <p className="text-3xl font-black mb-1" style={{ color: valueColor ?? '#0c4a6e' }}>
         {value}{suffix && <span className="text-base font-normal text-[#94a3b8] ml-1">{suffix}</span>}
       </p>
       {baseline && <p className="text-[11px] text-[#94a3b8] mb-2">{baseline}</p>}
       {change !== undefined && (
-        <div className={`flex items-center gap-1 text-xs font-semibold ${positive ? 'text-[#0d9488]' : 'text-[#b91c1c]'}`}>
+        <div className={`flex items-center gap-1 text-xs font-semibold ${changeColor}`}>
           <span>{positive ? '↑' : '↓'}</span><span>{Math.abs(change).toFixed(1)}%</span>
           <span className="text-[#94a3b8] font-normal ml-1">{changeLabel ?? 'vs baseline'}</span>
         </div>
@@ -361,13 +363,15 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         {/* ── SECTION 1: Hero KPI Cards ── */}
         <div ref={kpiRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard label="Total Sessions" value={sessions.toLocaleString()} change={D?.totalSessionsChange} baseline=""
-            reportLink={`/dashboard/${params.siteId}/report`} />
+            valueColor="#0c4a6e" reportLink={`/dashboard/${params.siteId}/report`} />
           <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline=""
-            valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#b91c1c'}
+            valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#dc2626'}
             reportLink={`/dashboard/${params.siteId}/report`} />
-          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline="" valueColor="#b91c1c"
+          <KpiCard label="Revenue at Risk" value={`$${revenueRisk.toLocaleString()}`} suffix="/mo" change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
+            valueColor={revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e'}
             reportLink={`/dashboard/${params.siteId}/report`} />
-          <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline="" valueColor={D?.bounceRate != null && D.bounceRate > 60 ? '#b91c1c' : '#b45309'}
+          <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline=""
+            valueColor={D?.bounceRate != null && D.bounceRate > 65 ? '#dc2626' : D?.bounceRate != null && D.bounceRate > 45 ? '#b45309' : '#0d9488'}
             reportLink={`/dashboard/${params.siteId}/report`} />
         </div>
 
@@ -600,7 +604,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         {/* ── SECTION 3: Behavioral Intent Breakdown ── */}
         {D && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-[#bae6fd] p-6 shadow-sm">
+            <div className="lg:col-span-2 bg-[#f0fdfa]/60 rounded-2xl border border-[#99f6e4] p-6 shadow-sm">
               <h2 className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-5">Intent Distribution</h2>
               <div className="space-y-3">
                 {Object.entries(D.intentDistribution).map(([key, pct]) => {
@@ -620,7 +624,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             </div>
 
             {/* ── SECTION 4: Drop-Off Analysis ── */}
-            <div id="drop-off-section" className="lg:col-span-3 bg-white rounded-2xl border border-[#bae6fd] p-6 shadow-sm">
+            <div id="drop-off-section" className="lg:col-span-3 bg-[#f0fdfa]/60 rounded-2xl border border-[#99f6e4] p-6 shadow-sm">
               <h2 className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-5">Drop-off Analysis</h2>
               <div className="space-y-3">
                 {D.dropOffPages.length > 0 ? D.dropOffPages.map(page => {
@@ -670,7 +674,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
 
         {/* ── SECTION 5: Revenue at Risk CTA ── */}
         {D && D.revenueAtRisk > 0 && (
-          <div className="p-5 bg-white border border-[#bae6fd] rounded-2xl shadow-sm flex items-center justify-between gap-6 flex-wrap">
+          <div className="p-5 bg-[#f0fdfa]/60 border border-[#99f6e4] rounded-2xl shadow-sm flex items-center justify-between gap-6 flex-wrap">
             <div>
               <p className="text-xs font-bold text-[#b91c1c] uppercase tracking-wider mb-1">Revenue at Risk</p>
               <p className="text-sm text-[#334155]">

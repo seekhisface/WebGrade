@@ -47,10 +47,11 @@ export default function SubscriptionBanner({
             </div>
             {/* 60-day audit countdown */}
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-full max-w-xs bg-sky-200/50 rounded-full h-1.5">
-                <div className="bg-sky-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+              <div className="w-full max-w-xs bg-sky-200/50 rounded-full h-2">
+                <div className="bg-sky-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
               </div>
-              <span className="text-xs text-sky-700 font-semibold whitespace-nowrap">Day {dayElapsed}/60</span>
+              <span className="text-sm text-sky-800 font-black whitespace-nowrap">Day {dayElapsed} of 60</span>
+              <span className="text-sm font-bold text-[#0c4a6e] whitespace-nowrap">· {daysRemaining} days left</span>
             </div>
             {/* Info row: audit window + viewing window */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
@@ -63,11 +64,11 @@ export default function SubscriptionBanner({
                 <strong className="text-slate-600">Viewing:</strong> {format(viewStart, 'MMM d')} – {format(viewEnd, 'MMM d, yyyy')}
               </span>
               <span className="text-slate-300">|</span>
-              <span>{daysRemaining} days remaining · Reports at Day 30 and 60</span>
+              <span>Reports at Day 30 and 60</span>
             </div>
           </div>
           <button onClick={() => setShowUpsell(true)}
-            className="text-[11px] font-semibold px-4 py-2 bg-gradient-to-r from-teal-500 to-sky-600 text-white rounded-lg hover:from-teal-600 hover:to-sky-700 transition-all whitespace-nowrap flex-shrink-0 shadow-md hover:shadow-lg animate-pulse hover:animate-none">
+            className="text-sm font-bold px-6 py-3 bg-gradient-to-r from-teal-500 to-sky-600 text-white rounded-xl hover:from-teal-600 hover:to-sky-700 transition-all whitespace-nowrap flex-shrink-0 shadow-lg hover:shadow-xl animate-pulse hover:animate-none">
             Keep the reports going →
           </button>
         </div>
