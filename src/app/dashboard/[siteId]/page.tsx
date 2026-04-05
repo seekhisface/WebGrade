@@ -118,8 +118,9 @@ function HealthBadge({ status, onShowReport }: { status: 'GREEN' | 'YELLOW' | 'R
   );
 }
 
-function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, onReportClick }: {
+function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, onReportClick, bottomCta }: {
   label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; onReportClick?: () => void;
+  bottomCta?: { text: string; tooltip: string; href: string };
 }) {
   const positive = (change ?? 0) >= 0;
   const changeColor = change === undefined ? '' : positive ? 'text-[#0d9488]' : Math.abs(change) > 15 ? 'text-[#b91c1c]' : 'text-[#b45309]';
@@ -140,6 +141,16 @@ function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueCol
         <button onClick={onReportClick} className="text-[10px] text-[#0891b2] hover:underline font-medium mt-2 inline-block">
           View in report →
         </button>
+      )}
+      {bottomCta && (
+        <div className="mt-2 pt-2 border-t border-[#99f6e4]/50 group relative">
+          <Link href={bottomCta.href} className="text-[10px] text-[#0891b2] font-semibold hover:underline">
+            {bottomCta.text}
+          </Link>
+          <div className="absolute bottom-full left-0 mb-1 px-3 py-1.5 bg-[#0c4a6e] text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg">
+            {bottomCta.tooltip}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -375,7 +386,8 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             suffix={D?.hasRevenueData ? '/mo' : 'visitors'}
             change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.hasRevenueData ? (revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e') : '#b45309'}
-            onReportClick={() => setShowReport(true)} />
+            onReportClick={() => setShowReport(true)}
+            bottomCta={!D?.hasRevenueData ? { text: 'Revenue questionnaire?', tooltip: 'Answer a few questions so we can translate to lost revenue for you', href: `/onboarding?siteId=${params.siteId}&step=revenue` } : undefined} />
           <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.bounceRate != null && D.bounceRate > 65 ? '#dc2626' : D?.bounceRate != null && D.bounceRate > 45 ? '#b45309' : '#0d9488'}
             onReportClick={() => setShowReport(true)} />
