@@ -132,15 +132,16 @@ export async function GET(req: NextRequest) {
       isStorylineBreakpoint: p.isStorylineBreakpoint,
     }));
 
-    // ── Bounce rate ─────────────────────────────────────────────────────
-    const bounceCount = totalSessions > 0
-      ? await prisma.visitorSession.count({
+    // ── Bounce rate (non-blocking) ──────────────────────────────────────
+    let bounceRate = 0;
+    try {
+      if (totalSessions > 0) {
+        const bounceCount = await prisma.visitorSession.count({
           where: { siteId, startedAt: { gte: periodStart, lte: now }, isBotFiltered: false, pageCount: { lte: 1 } },
-        })
-      : 0;
-    const bounceRate = totalSessions > 0
-      ? Math.round((bounceCount / totalSessions) * 1000) / 10
-      : 0;
+        });
+        bounceRate = Math.round((bounceCount / totalSessions) * 1000) / 10;
+      }
+    } catch { /* bounce rate calculation failed — skip */ }
 
     // ── Baseline comparison (non-blocking) ──────────────────────────────
     let baselineComparison = {};
