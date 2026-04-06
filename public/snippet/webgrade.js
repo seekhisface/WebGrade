@@ -166,8 +166,11 @@
     }
   }, 2000);
 
-  // Flush on page exit
+  // Flush on page exit — guard against double-fire from pagehide + beforeunload
+  var exitFired = false;
   function flushAndExit() {
+    if (exitFired) return;
+    exitFired = true;
     var exitEvents = queue.splice(0);
     exitEvents.push({
       t: 'page_exit',
