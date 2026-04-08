@@ -37,23 +37,28 @@ const HERO_SLIDES = [
 ];
 
 // -- Deliverables List (ranked by impact, bold = high value) --------------
-const DELIVERABLES = [
-  { text: 'Revenue at Risk Modeling', bold: true, desc: 'Dollar-impact estimates on every finding.' },
-  { text: 'AI-Powered Fix Recommendations', bold: true, desc: 'Prioritized action plans with estimated ROI.' },
-  { text: 'Drop-Off Analysis', bold: true, desc: 'Which pages lose visitors and why.' },
-  { text: 'Behavioral Intent Scoring', bold: true, desc: 'Separate buyers from browsers automatically.' },
-  { text: 'Ad Spend Efficiency Analysis', bold: true, desc: 'Where your dollars convert vs. get wasted.' },
-  { text: 'Competitor Gap Analysis', bold: true, desc: 'Keywords and traffic your competitors capture.' },
-  { text: 'Auto-Alert Detection', bold: false, desc: 'Instant notifications on performance drops.' },
-  { text: 'Monthly Trend Tracking', bold: false, desc: 'What improved, regressed, or emerged.' },
-  { text: 'Live SEO Intelligence', bold: false, desc: 'Rankings, keywords, and organic traffic.' },
-  { text: 'Keyword Gap & Opportunity Mapping', bold: false, desc: 'Untapped demand ranked by revenue.' },
-  { text: 'Web Crawling Health Scores', bold: false, desc: 'Indexability, crawl errors, and fixes.' },
-  { text: 'Broken Link Detection', bold: false, desc: 'Every dead link costing you visitors.' },
-  { text: 'Wasted Spend Identification', bold: false, desc: 'Campaigns driving traffic but not converting.' },
-  { text: 'Bot Detection & Traffic Filtering', bold: false, desc: 'Real visitors only — bots filtered out.' },
-  { text: 'Slack + Email Alert Delivery', bold: false, desc: 'Alerts where your team already works.' },
-  { text: 'Win-Back Reports', bold: false, desc: 'Re-engage lost prospects with data.' },
+// status: 'live' = shipped, 'building' = in active development, 'roadmap' = planned
+type FeatureStatus = 'live' | 'building' | 'roadmap';
+const DELIVERABLES: { text: string; bold: boolean; desc: string; status: FeatureStatus }[] = [
+  // ── Live (schema + logic + API all built) ──
+  { text: 'Drop-Off Analysis', bold: true, desc: 'Which pages lose visitors and why.', status: 'live' },
+  { text: 'Behavioral Intent Scoring', bold: true, desc: 'Separate buyers from browsers automatically.', status: 'live' },
+  { text: 'AI-Powered Fix Recommendations', bold: true, desc: 'Prioritized action plans with estimated ROI.', status: 'live' },
+  { text: 'Ad Spend Efficiency Analysis', bold: true, desc: 'Where your dollars convert vs. get wasted.', status: 'live' },
+  { text: 'Auto-Alert Detection', bold: false, desc: 'Instant notifications on performance drops.', status: 'live' },
+  { text: 'Monthly Trend Tracking', bold: false, desc: 'What improved, regressed, or emerged.', status: 'live' },
+  { text: 'Wasted Spend Identification', bold: false, desc: 'Campaigns driving traffic but not converting.', status: 'live' },
+  { text: 'Bot Detection & Traffic Filtering', bold: false, desc: 'Real visitors only — bots filtered out.', status: 'live' },
+  { text: 'Slack + Email Alert Delivery', bold: false, desc: 'Alerts where your team already works.', status: 'live' },
+  { text: 'Win-Back Reports', bold: false, desc: 'Re-engage lost prospects with data.', status: 'live' },
+  // ── Building now (GSC integration + crawl + DataForSEO) ──
+  { text: 'Live SEO Intelligence', bold: true, desc: 'Rankings, keywords, and organic traffic.', status: 'building' },
+  { text: 'Competitor Gap Analysis', bold: true, desc: 'Keywords and traffic your competitors capture.', status: 'building' },
+  { text: 'Keyword Gap & Opportunity Mapping', bold: false, desc: 'Untapped demand ranked by revenue.', status: 'building' },
+  { text: 'Web Crawling Health Scores', bold: false, desc: 'Indexability, crawl errors, and fixes.', status: 'building' },
+  { text: 'Broken Link Detection', bold: false, desc: 'Every dead link costing you visitors.', status: 'building' },
+  // ── Roadmap (needs revenue data / deeper integration) ──
+  { text: 'Revenue at Risk Modeling', bold: true, desc: 'Dollar-impact estimates on every finding.', status: 'roadmap' },
 ];
 
 // -- Stats (sourced, defensible) ------------------------------------------
@@ -438,20 +443,47 @@ function DeliverablesModal({ onClose }: { onClose: () => void }) {
 
         {/* Content */}
         <div className="px-6 py-5">
-          <div className="grid md:grid-cols-2 gap-x-6 gap-y-2">
-            {DELIVERABLES.map((d, i) => (
-              <div key={i} className="flex items-start gap-2 py-0.5">
-                <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-                <div>
-                  <p className={`text-sm leading-tight ${d.bold ? 'font-bold text-[#0c4a6e]' : 'font-semibold text-[#1e293b]'}`}>
-                    {d.text}
-                  </p>
-                  <p className="text-[11px] text-[#64748b] leading-snug">{d.desc}</p>
+          <div className="grid md:grid-cols-2 gap-x-6 gap-y-2.5">
+            {DELIVERABLES.map((d, i) => {
+              const statusIcon = {
+                live: (
+                  <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                ),
+                building: (
+                  <svg className="w-4 h-4 text-[#0284c7] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ),
+                roadmap: (
+                  <svg className="w-4 h-4 text-[#94a3b8] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ),
+              }[d.status];
+              const statusBadge = {
+                live: null,
+                building: <span className="text-[9px] font-bold text-[#0284c7] bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded-full ml-1.5">Building now</span>,
+                roadmap: <span className="text-[9px] font-bold text-[#94a3b8] bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full ml-1.5">Coming soon</span>,
+              }[d.status];
+              return (
+                <div key={i} className={`flex items-start gap-2 py-0.5 ${d.status === 'roadmap' ? 'opacity-60' : ''}`}>
+                  {statusIcon}
+                  <div>
+                    <p className={`text-sm leading-tight ${d.bold ? 'font-bold text-[#0c4a6e]' : 'font-semibold text-[#1e293b]'}`}>
+                      {d.text}{statusBadge}
+                    </p>
+                    <p className="text-[11px] text-[#64748b] leading-snug">{d.desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+          <div className="mt-4 pt-3 border-t border-[#e2e8f0] flex items-center justify-center gap-6 text-[10px] text-[#64748b]">
+            <span className="flex items-center gap-1"><svg className="w-3 h-3 text-[#0d9488]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Live</span>
+            <span className="flex items-center gap-1"><svg className="w-3 h-3 text-[#0284c7]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Building now</span>
+            <span className="flex items-center gap-1"><svg className="w-3 h-3 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> Coming soon</span>
           </div>
         </div>
       </div>
