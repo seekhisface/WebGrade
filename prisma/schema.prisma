@@ -1485,6 +1485,25 @@ model WebOppBudgetModel {
 }
 
 // =============================================================================
+// CONTACT INQUIRIES (Lead Capture)
+// =============================================================================
+
+model ContactInquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  company   String?
+  website   String?
+  message   String?  @db.Text
+  source    String?  // "marketing_page", "pricing", "footer", etc.
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("contact_inquiries")
+}
+
+// =============================================================================
 // REPORT DISTRIBUTION SETTINGS (Admin)
 // Allows org admins to configure who receives reports, how often, and which
 // products. Feeds into AL-03 email/Slack delivery.

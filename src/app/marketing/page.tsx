@@ -831,6 +831,9 @@ export default function MarketingPage() {
             </svg>
           </button>
           <p className="text-xs text-sky-400 mt-4">Setup in minutes · Cancel anytime · Results in weeks</p>
+          <Link href="/contact" className="text-xs text-sky-300 hover:text-white mt-2 inline-block transition-colors">
+            Have questions? Talk to us →
+          </Link>
         </div>
       </section>
 
@@ -841,6 +844,7 @@ export default function MarketingPage() {
           <div className="flex flex-wrap items-center gap-6 text-xs text-sky-400">
             <a href="#products" className="hover:text-white transition-colors">Products</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+            <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
           </div>

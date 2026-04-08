@@ -226,6 +226,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const [seoTab, setSeoTab] = useState<'overview' | 'keywords' | 'cwv' | 'indexing'>('overview');
   const [triggered, setTriggered] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [funnelData, setFunnelData] = useState<{ stages: { name: string; count: number; rate: number }[]; dropOffs: { from: string; to: string; dropped: number; dropRate: number }[]; abandonmentPages: { url: string; abandonments: number }[] } | null>(null);
   const kpiRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback((d: number) => {
@@ -233,9 +234,11 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
     Promise.all([
       fetch(`/api/dashboard?siteId=${params.siteId}&days=${d}`).then(r => r.ok ? r.json() : null),
       fetch(`/api/seo?siteId=${params.siteId}&days=${d}`).then(r => r.ok ? r.json() : null),
-    ]).then(([dash, seo]) => {
+      fetch(`/api/analytics/funnel?siteId=${params.siteId}&days=${d}`).then(r => r.ok ? r.json() : null),
+    ]).then(([dash, seo, funnel]) => {
       if (dash) setDashData(dash);
       if (seo) setSeoData(seo);
+      if (funnel) setFunnelData(funnel);
     }).catch(err => console.error('[dashboard] Failed:', err))
       .finally(() => setLoading(false));
   }, [params.siteId]);
@@ -690,7 +693,72 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
           </div>
         )}
 
-        {/* ── SECTION 5: Revenue at Risk CTA ── */}
+        {/* ── SECTION 5: Funnel Abandonment ── */}
+        {funnelData && funnelData.stages[0].count > 0 && (
+          <div className="bg-[#f0fdfa]/60 rounded-2xl border border-[#99f6e4] p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xs font-bold text-[#64748b] uppercase tracking-wider">Conversion Funnel</h2>
+              <button onClick={() => setShowReport(true)} className="text-[10px] text-[#0891b2] font-semibold hover:underline">View in report →</button>
+            </div>
+
+            {/* Funnel bars */}
+            <div className="space-y-2.5 mb-5">
+              {funnelData.stages.map((stage, i) => {
+                const barColor = i === 0 ? 'bg-[#0c4a6e]' : i === funnelData.stages.length - 1 ? 'bg-[#0d9488]' : 'bg-[#0891b2]';
+                return (
+                  <div key={stage.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-[#1e293b]">{stage.name}</span>
+                      <span className="text-xs text-[#64748b]">{stage.count.toLocaleString()} <span className="text-[#94a3b8]">({stage.rate}%)</span></span>
+                    </div>
+                    <div className="h-2 bg-[#e0f2fe] rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${stage.rate}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Drop-off highlights */}
+            {funnelData.dropOffs.filter(d => d.dropRate > 30).length > 0 && (
+              <div className="bg-[#fffbeb] border border-[#fde68a] rounded-xl px-4 py-3 mb-4">
+                <p className="text-xs font-bold text-[#92400e] mb-2">Biggest drop-offs</p>
+                <div className="space-y-1.5">
+                  {funnelData.dropOffs.filter(d => d.dropRate > 30).map((d, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-[#92400e]">{d.from} → {d.to}</span>
+                      <span className="font-bold text-[#b45309]">{d.dropRate}% lost ({d.dropped.toLocaleString()} visitors)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Top abandonment pages */}
+            {funnelData.abandonmentPages.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-2">Pages with form abandonment</p>
+                <div className="space-y-1">
+                  {funnelData.abandonmentPages.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-[#e0f2fe] last:border-0">
+                      <span className="font-mono text-[#0891b2] truncate">{p.url}</span>
+                      <span className="text-[#b45309] font-semibold flex-shrink-0 ml-3">{p.abandonments} abandoned</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {funnelData.stages.every(s => s.count === 0 || s === funnelData.stages[0]) && (
+              <div className="text-center py-4">
+                <p className="text-xs text-[#64748b]">Form and CTA tracking is active. Data will appear as visitors interact with your site.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SECTION 6: Revenue at Risk CTA ── */}
         {D && D.revenueAtRisk > 0 && (
           <div className="p-5 bg-[#f0fdfa]/60 border border-[#99f6e4] rounded-2xl shadow-sm flex items-center justify-between gap-6 flex-wrap">
             <div>
