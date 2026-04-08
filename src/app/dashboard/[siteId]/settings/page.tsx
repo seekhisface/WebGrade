@@ -50,15 +50,22 @@ export default function SettingsPage() {
   // Auto-load GSC properties after returning from Google OAuth
   useEffect(() => {
     if (searchParams.get('gsc') === 'connected') {
-      setSaveMessage('Google account connected — select a property below');
-      setTimeout(() => setSaveMessage(null), 5000);
-      // Load properties now that Google account is linked
+      setSaveMessage('Google account connected — loading your properties...');
       fetch(`/api/gsc/connect?siteId=${siteId}`)
         .then(r => r.json())
         .then(data => {
-          if (data.properties?.length) setGscProperties(data.properties);
+          if (data.properties?.length) {
+            setGscProperties(data.properties);
+            setSaveMessage(`Found ${data.properties.length} Search Console propert${data.properties.length === 1 ? 'y' : 'ies'} — select one below`);
+          } else {
+            setSaveMessage('No Search Console properties found. Make sure your Google account has access to at least one verified site in Search Console.');
+          }
+          setTimeout(() => setSaveMessage(null), 10000);
         })
-        .catch(() => {});
+        .catch(() => {
+          setSaveMessage('Failed to load properties');
+          setTimeout(() => setSaveMessage(null), 5000);
+        });
     }
   }, [searchParams, siteId]);
 
