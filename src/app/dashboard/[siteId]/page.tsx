@@ -390,7 +390,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.hasRevenueData ? (revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e') : '#b45309'}
             onReportClick={() => setShowReport(true)}
-            bottomCta={!D?.hasRevenueData ? { text: 'Revenue questionnaire?', tooltip: 'Answer a few questions so we can translate to lost revenue for you', href: `/onboarding?siteId=${params.siteId}&step=revenue` } : undefined} />
+            bottomCta={!D?.hasRevenueData ? { text: 'Revenue questionnaire?', tooltip: 'Answer a few questions so we can translate to lost revenue for you', href: `/dashboard/${params.siteId}/revenue` } : undefined} />
           <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.bounceRate != null && D.bounceRate > 65 ? '#dc2626' : D?.bounceRate != null && D.bounceRate > 45 ? '#b45309' : '#0d9488'}
             onReportClick={() => setShowReport(true)} />

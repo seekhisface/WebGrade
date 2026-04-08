@@ -1485,6 +1485,38 @@ model WebOppBudgetModel {
 }
 
 // =============================================================================
+// KEYWORD VOLUME CACHE (DataForSEO cost optimization)
+// =============================================================================
+
+model KeywordVolumeCache {
+  id                  String   @id @default(cuid())
+  keyword             String
+  locationCode        Int      @default(2840)
+  monthlySearchVolume Int
+  competition         Float
+  avgCpc              Float
+  difficulty          Int
+  fetchedAt           DateTime @default(now())
+
+  @@unique([keyword, locationCode])
+  @@index([keyword])
+  @@map("keyword_volume_cache")
+}
+
+model ApiUsageLog {
+  id               String   @id @default(cuid())
+  provider         String   // "dataforseo", "anthropic", "google"
+  endpoint         String
+  siteId           String?
+  keywordsQueried  Int      @default(0)
+  estimatedCost    Float    @default(0)
+  calledAt         DateTime @default(now())
+
+  @@index([provider, calledAt])
+  @@map("api_usage_logs")
+}
+
+// =============================================================================
 // CONTACT INQUIRIES (Lead Capture)
 // =============================================================================
 

@@ -57,8 +57,8 @@ const DELIVERABLES: { text: string; bold: boolean; desc: string; status: Feature
   { text: 'Keyword Gap & Opportunity Mapping', bold: false, desc: 'Untapped demand ranked by revenue.', status: 'live' },
   { text: 'Web Crawling Health Scores', bold: false, desc: 'Indexability, crawl errors, and fixes.', status: 'live' },
   { text: 'Broken Link Detection', bold: false, desc: 'Every dead link costing you visitors.', status: 'live' },
-  // ── Roadmap (needs revenue data / deeper integration) ──
-  { text: 'Revenue at Risk Modeling', bold: true, desc: 'Dollar-impact estimates on every finding.', status: 'roadmap' },
+  // ── Live (revenue questionnaire enables this) ──
+  { text: 'Revenue at Risk Modeling', bold: true, desc: 'Dollar-impact estimates on every finding.', status: 'live' },
 ];
 
 // -- Stats (sourced, defensible) ------------------------------------------

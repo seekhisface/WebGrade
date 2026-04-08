@@ -519,7 +519,101 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* ── Ad Spend ── */}
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6">
+          <h2 className="text-sm font-bold text-white mb-1">Ad Spend by Channel</h2>
+          <p className="text-xs text-slate-400 mb-4">Enter your monthly ad spend per channel so WebGrade can calculate wasted spend and ROI.</p>
+          <AdSpendEditor siteId={siteId} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ── Ad Spend Editor Component ──────────────────────────────────────────
+
+const DEFAULT_CHANNELS = [
+  { source: 'google', medium: 'cpc', label: 'Google Ads' },
+  { source: 'facebook', medium: 'social', label: 'Meta / Facebook Ads' },
+  { source: 'linkedin', medium: 'social', label: 'LinkedIn Ads' },
+  { source: 'bing', medium: 'cpc', label: 'Bing Ads' },
+];
+
+function AdSpendEditor({ siteId }: { siteId: string }) {
+  const [channels, setChannels] = useState<{ source: string; medium: string; label: string; spend: string; clicks: string }[]>(
+    DEFAULT_CHANNELS.map(c => ({ ...c, spend: '', clicks: '' }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/ad-spend?siteId=${siteId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.sources?.length > 0) {
+          setChannels(prev => prev.map(ch => {
+            const match = data.sources.find((s: { source: string; medium: string }) => s.source === ch.source && s.medium === ch.medium);
+            return match ? { ...ch, spend: match.platformSpend ? String(match.platformSpend) : '', clicks: match.platformClicks ? String(match.platformClicks) : '' } : ch;
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [siteId]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    const payload = channels
+      .filter(ch => ch.spend && parseFloat(ch.spend) > 0)
+      .map(ch => ({
+        source: ch.source,
+        medium: ch.medium,
+        platformSpend: parseFloat(ch.spend),
+        platformClicks: ch.clicks ? parseInt(ch.clicks) : undefined,
+      }));
+
+    if (payload.length > 0) {
+      const res = await fetch('/api/ad-spend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, channels: payload }),
+      });
+      if (res.ok) setSaved(true);
+    }
+    setSaving(false);
+  }
+
+  if (loading) return <p className="text-xs text-slate-500">Loading...</p>;
+
+  return (
+    <div className="space-y-3">
+      {channels.map((ch, i) => (
+        <div key={ch.source + ch.medium} className="flex items-center gap-3">
+          <span className="text-xs text-slate-300 w-32 flex-shrink-0">{ch.label}</span>
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">$</span>
+            <input type="number" placeholder="0" value={ch.spend}
+              onChange={e => setChannels(prev => prev.map((c, j) => j === i ? { ...c, spend: e.target.value } : c))}
+              className="w-full pl-7 pr-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+          </div>
+          <div className="relative w-28 flex-shrink-0">
+            <input type="number" placeholder="Clicks" value={ch.clicks}
+              onChange={e => setChannels(prev => prev.map((c, j) => j === i ? { ...c, clicks: e.target.value } : c))}
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-3 pt-2">
+        <button onClick={handleSave} disabled={saving}
+          className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 disabled:opacity-50 transition-colors">
+          {saving ? 'Saving...' : 'Save ad spend'}
+        </button>
+        {saved && <span className="text-xs text-emerald-400">Saved!</span>}
+      </div>
+      <p className="text-xs text-slate-500">Enter monthly spend and optional click counts. WebGrade uses this to calculate cost-per-conversion and identify wasted spend.</p>
     </div>
   );
 }

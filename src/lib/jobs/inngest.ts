@@ -507,6 +507,24 @@ export const runWeeklySeoCrawl = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// RM-01: Daily fix verification — checks pending measurement jobs
+// Runs daily at 7am UTC
+// ---------------------------------------------------------------------------
+export const runDailyVerification = inngest.createFunction(
+  { id: 'run-daily-verification', retries: 2 },
+  { cron: '0 7 * * *' },
+  async ({ step }) => {
+    const { evaluatePendingMeasurements } = await import('@/lib/verification/engine');
+
+    const result = await step.run('evaluate-measurements', async () => {
+      return evaluatePendingMeasurements();
+    });
+
+    return result;
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Export all functions for the Inngest handler
 // ---------------------------------------------------------------------------
 export const inngestFunctions = [
@@ -521,4 +539,5 @@ export const inngestFunctions = [
   archiveMonthlyReport,
   syncGscDaily,
   runWeeklySeoCrawl,
+  runDailyVerification,
 ];

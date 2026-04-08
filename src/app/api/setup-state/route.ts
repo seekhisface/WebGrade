@@ -40,6 +40,21 @@ export async function GET(req: NextRequest) {
     site.onboarding?.conversionGoalUrl
   );
 
+  // Auto-trigger first SEO crawl when snippet is detected as installed
+  if (snippetInstalled) {
+    try {
+      const existingCrawl = await prisma.seoCrawl.findFirst({ where: { siteId } });
+      if (!existingCrawl && site.url) {
+        // Fire and forget — don't block the response
+        import('@/lib/seo/crawler').then(({ crawlSite }) => {
+          crawlSite({ siteId, startUrl: site.url, maxPages: 30 }).catch(err =>
+            console.error(`[auto-crawl] First crawl failed for ${siteId}:`, err)
+          );
+        });
+      }
+    } catch { /* non-fatal */ }
+  }
+
   return NextResponse.json({
     snippetInstalled,
     ga4Connected,

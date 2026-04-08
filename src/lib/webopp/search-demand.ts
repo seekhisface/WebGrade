@@ -82,9 +82,33 @@ export async function getKeywordVolumes(
 ): Promise<KeywordData[]> {
   if (keywords.length === 0) return [];
 
-  // Batch into groups of 100 (DataForSEO limit)
-  const batches = chunk(keywords, 100);
-  const results: KeywordData[] = [];
+  // Check cache first — skip API for keywords we already know
+  const { getCachedKeywordVolumes, cacheKeywordVolumes, logApiUsage, checkDailyRateLimit } = await import('./cache');
+  const { cached, uncached } = await getCachedKeywordVolumes(keywords, locationCode);
+
+  // Return cached results for keywords we already have
+  const cachedResults: KeywordData[] = Array.from(cached.values()).map(c => ({
+    keyword: c.keyword,
+    monthlySearchVolume: c.monthlySearchVolume,
+    competition: c.competition,
+    avgCpc: c.avgCpc,
+    trend: [],
+    difficulty: c.difficulty,
+    intent: classifyIntent(c.keyword),
+  }));
+
+  if (uncached.length === 0) return cachedResults;
+
+  // Rate limit check
+  const withinLimit = await checkDailyRateLimit('dataforseo', 50);
+  if (!withinLimit) {
+    console.warn('[SearchDemand] Daily DataForSEO rate limit reached — returning cached only');
+    return cachedResults;
+  }
+
+  // Batch ONLY uncached keywords into groups of 100 (DataForSEO limit)
+  const batches = chunk(uncached, 100);
+  const freshResults: KeywordData[] = [];
 
   for (const batch of batches) {
     try {
@@ -102,6 +126,9 @@ export async function getKeywordVolumes(
         monthly_searches: Array<{ year: number; month: number; search_volume: number }>;
       }> }[] };
 
+      // Log API usage (~$0.075 per 100 keywords for search_volume/live)
+      await logApiUsage('dataforseo', '/keywords_data/google_ads/search_volume/live', null, batch.length, batch.length * 0.00075);
+
       const taskResult = data?.tasks?.[0]?.result ?? [];
       for (const item of taskResult) {
         if (!item) continue;
@@ -110,7 +137,7 @@ export async function getKeywordVolumes(
           .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
           .map(m => m.search_volume ?? 0);
 
-        results.push({
+        freshResults.push({
           keyword: item.keyword,
           monthlySearchVolume: item.search_volume ?? 0,
           competition: item.competition ?? 0,
@@ -125,7 +152,21 @@ export async function getKeywordVolumes(
     }
   }
 
-  return results;
+  // Cache fresh results for next time
+  if (freshResults.length > 0) {
+    await cacheKeywordVolumes(
+      freshResults.map(r => ({
+        keyword: r.keyword,
+        monthlySearchVolume: r.monthlySearchVolume,
+        competition: r.competition,
+        avgCpc: r.avgCpc,
+        difficulty: r.difficulty,
+      })),
+      locationCode
+    ).catch(err => console.error('[SearchDemand] Cache write failed:', err));
+  }
+
+  return [...cachedResults, ...freshResults];
 }
 
 // ---------------------------------------------------------------------------
