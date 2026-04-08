@@ -44,6 +44,8 @@ const EventSchema = z.object({
   name: z.string().nullish(),         // Form field name
   section: z.string().nullish(),     // Hash section name (section_view events)
   href: z.string().nullish(),        // Link destination (click events)
+  entry: z.string().nullish(),       // Entry page path (first page_view)
+  utm: z.record(z.string()).nullish(), // UTM parameters {utm_source, utm_medium, etc.}
   metadata: z.record(z.unknown()).nullish(),
 });
 
@@ -291,6 +293,27 @@ export async function POST(req: NextRequest) {
 
     if (pageViewEvents.length > 0) {
       sessionUpdates.exitPage = pageViewEvents[pageViewEvents.length - 1].u;
+
+      // Set entry page from first page_view (only if not already set)
+      const firstPv = pageViewEvents[0];
+      if (firstPv.entry) {
+        sessionUpdates.entryPage = firstPv.entry;
+      }
+
+      // Capture UTM parameters from first page_view
+      const utm = firstPv.utm as Record<string, string> | undefined;
+      if (utm) {
+        if (utm.utm_source) sessionUpdates.utmSource = utm.utm_source;
+        if (utm.utm_medium) sessionUpdates.utmMedium = utm.utm_medium;
+        if (utm.utm_campaign) sessionUpdates.utmCampaign = utm.utm_campaign;
+        if (utm.utm_term) sessionUpdates.utmTerm = utm.utm_term;
+        if (utm.utm_content) sessionUpdates.utmContent = utm.utm_content;
+      }
+
+      // Capture referrer
+      if (firstPv.ref && !sessionUpdates.referrer) {
+        sessionUpdates.referrer = firstPv.ref;
+      }
     }
 
     if (converted) {
@@ -369,6 +392,9 @@ function mapEventType(type: string): import('@prisma/client').EventType {
     'conversion': 'CONVERSION',
     'route_change': 'ROUTE_CHANGE',
     'section_view': 'SECTION_VIEW',
+    'exit_intent': 'EXIT_INTENT',
+    'tab_blur': 'TAB_BLUR',
+    'tab_focus': 'TAB_FOCUS',
   };
   return map[type] ?? 'CUSTOM';
 }

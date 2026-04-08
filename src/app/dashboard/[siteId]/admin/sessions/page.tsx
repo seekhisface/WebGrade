@@ -99,6 +99,9 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   CONVERSION: 'bg-green-100 text-green-800 font-semibold',
   ROUTE_CHANGE: 'bg-indigo-100 text-indigo-700',
   SECTION_VIEW: 'bg-violet-100 text-violet-700',
+  EXIT_INTENT: 'bg-orange-100 text-orange-700',
+  TAB_BLUR: 'bg-slate-100 text-slate-500',
+  TAB_FOCUS: 'bg-sky-100 text-sky-700',
   CUSTOM: 'bg-gray-100 text-gray-700',
 };
 
@@ -137,6 +140,9 @@ export default function SessionExplorerPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   function fetchSessions() {
     setLoading(true);
@@ -179,37 +185,58 @@ export default function SessionExplorerPage() {
               {total} session{total !== 1 ? 's' : ''} recorded
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-400">
-              Updated {lastRefreshed.toLocaleTimeString()}
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Date range */}
+            <div className="flex items-center gap-1.5">
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
+                className="px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500" />
+              <span className="text-xs text-slate-400">to</span>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+                className="px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500" />
+            </div>
+
+            {/* Download CSV */}
             <button
-              onClick={() => setRefreshKey(k => k + 1)}
-              disabled={loading}
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+              onClick={async () => {
+                setDownloading(true);
+                const params = new URLSearchParams({ siteId });
+                if (dateStart) params.set('start', dateStart);
+                if (dateEnd) params.set('end', dateEnd);
+                const res = await fetch(`/api/admin/sessions/export?${params}`);
+                if (res.ok) {
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.csv';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }
+                setDownloading(false);
+              }}
+              disabled={downloading}
+              className="px-3 py-1.5 text-sm bg-[#0c4a6e] text-white rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors flex items-center gap-1.5"
             >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              {downloading ? 'Exporting...' : 'Download CSV'}
+            </button>
+
+            <span className="text-xs text-slate-400">Updated {lastRefreshed.toLocaleTimeString()}</span>
+
+            <button onClick={() => setRefreshKey(k => k + 1)} disabled={loading}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors flex items-center gap-1.5">
               <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Refresh
             </button>
-            <label className="flex items-center gap-1.5 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={e => setAutoRefresh(e.target.checked)}
-                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-              />
-              Auto (30s)
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Auto
             </label>
-            <label className="flex items-center gap-1.5 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={showBots}
-                onChange={e => { setShowBots(e.target.checked); setPage(1); }}
-                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-              />
-              Show bots
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" checked={showBots} onChange={e => { setShowBots(e.target.checked); setPage(1); }}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Bots
             </label>
           </div>
         </div>

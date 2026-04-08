@@ -185,10 +185,39 @@
   window.addEventListener('beforeunload', flushAndExit);
 
   // -------------------------------------------------------------------------
-  // Page view — fire immediately
+  // UTM parameter extraction
   // -------------------------------------------------------------------------
+  function extractUtm() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var utm = {};
+      ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(function(key) {
+        var val = params.get(key);
+        if (val) utm[key] = val;
+      });
+      return Object.keys(utm).length > 0 ? utm : null;
+    } catch (e) { return null; }
+  }
+
+  // -------------------------------------------------------------------------
+  // Page view — fire immediately (with UTM + referrer)
+  // -------------------------------------------------------------------------
+  var utmData = extractUtm();
   track('page_view', {
     ref: document.referrer,
+    entry: window.location.pathname,
+    utm: utmData,
+  });
+
+  // -------------------------------------------------------------------------
+  // Tab focus/blur tracking — measures attention
+  // -------------------------------------------------------------------------
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      track('tab_blur', {});
+    } else {
+      track('tab_focus', {});
+    }
   });
 
   // -------------------------------------------------------------------------

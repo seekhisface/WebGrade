@@ -603,6 +603,9 @@ enum EventType {
   CONVERSION
   ROUTE_CHANGE  // SPA navigation
   SECTION_VIEW  // Hash/anchor navigation within same page
+  EXIT_INTENT   // Cursor leaving top of viewport
+  TAB_BLUR      // User switched away from tab
+  TAB_FOCUS     // User returned to tab
   CUSTOM
 }
 
