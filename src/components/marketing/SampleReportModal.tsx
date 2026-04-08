@@ -49,6 +49,10 @@ function ReportShell({ onClose, title, subtitle, color, children }: {
         </div>
 
         <div className="overflow-y-auto px-8 py-6" style={{ maxHeight: 'calc(92vh - 110px)' }}>
+          <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-lg px-4 py-2 mb-5 flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-[#0891b2] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <p className="text-[10px] text-[#64748b]">Sample report with illustrative data from NovaPulse HR (60 days of behavioral + SEO + ad spend analysis). Your report will reflect your actual site data.</p>
+          </div>
           {children}
         </div>
       </div>
@@ -368,10 +372,10 @@ function WebOppReport({ onClose }: { onClose: () => void }) {
       <SectionHeader title="Market Overview" icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       <div className="bg-[#f5f3ff] border border-[#ddd6fe] rounded-xl p-5 mb-6">
         <p className="text-sm text-[#334155] leading-relaxed">
-          WebOpp analyzed <strong>94,200 keywords</strong> across the HR SaaS market. NovaPulse HR currently ranks for
-          <strong> 1,240 keywords</strong> — capturing approximately <strong>$18k/mo in organic traffic value</strong>.
-          Your top 3 competitors collectively rank for <strong>8,400 keywords you don&apos;t</strong>, representing
-          an estimated <strong>$39k/mo in missed opportunity</strong>.
+          WebOpp scanned your competitive landscape using Google Search Console data and keyword intelligence APIs.
+          NovaPulse HR currently ranks for <strong>1,240 keywords</strong> — capturing approximately <strong>$18k/mo in organic traffic value</strong>.
+          Your top 3 competitors collectively rank for keywords you don&apos;t, representing
+          an estimated <strong>$39k/mo in missed opportunity</strong> across <strong>8,400 keyword gaps</strong>.
         </p>
       </div>
 
