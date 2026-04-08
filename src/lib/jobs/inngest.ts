@@ -442,6 +442,71 @@ export const archiveMonthlyReport = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// GSC-01: Daily Google Search Console sync — 6am UTC
+// Syncs keyword rankings and traffic for GSC-connected sites
+// ---------------------------------------------------------------------------
+export const syncGscDaily = inngest.createFunction(
+  { id: 'sync-gsc-daily', retries: 2, concurrency: { limit: 3 } },
+  { cron: '0 6 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-gsc-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true, gscConnected: true, gscPropertyUrl: { not: null } },
+        select: { id: true, gscConnectedByUserId: true },
+      });
+    });
+
+    let synced = 0;
+    for (const site of sites) {
+      await step.run(`gsc-sync-${site.id}`, async () => {
+        // Call the sync endpoint logic directly
+        const { syncGscData } = await import('@/lib/gsc/client');
+        await syncGscData(site.id);
+      }).catch(err => {
+        console.error(`[GSC sync] Failed for site ${site.id}:`, err);
+      });
+      synced++;
+    }
+
+    return { sitesSynced: synced };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// SEO-01: Weekly SEO crawl — every Sunday at 3am UTC
+// Crawls all active sites for SEO health scoring
+// ---------------------------------------------------------------------------
+export const runWeeklySeoCrawl = inngest.createFunction(
+  { id: 'run-weekly-seo-crawl', retries: 1, concurrency: { limit: 2 } },
+  { cron: '0 3 * * 0' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+    const { crawlSite } = await import('@/lib/seo/crawler');
+
+    const sites = await step.run('load-active-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true },
+        select: { id: true, url: true },
+      });
+    });
+
+    let crawled = 0;
+    for (const site of sites) {
+      await step.run(`crawl-${site.id}`, async () => {
+        return crawlSite({ siteId: site.id, startUrl: site.url, maxPages: 50 });
+      }).catch(err => {
+        console.error(`[SEO crawl] Failed for site ${site.id}:`, err);
+      });
+      crawled++;
+    }
+
+    return { sitesCrawled: crawled };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Export all functions for the Inngest handler
 // ---------------------------------------------------------------------------
 export const inngestFunctions = [
@@ -454,4 +519,6 @@ export const inngestFunctions = [
   annualBaselineReset,
   webauditSnapshot,
   archiveMonthlyReport,
+  syncGscDaily,
+  runWeeklySeoCrawl,
 ];

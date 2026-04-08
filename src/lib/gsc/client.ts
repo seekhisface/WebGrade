@@ -174,3 +174,81 @@ export async function fetchDailyTraffic(
     position: row.position ?? 0,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Full sync — called by Inngest job and API route
+// Fetches GSC data and writes to DB for a given site
+// ---------------------------------------------------------------------------
+
+export async function syncGscData(siteId: string): Promise<{ daysImported: number; keywordsImported: number }> {
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { gscConnected: true, gscPropertyUrl: true, gscConnectedByUserId: true, gscLastSyncAt: true },
+  });
+
+  if (!site?.gscConnected || !site.gscPropertyUrl || !site.gscConnectedByUserId) {
+    return { daysImported: 0, keywordsImported: 0 };
+  }
+
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() - 3); // GSC data delay
+  const startDate = site.gscLastSyncAt
+    ? new Date(site.gscLastSyncAt)
+    : new Date(Date.now() - 90 * 86400000);
+
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+  if (startStr >= endStr) return { daysImported: 0, keywordsImported: 0 };
+
+  const [dailyTraffic, keywordRows] = await Promise.all([
+    fetchDailyTraffic(site.gscConnectedByUserId, site.gscPropertyUrl, startStr, endStr),
+    fetchKeywordData(site.gscConnectedByUserId, site.gscPropertyUrl, startStr, endStr),
+  ]);
+
+  // Write traffic snapshots
+  if (dailyTraffic.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      for (const day of dailyTraffic) {
+        await tx.seoTrafficSnapshot.upsert({
+          where: { siteId_date: { siteId, date: new Date(day.date) } },
+          create: { siteId, date: new Date(day.date), clicks: day.clicks, impressions: day.impressions, ctr: day.ctr, avgPosition: day.position, organicSessions: day.clicks, totalSessions: day.clicks, organicPct: 100 },
+          update: { clicks: day.clicks, impressions: day.impressions, ctr: day.ctr, avgPosition: day.position, organicSessions: day.clicks },
+        });
+      }
+    });
+  }
+
+  // Write keyword rankings in chunks
+  const CHUNK = 500;
+  for (let i = 0; i < keywordRows.length; i += CHUNK) {
+    const chunk = keywordRows.slice(i, i + CHUNK);
+    await prisma.$transaction(async (tx) => {
+      for (const kw of chunk) {
+        await tx.seoKeywordRanking.upsert({
+          where: { siteId_keyword_date: { siteId, keyword: kw.keyword, date: new Date(kw.date) } },
+          create: { siteId, date: new Date(kw.date), keyword: kw.keyword, position: kw.position, clicks: kw.clicks, impressions: kw.impressions, ctr: kw.ctr },
+          update: { position: kw.position, clicks: kw.clicks, impressions: kw.impressions, ctr: kw.ctr },
+        });
+      }
+    });
+  }
+
+  // Update keyword buckets on latest traffic snapshot
+  const latestDate = dailyTraffic.length > 0 ? dailyTraffic[dailyTraffic.length - 1].date : endStr;
+  const latestKw = keywordRows.filter(kw => kw.date === latestDate);
+  if (latestDate) {
+    await prisma.seoTrafficSnapshot.update({
+      where: { siteId_date: { siteId, date: new Date(latestDate) } },
+      data: {
+        keywordsTop3: latestKw.filter(kw => kw.position <= 3).length,
+        keywordsTop10: latestKw.filter(kw => kw.position <= 10).length,
+        keywordsTop30: latestKw.filter(kw => kw.position <= 30).length,
+        keywordsTotal: latestKw.length,
+      },
+    }).catch(() => {});
+  }
+
+  await prisma.site.update({ where: { id: siteId }, data: { gscLastSyncAt: new Date() } });
+
+  return { daysImported: dailyTraffic.length, keywordsImported: keywordRows.length };
+}

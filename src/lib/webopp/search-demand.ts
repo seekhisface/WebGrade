@@ -136,8 +136,29 @@ export async function getCompetitorKeywords(
   competitorDomains: string[],
   ourDomain: string,
   locationCode = 2840,
+  siteId?: string,
 ): Promise<CompetitorKeyword[]> {
   const gaps: CompetitorKeyword[] = [];
+
+  // Load our own keyword rankings from GSC data if available
+  let ownRankings = new Map<string, number>();
+  if (siteId) {
+    try {
+      const { prisma } = await import('@/lib/db/client');
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+      const rankings = await prisma.seoKeywordRanking.findMany({
+        where: { siteId, date: { gte: thirtyDaysAgo } },
+        select: { keyword: true, position: true },
+        orderBy: { date: 'desc' },
+      });
+      // Use the most recent position per keyword
+      for (const r of rankings) {
+        if (!ownRankings.has(r.keyword)) {
+          ownRankings.set(r.keyword, r.position);
+        }
+      }
+    } catch { /* GSC data not available */ }
+  }
 
   for (const domain of competitorDomains.slice(0, 3)) {
     try {
@@ -159,14 +180,16 @@ export async function getCompetitorKeywords(
       const items = data?.tasks?.[0]?.result ?? [];
       for (const item of items) {
         if (!item) continue;
+        const compPos = item.ranked_serp_element?.serp_item?.rank_group ?? 99;
+        const ourPos = ownRankings.get(item.keyword) ?? null;
 
         gaps.push({
           keyword: item.keyword,
           competitorDomain: domain,
-          competitorPosition: item.ranked_serp_element?.serp_item?.rank_group ?? 99,
+          competitorPosition: compPos,
           monthlySearchVolume: item.keyword_data?.keyword_info?.search_volume ?? 0,
-          ourPosition: null, // Would require checking our own rankings
-          gap: item.ranked_serp_element?.serp_item?.rank_group ?? 99,
+          ourPosition: ourPos,
+          gap: ourPos != null ? Math.max(0, ourPos - compPos) : compPos,
         });
       }
     } catch (err) {
@@ -186,10 +209,11 @@ export async function aggregateSearchDemand(params: {
   competitorDomains: string[];
   ourDomain: string;
   locationCode?: number;
+  siteId?: string;
 }): Promise<SearchDemandResult> {
   const [keywordData, competitorKeywords] = await Promise.all([
     getKeywordVolumes(params.seedKeywords, params.locationCode),
-    getCompetitorKeywords(params.competitorDomains, params.ourDomain, params.locationCode),
+    getCompetitorKeywords(params.competitorDomains, params.ourDomain, params.locationCode, params.siteId),
   ]);
 
   // Sort by opportunity score (volume × (1 - difficulty) × cpc_signal)

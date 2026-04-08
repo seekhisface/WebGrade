@@ -51,12 +51,12 @@ const DELIVERABLES: { text: string; bold: boolean; desc: string; status: Feature
   { text: 'Bot Detection & Traffic Filtering', bold: false, desc: 'Real visitors only — bots filtered out.', status: 'live' },
   { text: 'Slack + Email Alert Delivery', bold: false, desc: 'Alerts where your team already works.', status: 'live' },
   { text: 'Win-Back Reports', bold: false, desc: 'Re-engage lost prospects with data.', status: 'live' },
-  // ── Building now (GSC integration + crawl + DataForSEO) ──
-  { text: 'Live SEO Intelligence', bold: true, desc: 'Rankings, keywords, and organic traffic.', status: 'building' },
-  { text: 'Competitor Gap Analysis', bold: true, desc: 'Keywords and traffic your competitors capture.', status: 'building' },
-  { text: 'Keyword Gap & Opportunity Mapping', bold: false, desc: 'Untapped demand ranked by revenue.', status: 'building' },
-  { text: 'Web Crawling Health Scores', bold: false, desc: 'Indexability, crawl errors, and fixes.', status: 'building' },
-  { text: 'Broken Link Detection', bold: false, desc: 'Every dead link costing you visitors.', status: 'building' },
+  // ── Live (GSC + crawl + DataForSEO integrations) ──
+  { text: 'Live SEO Intelligence', bold: true, desc: 'Rankings, keywords, and organic traffic.', status: 'live' },
+  { text: 'Competitor Gap Analysis', bold: true, desc: 'Keywords and traffic your competitors capture.', status: 'live' },
+  { text: 'Keyword Gap & Opportunity Mapping', bold: false, desc: 'Untapped demand ranked by revenue.', status: 'live' },
+  { text: 'Web Crawling Health Scores', bold: false, desc: 'Indexability, crawl errors, and fixes.', status: 'live' },
+  { text: 'Broken Link Detection', bold: false, desc: 'Every dead link costing you visitors.', status: 'live' },
   // ── Roadmap (needs revenue data / deeper integration) ──
   { text: 'Revenue at Risk Modeling', bold: true, desc: 'Dollar-impact estimates on every finding.', status: 'roadmap' },
 ];

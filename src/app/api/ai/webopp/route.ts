@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       seedKeywords: seeds,
       competitorDomains: competitors,
       ourDomain: ctx.domain,
+      siteId,
     });
   } catch (err) {
     console.error('[WebOpp] Search demand aggregation failed:', err);
@@ -176,6 +177,28 @@ Base numbers on the business context and search data provided. Respond ONLY with
         currentRankPosition: typeof c.currentPosition === 'number' ? c.currentPosition : null,
       })),
     });
+  }
+
+  // Save budget models
+  const budgetChannels = (budgetObj.channels ?? budgetObj.recommendations) as Record<string, unknown>[] | undefined;
+  if (Array.isArray(budgetChannels) && budgetChannels.length > 0) {
+    for (const ch of budgetChannels) {
+      await prisma.webOppBudgetModel.create({
+        data: {
+          analysisId: analysis.id,
+          channel: String(ch.channel ?? ch.name ?? ''),
+          currentMonthlySpend: typeof ch.currentSpend === 'number' ? ch.currentSpend : null,
+          recommendedMonthlySpend: typeof ch.recommendedSpend === 'number' ? ch.recommendedSpend : null,
+          maxMarketSpend: typeof ch.maxSpend === 'number' ? ch.maxSpend : null,
+          expectedLeads: typeof ch.expectedLeads === 'number' ? Math.round(ch.expectedLeads) : null,
+          expectedWins: typeof ch.expectedWins === 'number' ? Math.round(ch.expectedWins) : null,
+          expectedRevenue: typeof ch.expectedRevenue === 'number' ? ch.expectedRevenue : null,
+          roiTimeline: typeof ch.roiTimeline === 'number' ? Math.round(ch.roiTimeline) : null,
+          breakEvenMonths: typeof ch.breakEvenMonths === 'number' ? Math.round(ch.breakEvenMonths) : null,
+          stairStepPlan: (ch.stairStepPlan as object) ?? undefined,
+        },
+      });
+    }
   }
 
   return NextResponse.json({
