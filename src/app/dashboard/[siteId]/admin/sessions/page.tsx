@@ -240,7 +240,7 @@ export default function SessionExplorerPage() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'summary.csv';
+                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'summary.pdf';
                   a.click();
                   URL.revokeObjectURL(url);
                 }

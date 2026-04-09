@@ -1,12 +1,12 @@
 // src/app/api/admin/sessions/summary/route.ts
 // GET /api/admin/sessions/summary?siteId=xxx&start=YYYY-MM-DD&end=YYYY-MM-DD
-// Returns a KPI summary CSV with top-10 breakdowns for locations,
-// pages visited, entry pages, and exit pages.
+// Returns a formatted PDF summary report with KPI breakdowns.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import PDFDocument from 'pdfkit';
 
 export const runtime = 'nodejs';
 
@@ -14,54 +14,189 @@ export const runtime = 'nodejs';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a top-10 list with "Other" as the 10th bucket */
 function topTenWithOther(
   counts: Map<string, number>,
-  totalSessions: number,
-  labelFn: (key: string) => string = k => k,
-): { label: string; count: number; pct: string }[] {
+  total: number,
+): { rank: number; label: string; count: number; pct: string }[] {
   const sorted = [...counts.entries()]
     .filter(([k]) => k !== '' && k !== null)
     .sort((a, b) => b[1] - a[1]);
 
   const top9 = sorted.slice(0, 9);
   const top9Total = top9.reduce((s, [, c]) => s + c, 0);
-  const otherTotal = totalSessions - top9Total;
+  const otherTotal = total - top9Total;
 
-  const rows = top9.map(([key, count]) => ({
-    label: labelFn(key),
+  const rows = top9.map(([key, count], i) => ({
+    rank: i + 1,
+    label: key,
     count,
-    pct: ((count / totalSessions) * 100).toFixed(1) + '%',
+    pct: ((count / total) * 100).toFixed(1) + '%',
   }));
 
   if (otherTotal > 0) {
     rows.push({
+      rank: rows.length + 1,
       label: 'All Other',
       count: otherTotal,
-      pct: ((otherTotal / totalSessions) * 100).toFixed(1) + '%',
+      pct: ((otherTotal / total) * 100).toFixed(1) + '%',
     });
   }
 
   return rows;
 }
 
-/** Strip hash + query from a URL to get clean page path */
 function cleanPagePath(url: string | null): string {
   if (!url) return '(none)';
   try {
     const u = new URL(url);
     return u.pathname || '/';
   } catch {
-    // Already a path like "/about"
     return url.split('#')[0].split('?')[0] || '/';
   }
 }
 
-function escCsv(val: string | number): string {
-  const str = String(val).replace(/[\r\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-  return str.includes(',') || str.includes('"') || str.includes('\n')
-    ? `"${str.replace(/"/g, '""')}"`
-    : str;
+// ---------------------------------------------------------------------------
+// PDF rendering helpers
+// ---------------------------------------------------------------------------
+
+const COLORS = {
+  navy: '#0c4a6e',
+  darkText: '#1e293b',
+  medText: '#475569',
+  lightText: '#94a3b8',
+  accent: '#0ea5e9',
+  headerBg: '#f1f5f9',
+  rowAlt: '#f8fafc',
+  border: '#e2e8f0',
+  white: '#ffffff',
+};
+
+type TopRow = { rank: number; label: string; count: number; pct: string };
+
+function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, y: number): number {
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(COLORS.navy);
+  doc.text(title, 40, y);
+  doc.moveTo(40, y + 16).lineTo(555, y + 16).strokeColor(COLORS.accent).lineWidth(1.5).stroke();
+  return y + 24;
+}
+
+function drawKpiGrid(
+  doc: PDFKit.PDFDocument,
+  kpis: { label: string; value: string }[],
+  y: number,
+): number {
+  const cols = 3;
+  const cellW = 172;
+  const cellH = 48;
+  const startX = 40;
+
+  for (let i = 0; i < kpis.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = startX + col * cellW;
+    const cy = y + row * cellH;
+
+    // Cell background
+    doc.roundedRect(x, cy, cellW - 8, cellH - 6, 4)
+      .fillColor(COLORS.headerBg).fill();
+
+    // Value
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(COLORS.navy);
+    doc.text(kpis[i].value, x + 10, cy + 6, { width: cellW - 28 });
+
+    // Label
+    doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.medText);
+    doc.text(kpis[i].label, x + 10, cy + 26, { width: cellW - 28 });
+  }
+
+  const totalRows = Math.ceil(kpis.length / cols);
+  return y + totalRows * cellH + 8;
+}
+
+function drawTable(
+  doc: PDFKit.PDFDocument,
+  headers: string[],
+  rows: string[][],
+  colWidths: number[],
+  y: number,
+  rightAlignCols: number[] = [],
+): number {
+  const startX = 40;
+  const rowH = 16;
+
+  // Header row
+  doc.fontSize(7).font('Helvetica-Bold').fillColor(COLORS.medText);
+  let x = startX;
+  for (let c = 0; c < headers.length; c++) {
+    const align = rightAlignCols.includes(c) ? 'right' : 'left';
+    const textX = align === 'right' ? x : x + 4;
+    const textW = align === 'right' ? colWidths[c] - 4 : colWidths[c] - 4;
+    doc.text(headers[c], textX, y + 3, { width: textW, align });
+    x += colWidths[c];
+  }
+  y += rowH;
+  doc.moveTo(startX, y).lineTo(startX + colWidths.reduce((a, b) => a + b, 0), y)
+    .strokeColor(COLORS.border).lineWidth(0.5).stroke();
+
+  // Data rows
+  for (let r = 0; r < rows.length; r++) {
+    // Alternating row background
+    if (r % 2 === 0) {
+      doc.rect(startX, y, colWidths.reduce((a, b) => a + b, 0), rowH)
+        .fillColor(COLORS.rowAlt).fill();
+    }
+
+    doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.darkText);
+    x = startX;
+    for (let c = 0; c < rows[r].length; c++) {
+      const align = rightAlignCols.includes(c) ? 'right' : 'left';
+      const textX = align === 'right' ? x : x + 4;
+      const textW = align === 'right' ? colWidths[c] - 4 : colWidths[c] - 4;
+
+      // Bold the rank column and "All Other" label
+      if (c === 0 || rows[r][1] === 'All Other') {
+        doc.font('Helvetica-Bold');
+      } else {
+        doc.font('Helvetica');
+      }
+
+      doc.fillColor(COLORS.darkText);
+      doc.text(rows[r][c], textX, y + 3, { width: textW, align });
+      x += colWidths[c];
+    }
+    y += rowH;
+  }
+
+  return y + 6;
+}
+
+function drawMiniTable(
+  doc: PDFKit.PDFDocument,
+  title: string,
+  items: { label: string; count: number; pct: string }[],
+  x: number,
+  y: number,
+  width: number,
+): number {
+  // Title
+  doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORS.navy);
+  doc.text(title, x, y, { width });
+  y += 14;
+
+  for (let i = 0; i < items.length; i++) {
+    if (i % 2 === 0) {
+      doc.rect(x, y - 1, width, 13).fillColor(COLORS.rowAlt).fill();
+    }
+    doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.darkText);
+    doc.text(items[i].label, x + 4, y + 1, { width: width - 70 });
+    doc.font('Helvetica-Bold');
+    doc.text(`${items[i].count}`, x + width - 65, y + 1, { width: 35, align: 'right' });
+    doc.font('Helvetica').fillColor(COLORS.medText);
+    doc.text(items[i].pct, x + width - 28, y + 1, { width: 28, align: 'right' });
+    y += 13;
+  }
+
+  return y + 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +250,6 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Fetch page views for page breakdown
     const sessionIds = sessions.map(s => s.id);
     const pageViews = await prisma.pageView.findMany({
       where: { sessionId: { in: sessionIds }, siteId },
@@ -140,21 +274,23 @@ export async function GET(req: NextRequest) {
       ? `${Math.floor(avgDurationSec / 60)}m ${avgDurationSec % 60}s`
       : `${avgDurationSec}s`;
 
+    // Intent breakdown
     const intentCounts = new Map<string, number>();
     for (const s of sessions) {
       const cls = s.intentClass ?? 'UNSCORED';
       intentCounts.set(cls, (intentCounts.get(cls) ?? 0) + 1);
     }
+    const intentSorted = [...intentCounts.entries()].sort((a, b) => b[1] - a[1]);
 
+    // Device breakdown
     const deviceCounts = new Map<string, number>();
     for (const s of sessions) {
       const d = s.deviceType ?? 'unknown';
       deviceCounts.set(d, (deviceCounts.get(d) ?? 0) + 1);
     }
+    const deviceSorted = [...deviceCounts.entries()].sort((a, b) => b[1] - a[1]);
 
-    // -----------------------------------------------------------------
-    // Location breakdown: Region, State (for US) or Country, Region
-    // -----------------------------------------------------------------
+    // Location
     const locationCounts = new Map<string, number>();
     for (const s of sessions) {
       let loc: string;
@@ -169,9 +305,7 @@ export async function GET(req: NextRequest) {
     }
     const locationTop10 = topTenWithOther(locationCounts, totalSessions);
 
-    // -----------------------------------------------------------------
-    // Pages visited breakdown (from PageView records)
-    // -----------------------------------------------------------------
+    // Pages visited
     const pageCounts = new Map<string, number>();
     for (const pv of pageViews) {
       const path = cleanPagePath(pv.url);
@@ -179,9 +313,7 @@ export async function GET(req: NextRequest) {
     }
     const pageTop10 = topTenWithOther(pageCounts, pageViews.length);
 
-    // -----------------------------------------------------------------
-    // Entry pages breakdown
-    // -----------------------------------------------------------------
+    // Entry pages
     const entryCounts = new Map<string, number>();
     for (const s of sessions) {
       const path = cleanPagePath(s.entryPage);
@@ -189,9 +321,7 @@ export async function GET(req: NextRequest) {
     }
     const entryTop10 = topTenWithOther(entryCounts, totalSessions);
 
-    // -----------------------------------------------------------------
-    // Exit pages breakdown
-    // -----------------------------------------------------------------
+    // Exit pages
     const exitCounts = new Map<string, number>();
     for (const s of sessions) {
       const path = cleanPagePath(s.exitPage);
@@ -200,83 +330,129 @@ export async function GET(req: NextRequest) {
     const exitTop10 = topTenWithOther(exitCounts, totalSessions);
 
     // -----------------------------------------------------------------
-    // Build CSV
+    // Build PDF
     // -----------------------------------------------------------------
-    const lines: string[] = [];
+    const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const periodLabel = `${fmtDate(start)} - ${fmtDate(end)}`;
 
-    const periodLabel = `${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`;
-
-    // Header section
-    lines.push(`WebGrade Summary Report — ${site.name} (${site.domain})`);
-    lines.push(`Period: ${periodLabel}`);
-    lines.push('');
-
-    // KPIs
-    lines.push('KEY METRICS');
-    lines.push('Metric,Value');
-    lines.push(`Unique Sessions,${totalSessions}`);
-    lines.push(`Total Pageviews,${totalPageviews}`);
-    lines.push(`Avg Pages/Session,${avgPagesPerSession}`);
-    lines.push(`Avg Session Duration,${escCsv(avgDuration)}`);
-    lines.push(`Conversions,${conversions}`);
-    lines.push(`Conversion Rate,${conversionRate}`);
-    lines.push('');
-
-    // Intent breakdown
-    lines.push('INTENT BREAKDOWN');
-    lines.push('Intent Class,Sessions,%');
-    const intentSorted = [...intentCounts.entries()].sort((a, b) => b[1] - a[1]);
-    for (const [cls, count] of intentSorted) {
-      lines.push(`${cls},${count},${((count / totalSessions) * 100).toFixed(1)}%`);
-    }
-    lines.push('');
-
-    // Device breakdown
-    lines.push('DEVICE BREAKDOWN');
-    lines.push('Device,Sessions,%');
-    const deviceSorted = [...deviceCounts.entries()].sort((a, b) => b[1] - a[1]);
-    for (const [dev, count] of deviceSorted) {
-      lines.push(`${dev},${count},${((count / totalSessions) * 100).toFixed(1)}%`);
-    }
-    lines.push('');
-
-    // Top 10 locations
-    lines.push('TOP 10 VISITOR LOCATIONS');
-    lines.push('Rank,Location,Sessions,%');
-    locationTop10.forEach((row, i) => {
-      lines.push(`${i + 1},${escCsv(row.label)},${row.count},${row.pct}`);
-    });
-    lines.push('');
-
-    // Top 10 pages visited
-    lines.push('TOP 10 PAGES VISITED');
-    lines.push('Rank,Page,Views,%');
-    pageTop10.forEach((row, i) => {
-      lines.push(`${i + 1},${escCsv(row.label)},${row.count},${row.pct}`);
-    });
-    lines.push('');
-
-    // Top 10 entry pages
-    lines.push('TOP 10 ENTRY PAGES (where visitors land first)');
-    lines.push('Rank,Entry Page,Sessions,%');
-    entryTop10.forEach((row, i) => {
-      lines.push(`${i + 1},${escCsv(row.label)},${row.count},${row.pct}`);
-    });
-    lines.push('');
-
-    // Top 10 exit pages
-    lines.push('TOP 10 EXIT PAGES (where visitors leave)');
-    lines.push('Rank,Exit Page,Sessions,%');
-    exitTop10.forEach((row, i) => {
-      lines.push(`${i + 1},${escCsv(row.label)},${row.count},${row.pct}`);
+    const doc = new PDFDocument({
+      size: 'letter',
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      info: {
+        Title: `WebGrade Summary - ${site.name}`,
+        Author: 'WebGrade',
+      },
     });
 
-    const csvContent = lines.join('\n');
-    const filename = `webgrade-summary-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv`;
+    // Collect PDF into buffer
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
 
-    return new NextResponse(csvContent, {
+    const pdfReady = new Promise<Buffer>((resolve) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+
+    // --- Page 1: Header + KPIs + Location + Pages ---
+
+    // Title bar
+    doc.rect(0, 0, 612, 70).fill(COLORS.navy);
+    doc.fontSize(20).font('Helvetica-Bold').fillColor(COLORS.white);
+    doc.text('WebGrade', 40, 16);
+    doc.fontSize(9).font('Helvetica').fillColor('#7dd3fc');
+    doc.text('Website Intelligence for Owners', 40, 40);
+
+    // Site name + period (right-aligned)
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(COLORS.white);
+    doc.text(site.name, 300, 18, { width: 272, align: 'right' });
+    doc.fontSize(8).font('Helvetica').fillColor('#7dd3fc');
+    doc.text(`${site.domain}  |  ${periodLabel}`, 300, 36, { width: 272, align: 'right' });
+
+    let y = 85;
+
+    // Key Metrics
+    y = drawSectionTitle(doc, 'Key Metrics', y);
+    y = drawKpiGrid(doc, [
+      { label: 'Unique Sessions', value: totalSessions.toLocaleString() },
+      { label: 'Total Pageviews', value: totalPageviews.toLocaleString() },
+      { label: 'Avg Pages / Session', value: avgPagesPerSession },
+      { label: 'Avg Session Duration', value: avgDuration },
+      { label: 'Conversions', value: conversions.toLocaleString() },
+      { label: 'Conversion Rate', value: conversionRate },
+    ], y);
+
+    // Intent + Device side by side
+    y = drawSectionTitle(doc, 'Visitor Breakdown', y);
+    const breakdownY = y;
+
+    // Intent (left side)
+    const intentItems = intentSorted.map(([cls, count]) => ({
+      label: cls,
+      count,
+      pct: ((count / totalSessions) * 100).toFixed(1) + '%',
+    }));
+    drawMiniTable(doc, 'By Intent', intentItems, 40, breakdownY, 250);
+
+    // Device (right side)
+    const deviceItems = deviceSorted.map(([dev, count]) => ({
+      label: dev.charAt(0).toUpperCase() + dev.slice(1),
+      count,
+      pct: ((count / totalSessions) * 100).toFixed(1) + '%',
+    }));
+    const rightY = drawMiniTable(doc, 'By Device', deviceItems, 310, breakdownY, 245);
+
+    y = Math.max(rightY, breakdownY + intentItems.length * 13 + 18) + 4;
+
+    // Top 10 Visitor Locations
+    y = drawSectionTitle(doc, 'Top Visitor Locations', y);
+    const locRows = locationTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
+    y = drawTable(doc, ['#', 'Location', 'Sessions', '%'], locRows, [30, 280, 100, 105], y, [2, 3]);
+
+    // Top 10 Pages Visited
+    y = drawSectionTitle(doc, 'Top Pages Visited', y);
+    const pageRows = pageTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
+    y = drawTable(doc, ['#', 'Page', 'Views', '%'], pageRows, [30, 280, 100, 105], y, [2, 3]);
+
+    // --- Page 2: Entry + Exit ---
+    doc.addPage();
+
+    // Slim header bar on page 2
+    doc.rect(0, 0, 612, 36).fill(COLORS.navy);
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.white);
+    doc.text(`${site.name} - Session Summary`, 40, 11);
+    doc.fontSize(7).font('Helvetica').fillColor('#7dd3fc');
+    doc.text(periodLabel, 350, 14, { width: 222, align: 'right' });
+
+    y = 52;
+
+    // Top 10 Entry Pages
+    y = drawSectionTitle(doc, 'Top Entry Pages (where visitors land first)', y);
+    const entryRows = entryTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
+    y = drawTable(doc, ['#', 'Entry Page', 'Sessions', '%'], entryRows, [30, 280, 100, 105], y, [2, 3]);
+
+    y += 8;
+
+    // Top 10 Exit Pages
+    y = drawSectionTitle(doc, 'Top Exit Pages (where visitors leave)', y);
+    const exitRows = exitTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
+    y = drawTable(doc, ['#', 'Exit Page', 'Sessions', '%'], exitRows, [30, 280, 100, 105], y, [2, 3]);
+
+    // Footer
+    y += 20;
+    doc.moveTo(40, y).lineTo(555, y).strokeColor(COLORS.border).lineWidth(0.5).stroke();
+    y += 8;
+    doc.fontSize(7).font('Helvetica').fillColor(COLORS.lightText);
+    doc.text(`Generated by WebGrade on ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 40, y);
+    doc.text('webgrade.io', 400, y, { width: 155, align: 'right', link: 'https://webgrade.io' });
+
+    doc.end();
+
+    const pdfBuffer = await pdfReady;
+
+    const filename = `webgrade-summary-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.pdf`;
+
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
