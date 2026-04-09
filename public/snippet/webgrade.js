@@ -126,6 +126,28 @@
   var pageStartTime = Date.now();
   var currentUrl = window.location.href;
 
+  // -------------------------------------------------------------------------
+  // URL normalization — strip hash fragments so tab/filter clicks
+  // (e.g. /portfolio#active, /team#all) don't inflate page counts.
+  // Hash sections are captured separately via section_view events.
+  // -------------------------------------------------------------------------
+  function stripHash(url) {
+    try { return url.split('#')[0]; } catch (e) { return url; }
+  }
+
+  // -------------------------------------------------------------------------
+  // File download detection — matches common downloadable extensions
+  // -------------------------------------------------------------------------
+  var downloadExtensions = /\.(pdf|docx?|xlsx?|csv|pptx?|zip|rar|gz|tar|dmg|exe|msi)(\?|$)/i;
+
+  function isDownloadLink(el) {
+    if (!el) return false;
+    var href = el.href || '';
+    if (downloadExtensions.test(href)) return true;
+    if (el.hasAttribute && el.hasAttribute('download')) return true;
+    return false;
+  }
+
   function send(events) {
     if (!events || events.length === 0) return;
 
@@ -153,7 +175,7 @@
     var event = Object.assign({}, data, {
       t: type,                            // event type
       ts: Date.now(),                     // timestamp
-      u: window.location.href,            // current URL
+      u: stripHash(window.location.href), // current URL (hash stripped)
       ti: document.title,                 // page title
     });
     queue.push(event);
@@ -175,7 +197,7 @@
     exitEvents.push({
       t: 'page_exit',
       ts: Date.now(),
-      u: currentUrl,
+      u: stripHash(currentUrl),
       ms: Date.now() - pageStartTime,    // time on page
     });
     send(exitEvents);
@@ -311,15 +333,32 @@
 
     var isRage = clickTimestamps.length >= RAGE_CLICK_THRESHOLD;
 
-    track('click', {
-      tag: el.tagName ? el.tagName.toLowerCase() : null,
-      txt: (el.innerText || '').slice(0, 100), // First 100 chars only
-      cls: (typeof el.className === 'string' ? el.className : '').slice(0, 100),
-      cta: isCta(el),
-      rage: isRage,
-      hms: window.__wg_hover_ms || null,       // Hesitation time
-      href: el.href || null,                   // Capture link destination for nav clicks
-    });
+    var tag = el.tagName ? el.tagName.toLowerCase() : null;
+    var txt = (el.innerText || '').slice(0, 100);
+    var cls = (typeof el.className === 'string' ? el.className : '').slice(0, 100);
+    var ctaHit = isCta(el);
+    var href = el.href || null;
+    var hoverMs = window.__wg_hover_ms || null;
+
+    var baseData = {
+      tag: tag, txt: txt, cls: cls, cta: ctaHit,
+      rage: isRage, hms: hoverMs, href: href,
+    };
+
+    // Classify the click into the most specific event type:
+    // 1. File download clicks (highest priority — distinct funnel signal)
+    // 2. CTA clicks (signup, demo, contact, etc.)
+    // 3. Navigation clicks (link to another page)
+    // 4. Generic click (div, img, span, etc.)
+    if (isDownloadLink(el)) {
+      track('file_download', baseData);
+    } else if (ctaHit) {
+      track('cta_click', baseData);
+    } else if (tag === 'a' && href) {
+      track('nav_click', baseData);
+    } else {
+      track('click', baseData);
+    }
 
     window.__wg_hover_ms = null;
   }, true);
@@ -425,7 +464,7 @@
     pageEvents.push({
       t: 'page_exit',
       ts: Date.now(),
-      u: currentUrl,
+      u: stripHash(currentUrl),
       ms: Date.now() - pageStartTime,
     });
     send(pageEvents);
@@ -478,6 +517,18 @@
   });
 
   // -------------------------------------------------------------------------
+  // Copy text detection — user selecting & copying = research intent
+  // -------------------------------------------------------------------------
+  document.addEventListener('copy', function () {
+    var selection = (window.getSelection() || '').toString().slice(0, 200);
+    if (selection.length > 5) { // Ignore accidental tiny selections
+      track('copy_text', {
+        txt: selection,
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // Conversion tracking — call window.wg('conversion') from your thank-you page
   // or pass the conversion URL in the snippet config
   // -------------------------------------------------------------------------
@@ -489,14 +540,30 @@
     }
   };
 
-  // Auto-detect conversion if current URL matches the goal
-  // (Goal URL is validated server-side — snippet just fires the event)
+  // -------------------------------------------------------------------------
+  // Page load complete — captures performance timing data
+  // (Goal URL match is validated server-side)
+  // -------------------------------------------------------------------------
   if (document.readyState === 'complete') {
-    // Already loaded
+    // Already loaded — fire immediately with timing if available
+    var perf = window.performance && window.performance.timing;
+    track('page_load_complete', {
+      metadata: perf ? {
+        domReady: perf.domContentLoadedEventEnd - perf.navigationStart,
+        fullLoad: perf.loadEventEnd - perf.navigationStart,
+        ttfb: perf.responseStart - perf.navigationStart,
+      } : {},
+    });
   } else {
     window.addEventListener('load', function () {
-      // Server-side ingestion will check if this URL is the conversion goal
-      track('page_load_complete', {});
+      var perf = window.performance && window.performance.timing;
+      track('page_load_complete', {
+        metadata: perf ? {
+          domReady: perf.domContentLoadedEventEnd - perf.navigationStart,
+          fullLoad: perf.loadEventEnd - perf.navigationStart,
+          ttfb: perf.responseStart - perf.navigationStart,
+        } : {},
+      });
     });
   }
 

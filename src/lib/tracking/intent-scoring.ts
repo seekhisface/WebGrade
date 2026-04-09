@@ -139,16 +139,20 @@ export function scoreSessionIntent(
   // -------------------------------------------------------------------------
   let microGestureScore = 0;
 
-  const ctaClicks = events.filter(e => e.eventType === 'CLICK' && e.isCtaClick).length;
+  const ctaClicks = events.filter(e => e.eventType === 'CTA_CLICK' || (e.eventType === 'CLICK' && e.isCtaClick)).length;
+  const fileDownloads = events.filter(e => e.eventType === 'FILE_DOWNLOAD').length;
+  const copyEvents = events.filter(e => e.eventType === 'COPY_TEXT').length;
   const hesitations = events.filter(e => e.eventType === 'HESITATION').length;
   const formFocuses = events.filter(e => e.eventType === 'FORM_FOCUS').length;
   const formSubmits = events.filter(e => e.eventType === 'FORM_SUBMIT').length;
   const rageClicks = events.filter(e => e.eventType === 'RAGE_CLICK').length;
 
-  microGestureScore += Math.min(8, ctaClicks * 4);  // Up to 8 pts for CTA clicks
-  microGestureScore += Math.min(4, hesitations * 2); // Up to 4 pts for hesitation
-  microGestureScore += Math.min(4, formFocuses * 2); // Up to 4 pts for form focus
-  microGestureScore += formSubmits > 0 ? 4 : 0;      // 4 pts for any form submit
+  microGestureScore += Math.min(8, ctaClicks * 4);      // Up to 8 pts for CTA clicks
+  microGestureScore += Math.min(4, hesitations * 2);    // Up to 4 pts for hesitation
+  microGestureScore += Math.min(4, formFocuses * 2);    // Up to 4 pts for form focus
+  microGestureScore += formSubmits > 0 ? 4 : 0;         // 4 pts for any form submit
+  microGestureScore += Math.min(4, fileDownloads * 4);   // Up to 4 pts for file downloads (bottom-funnel)
+  microGestureScore += Math.min(3, copyEvents * 2);      // Up to 3 pts for copy text (research intent)
 
   // Rage clicks are negative signal (frustrated, not buying)
   microGestureScore -= Math.min(4, rageClicks * 2);
@@ -201,7 +205,7 @@ function classifyIntent(
     (session.durationMs ?? 0) > 10 * 60 * 1000 &&  // 10+ min
     session.pageCount >= 6 &&
     !session.conversionGoalHit &&
-    events.filter(e => e.isCtaClick).length === 0;
+    events.filter(e => e.eventType === 'CTA_CLICK' || e.isCtaClick).length === 0;
 
   if (isResearcher) return 'RESEARCHER';
 
@@ -227,7 +231,7 @@ function classifyIntent(
     return false;
   });
 
-  const ctaClicks = events.filter(e => e.isCtaClick).length;
+  const ctaClicks = events.filter(e => e.eventType === 'CTA_CLICK' || e.isCtaClick).length;
   const formInteractions = events.filter(e => e.eventType === 'FORM_FOCUS' || e.eventType === 'FORM_SUBMIT').length;
   const hesitations = events.filter(e => e.eventType === 'HESITATION').length;
   const noInteraction = ctaClicks === 0 && formInteractions === 0 && hesitations === 0;

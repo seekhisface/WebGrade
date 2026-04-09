@@ -59,9 +59,15 @@ export async function GET(req: NextRequest) {
       return m > 0 ? `${m}m ${s}s` : `${s}s`;
     }
 
+    /** Strip hash fragments from URLs so tab/filter clicks don't inflate page counts */
+    function stripHash(url: string | null): string {
+      if (!url) return '';
+      return url.split('#')[0];
+    }
+
     function lastSegment(path: string | null): string {
       if (!path) return '';
-      const clean = path.replace(/\/$/, '');
+      const clean = stripHash(path).replace(/\/$/, '');
       const parts = clean.split('/');
       return parts[parts.length - 1] || '/';
     }
@@ -85,7 +91,7 @@ export async function GET(req: NextRequest) {
       // Event detail
       'Step', 'Time in Session', 'Event Type', 'Page', 'Page (last segment)',
       'Scroll Depth %', 'Element Tag', 'Element Text', 'Is CTA Click',
-      'Hesitation (ms)', 'Rage Clicks', 'Time on Page', 'Metadata',
+      'Hesitation (s)', 'Rage Clicks', 'Time on Page', 'Metadata',
     ];
 
     const rows: (string | number)[][] = [];
@@ -106,7 +112,7 @@ export async function GET(req: NextRequest) {
         s.browser ?? '',
         s.os ?? '',
         s.entryPage ?? '',
-        lastSegment(s.exitPage),
+        stripHash(s.exitPage),
         s.pageCount,
         s.events.length,
         s.intentScore ?? '',
@@ -140,7 +146,7 @@ export async function GET(req: NextRequest) {
             i + 1, // Step number (journey order)
             fmtRelative(evTs, s.startedAt),
             ev.eventType,
-            ev.pageUrl,
+            stripHash(ev.pageUrl),
             lastSegment(ev.pageUrl),
             ev.scrollDepthPct ?? '',
             ev.elementTag ?? '',
@@ -159,7 +165,8 @@ export async function GET(req: NextRequest) {
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => {
-        const str = String(cell);
+        // Sanitize: strip carriage returns and control chars that break CSV row boundaries
+        const str = String(cell).replace(/[\r\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
         return str.includes(',') || str.includes('"') || str.includes('\n')
           ? `"${str.replace(/"/g, '""')}"`
           : str;

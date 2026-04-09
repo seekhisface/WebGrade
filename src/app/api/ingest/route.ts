@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
         sessionId: session.id,
         siteId: site.id,
         eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
-        pageUrl: event.u,
+        pageUrl: stripUrlHash(event.u),
         timestamp: new Date(event.ts),
         scrollDepthPct: event.pct,
         elementTag: event.tag,
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
     }>();
 
     for (const event of events) {
-      const url = event.u.split('?')[0]; // strip query params
+      const url = stripUrlHash(event.u).split('?')[0]; // strip hash + query params
       if (!pageUrlMap.has(url)) {
         pageUrlMap.set(url, {
           title: event.ti,
@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
       const pg = pageUrlMap.get(url)!;
 
       if (event.pct && event.pct > pg.scrollDepth) pg.scrollDepth = event.pct;
-      if (event.t === 'click') pg.clicks++;
+      if (event.t === 'click' || event.t === 'cta_click' || event.t === 'nav_click' || event.t === 'file_download') pg.clicks++;
       if (event.t === 'click' && event.rage) pg.rageClicks++;
       if (event.t === 'hesitation') pg.hesitations++;
       if (event.t === 'page_exit') {
@@ -292,7 +292,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (pageViewEvents.length > 0) {
-      sessionUpdates.exitPage = pageViewEvents[pageViewEvents.length - 1].u;
+      sessionUpdates.exitPage = stripUrlHash(pageViewEvents[pageViewEvents.length - 1].u);
 
       // Set entry page from first page_view (only if not already set)
       const firstPv = pageViewEvents[0];
@@ -383,8 +383,11 @@ function mapEventType(type: string): import('@prisma/client').EventType {
   const map: Record<string, import('@prisma/client').EventType> = {
     'page_view': 'PAGE_VIEW',
     'page_exit': 'PAGE_EXIT',
+    'page_load_complete': 'PAGE_LOAD_COMPLETE',
     'scroll': 'SCROLL',
     'click': 'CLICK',
+    'cta_click': 'CTA_CLICK',
+    'nav_click': 'NAV_CLICK',
     'hesitation': 'HESITATION',
     'rage_click': 'RAGE_CLICK',
     'form_focus': 'FORM_FOCUS',
@@ -395,6 +398,13 @@ function mapEventType(type: string): import('@prisma/client').EventType {
     'exit_intent': 'EXIT_INTENT',
     'tab_blur': 'TAB_BLUR',
     'tab_focus': 'TAB_FOCUS',
+    'copy_text': 'COPY_TEXT',
+    'file_download': 'FILE_DOWNLOAD',
   };
   return map[type] ?? 'CUSTOM';
+}
+
+/** Strip hash fragments from URLs for consistent page grouping */
+function stripUrlHash(url: string): string {
+  return url.split('#')[0];
 }

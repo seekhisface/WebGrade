@@ -594,18 +594,23 @@ model SessionEvent {
 enum EventType {
   PAGE_VIEW
   PAGE_EXIT
+  PAGE_LOAD_COMPLETE  // Window load event with timing data
   SCROLL
   CLICK
+  CTA_CLICK           // Click on a CTA element (button, signup, demo, etc.)
+  NAV_CLICK           // Click on a link that navigates to another page
   HESITATION
   RAGE_CLICK
   FORM_FOCUS
   FORM_SUBMIT
   CONVERSION
-  ROUTE_CHANGE  // SPA navigation
-  SECTION_VIEW  // Hash/anchor navigation within same page
-  EXIT_INTENT   // Cursor leaving top of viewport
-  TAB_BLUR      // User switched away from tab
-  TAB_FOCUS     // User returned to tab
+  ROUTE_CHANGE        // SPA navigation
+  SECTION_VIEW        // Hash/anchor navigation within same page
+  EXIT_INTENT         // Cursor leaving top of viewport
+  TAB_BLUR            // User switched away from tab
+  TAB_FOCUS           // User returned to tab
+  COPY_TEXT            // User copied text from the page (high research intent)
+  FILE_DOWNLOAD       // Click on a downloadable file link (.pdf, .doc, etc.)
   CUSTOM
 }
 
