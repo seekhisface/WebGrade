@@ -234,15 +234,24 @@ export default function SessionExplorerPage() {
                 const params = new URLSearchParams({ siteId });
                 if (dateStart) params.set('start', dateStart);
                 if (dateEnd) params.set('end', dateEnd);
-                const res = await fetch(`/api/admin/sessions/summary?${params}`);
-                if (res.ok) {
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'summary.pdf';
-                  a.click();
-                  URL.revokeObjectURL(url);
+                try {
+                  const res = await fetch(`/api/admin/sessions/summary?${params}`);
+                  if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'summary.pdf';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    const err = await res.text();
+                    console.error('Summary export failed:', res.status, err);
+                    alert(`Summary export failed (${res.status}). Check console for details.`);
+                  }
+                } catch (e) {
+                  console.error('Summary export error:', e);
+                  alert('Summary export failed. Check console for details.');
                 }
                 setDownloadingSummary(false);
               }}

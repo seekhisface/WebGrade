@@ -4,6 +4,7 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   experimental: {
     serverActions: { allowedOrigins: ['localhost:3000'] },
+    serverComponentsExternalPackages: ['pdfkit'],
   },
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }],
