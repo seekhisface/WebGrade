@@ -1,6 +1,8 @@
 // src/app/api/admin/sessions/export/route.ts
 // GET /api/admin/sessions/export?siteId=xxx&start=YYYY-MM-DD&end=YYYY-MM-DD
-// Returns CSV download of session data within the specified date range.
+// Returns CSV with one row per event, grouped by session.
+// Sort by Session ID + Step to see the full visitor journey.
+// Filter/pivot on Page to see totals by page.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -22,35 +24,34 @@ export async function GET(req: NextRequest) {
 
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-    // Verify access
     const site = await prisma.site.findFirst({
       where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
       select: { id: true, name: true },
     });
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
-    // Date range
     const start = startStr ? new Date(startStr) : new Date(Date.now() - 30 * 86400000);
     const end = endStr ? new Date(endStr + 'T23:59:59') : new Date();
 
-    // Fetch sessions with events (for event list + metadata)
+    // Fetch sessions with ALL event fields
     const sessions = await prisma.visitorSession.findMany({
-      where: {
-        siteId,
-        startedAt: { gte: start, lte: end },
-      },
+      where: { siteId, startedAt: { gte: start, lte: end } },
       include: {
         events: {
-          select: { eventType: true, pageUrl: true, metadata: true, scrollDepthPct: true, elementTag: true, elementText: true, isCtaClick: true },
+          select: {
+            eventType: true, pageUrl: true, timestamp: true,
+            scrollDepthPct: true, elementTag: true, elementText: true,
+            elementClass: true, isCtaClick: true, hesitationMs: true,
+            rageClickCount: true, timeOnPageMs: true, metadata: true,
+          },
           orderBy: { timestamp: 'asc' },
         },
-        _count: { select: { events: true, pageViews: true } },
       },
       orderBy: { startedAt: 'desc' },
-      take: 10000,
+      take: 5000, // cap sessions (events expand this significantly)
     });
 
-    // Helper: format duration as Xm Ys
+    // Helpers
     function fmtDuration(seconds: number): string {
       if (seconds <= 0) return '0s';
       const m = Math.floor(seconds / 60);
@@ -58,57 +59,46 @@ export async function GET(req: NextRequest) {
       return m > 0 ? `${m}m ${s}s` : `${s}s`;
     }
 
-    // Helper: extract last path segment
     function lastSegment(path: string | null): string {
       if (!path) return '';
-      const clean = path.replace(/\/$/, ''); // strip trailing slash
+      const clean = path.replace(/\/$/, '');
       const parts = clean.split('/');
       return parts[parts.length - 1] || '/';
     }
 
-    // Build CSV
+    function fmtRelative(eventTs: Date, sessionStart: Date): string {
+      const diff = Math.round((eventTs.getTime() - sessionStart.getTime()) / 1000);
+      if (diff <= 0) return '0s';
+      const m = Math.floor(diff / 60);
+      const s = diff % 60;
+      return m > 0 ? `+${m}m ${s}s` : `+${s}s`;
+    }
+
+    // Build CSV — one row per event
     const headers = [
-      'Session ID', 'Started At', 'Ended At', 'Duration',
-      'Country', 'Region', 'Device Type', 'Browser', 'OS',
-      'Entry Page', 'Exit Page (last)', 'Page Count', 'Event Count',
-      'Event Types', 'Intent Score', 'Intent Class', 'Is Bot', 'Bot Reason',
-      'Converted', 'Converted At',
-      'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Term', 'UTM Content',
-      'Referrer', 'Metadata',
+      // Session context (repeated per event for filtering)
+      'Session ID', 'Session Start', 'Session Duration',
+      'Country', 'Region', 'Device', 'Browser', 'OS',
+      'Entry Page', 'Exit Page', 'Total Pages', 'Total Events',
+      'Intent Score', 'Intent Class', 'Converted',
+      'UTM Source', 'UTM Medium', 'UTM Campaign', 'Referrer',
+      // Event detail
+      'Step', 'Time in Session', 'Event Type', 'Page', 'Page (last segment)',
+      'Scroll Depth %', 'Element Tag', 'Element Text', 'Is CTA Click',
+      'Hesitation (ms)', 'Rage Clicks', 'Time on Page', 'Metadata',
     ];
 
-    const rows = sessions.map(s => {
+    const rows: (string | number)[][] = [];
+
+    for (const s of sessions) {
       const durationSec = s.endedAt && s.startedAt
         ? Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000)
         : 0;
 
-      // Build event type summary: "PAGE_VIEW(3) CLICK(5) SCROLL(2)"
-      const eventCounts: Record<string, number> = {};
-      for (const ev of s.events) {
-        eventCounts[ev.eventType] = (eventCounts[ev.eventType] ?? 0) + 1;
-      }
-      const eventSummary = Object.entries(eventCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([type, count]) => `${type}(${count})`)
-        .join(' ');
-
-      // Collect unique metadata across all events (flatten into key=value pairs)
-      const metaParts: string[] = [];
-      for (const ev of s.events) {
-        if (ev.metadata && typeof ev.metadata === 'object') {
-          for (const [k, v] of Object.entries(ev.metadata as Record<string, unknown>)) {
-            if (v != null && v !== '' && k !== 'section') {
-              const str = `${k}=${String(v)}`;
-              if (!metaParts.includes(str)) metaParts.push(str);
-            }
-          }
-        }
-      }
-
-      return [
+      // Session-level fields (same on every row for this session)
+      const sessionFields = [
         s.sessionId,
         s.startedAt.toISOString(),
-        s.endedAt?.toISOString() ?? '',
         fmtDuration(durationSec),
         s.country ?? '',
         s.region ?? '',
@@ -118,24 +108,54 @@ export async function GET(req: NextRequest) {
         s.entryPage ?? '',
         lastSegment(s.exitPage),
         s.pageCount,
-        s._count.events,
-        eventSummary,
+        s.events.length,
         s.intentScore ?? '',
         s.intentClass ?? '',
-        s.isBotFiltered ? 'Yes' : 'No',
-        s.botReason ?? '',
         s.conversionGoalHit ? 'Yes' : 'No',
-        s.convertedAt?.toISOString() ?? '',
         s.utmSource ?? '',
         s.utmMedium ?? '',
         s.utmCampaign ?? '',
-        s.utmTerm ?? '',
-        s.utmContent ?? '',
         s.referrer ?? '',
-        metaParts.join('; '),
       ];
-    });
 
+      if (s.events.length === 0) {
+        // Session with no events — still output one row
+        rows.push([...sessionFields, 1, '0s', '(no events)', '', '', '', '', '', '', '', '', '', '']);
+      } else {
+        for (let i = 0; i < s.events.length; i++) {
+          const ev = s.events[i];
+          const evTs = new Date(ev.timestamp);
+
+          // Flatten metadata
+          let meta = '';
+          if (ev.metadata && typeof ev.metadata === 'object') {
+            const parts = Object.entries(ev.metadata as Record<string, unknown>)
+              .filter(([, v]) => v != null && v !== '')
+              .map(([k, v]) => `${k}=${String(v)}`);
+            meta = parts.join('; ');
+          }
+
+          rows.push([
+            ...sessionFields,
+            i + 1, // Step number (journey order)
+            fmtRelative(evTs, s.startedAt),
+            ev.eventType,
+            ev.pageUrl,
+            lastSegment(ev.pageUrl),
+            ev.scrollDepthPct ?? '',
+            ev.elementTag ?? '',
+            ev.elementText ?? '',
+            ev.isCtaClick ? 'Yes' : '',
+            ev.hesitationMs ?? '',
+            ev.rageClickCount ?? '',
+            ev.timeOnPageMs ? fmtDuration(Math.round(ev.timeOnPageMs / 1000)) : '',
+            meta,
+          ]);
+        }
+      }
+    }
+
+    // Encode CSV
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => {
@@ -146,7 +166,7 @@ export async function GET(req: NextRequest) {
       }).join(',')),
     ].join('\n');
 
-    const filename = `webgrade-sessions-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv`;
+    const filename = `webgrade-events-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv`;
 
     return new NextResponse(csvContent, {
       headers: {
