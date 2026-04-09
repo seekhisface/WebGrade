@@ -247,6 +247,22 @@ export async function GET(req: NextRequest) {
         conversionGoalHit: true,
         durationMs: true,
         pageCount: true,
+        isBounce: true,
+        isReturning: true,
+        trafficSource: true,
+      },
+    });
+
+    // Also fetch bot sessions for the bot breakdown
+    const botSessions = await prisma.visitorSession.findMany({
+      where: {
+        siteId,
+        startedAt: { gte: start, lte: end },
+        isBotFiltered: true,
+      },
+      select: {
+        botReason: true,
+        botCategory: true,
       },
     });
 
@@ -257,6 +273,8 @@ export async function GET(req: NextRequest) {
     });
 
     const totalSessions = sessions.length;
+    const totalBots = botSessions.length;
+    const totalAll = totalSessions + totalBots;
 
     // -----------------------------------------------------------------
     // KPI calculations
@@ -273,6 +291,30 @@ export async function GET(req: NextRequest) {
     const avgDuration = avgDurationSec >= 60
       ? `${Math.floor(avgDurationSec / 60)}m ${avgDurationSec % 60}s`
       : `${avgDurationSec}s`;
+
+    // Bounce rate
+    const bounces = sessions.filter(s => s.isBounce).length;
+    const bounceRate = totalSessions > 0 ? ((bounces / totalSessions) * 100).toFixed(1) + '%' : '0%';
+
+    // New vs returning
+    const returningCount = sessions.filter(s => s.isReturning).length;
+    const newCount = totalSessions - returningCount;
+
+    // Traffic source breakdown
+    const sourceCounts = new Map<string, number>();
+    for (const s of sessions) {
+      const src = s.trafficSource ?? 'direct';
+      sourceCounts.set(src, (sourceCounts.get(src) ?? 0) + 1);
+    }
+    const sourceSorted = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]);
+
+    // Bot category breakdown
+    const botCategoryCounts = new Map<string, number>();
+    for (const b of botSessions) {
+      const cat = b.botCategory ?? b.botReason ?? 'Unknown';
+      botCategoryCounts.set(cat, (botCategoryCounts.get(cat) ?? 0) + 1);
+    }
+    const botCategorySorted = [...botCategoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 
     // Intent breakdown
     const intentCounts = new Map<string, number>();
@@ -372,25 +414,28 @@ export async function GET(req: NextRequest) {
     // Key Metrics
     y = drawSectionTitle(doc, 'Key Metrics', y);
     y = drawKpiGrid(doc, [
-      { label: 'Unique Sessions', value: totalSessions.toLocaleString() },
+      { label: 'Unique Sessions (humans)', value: totalSessions.toLocaleString() },
       { label: 'Total Pageviews', value: totalPageviews.toLocaleString() },
       { label: 'Avg Pages / Session', value: avgPagesPerSession },
       { label: 'Avg Session Duration', value: avgDuration },
-      { label: 'Conversions', value: conversions.toLocaleString() },
+      { label: 'Bounce Rate', value: bounceRate },
       { label: 'Conversion Rate', value: conversionRate },
+      { label: 'New Visitors', value: newCount.toLocaleString() },
+      { label: 'Returning Visitors', value: returningCount.toLocaleString() },
+      { label: 'Bots Filtered', value: `${totalBots.toLocaleString()} of ${totalAll.toLocaleString()} total` },
     ], y);
 
-    // Intent + Device side by side
-    y = drawSectionTitle(doc, 'Visitor Breakdown', y);
+    // Traffic Source + Device side by side
+    y = drawSectionTitle(doc, 'Traffic & Visitor Breakdown', y);
     const breakdownY = y;
 
-    // Intent (left side)
-    const intentItems = intentSorted.map(([cls, count]) => ({
-      label: cls,
+    // Traffic source (left side)
+    const sourceItems = sourceSorted.map(([src, count]) => ({
+      label: src.charAt(0).toUpperCase() + src.slice(1),
       count,
       pct: ((count / totalSessions) * 100).toFixed(1) + '%',
     }));
-    drawMiniTable(doc, 'By Intent', intentItems, 40, breakdownY, 250);
+    const leftY1 = drawMiniTable(doc, 'By Traffic Source', sourceItems, 40, breakdownY, 250);
 
     // Device (right side)
     const deviceItems = deviceSorted.map(([dev, count]) => ({
@@ -398,9 +443,37 @@ export async function GET(req: NextRequest) {
       count,
       pct: ((count / totalSessions) * 100).toFixed(1) + '%',
     }));
-    const rightY = drawMiniTable(doc, 'By Device', deviceItems, 310, breakdownY, 245);
+    const rightY1 = drawMiniTable(doc, 'By Device', deviceItems, 310, breakdownY, 245);
 
-    y = Math.max(rightY, breakdownY + intentItems.length * 13 + 18) + 4;
+    y = Math.max(leftY1, rightY1) + 4;
+
+    // Intent + Bot breakdown side by side
+    y = drawSectionTitle(doc, 'Intent Classification & Bot Filtering', y);
+    const row2Y = y;
+
+    // Intent (left side)
+    const intentItems = intentSorted.map(([cls, count]) => ({
+      label: cls,
+      count,
+      pct: ((count / totalSessions) * 100).toFixed(1) + '%',
+    }));
+    const leftY2 = drawMiniTable(doc, 'By Visitor Intent', intentItems, 40, row2Y, 250);
+
+    // Bot breakdown (right side)
+    const botItems = botCategorySorted.slice(0, 8).map(([cat, count]) => ({
+      label: cat,
+      count,
+      pct: ((count / totalBots) * 100).toFixed(1) + '%',
+    }));
+    const rightY2 = totalBots > 0
+      ? drawMiniTable(doc, `Bots Detected (${totalBots})`, botItems, 310, row2Y, 245)
+      : row2Y;
+    if (totalBots === 0) {
+      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medText);
+      doc.text('No bots detected in this period', 310, row2Y + 14);
+    }
+
+    y = Math.max(leftY2, rightY2) + 4;
 
     // Top 10 Visitor Locations
     y = drawSectionTitle(doc, 'Top Visitor Locations', y);

@@ -18,7 +18,7 @@ import { anonymizeRequest } from '@/lib/tracking/anonymize';
 import { prisma } from '@/lib/db/client';
 import { enqueueEvents } from '@/lib/tracking/posthog';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
-import { detectBotFromUserAgent, classifyDevice } from '@/lib/tracking/bot-filter';
+import { detectBotFromUserAgent, classifyDevice, classifyTrafficSource } from '@/lib/tracking/bot-filter';
 import { scoreSessionIntent } from '@/lib/tracking/intent-scoring';
 
 // ---------------------------------------------------------------------------
@@ -165,6 +165,12 @@ export async function POST(req: NextRequest) {
   // 7. All DB writes in a single transaction (one connection held, not many)
   const dbSessionId = await prisma.$transaction(async (tx) => {
     // Upsert session — uses @@unique([siteId, sessionId])
+    // Check if this visitor (ipHash) has been seen before on this site
+    const priorVisit = await tx.visitorSession.findFirst({
+      where: { siteId: site.id, ipHash, sessionId: { not: sessionId } },
+      select: { id: true },
+    });
+
     const session = await tx.visitorSession.upsert({
       where: { siteId_sessionId: { siteId: site.id, sessionId } },
       create: {
@@ -179,6 +185,8 @@ export async function POST(req: NextRequest) {
         os: deviceInfo.os,
         isBotFiltered: botCheck.isBot,
         botReason: botCheck.reason,
+        botCategory: botCheck.category,
+        isReturning: priorVisit !== null,
       },
       update: {},
       select: { id: true },
@@ -314,6 +322,14 @@ export async function POST(req: NextRequest) {
       if (firstPv.ref && !sessionUpdates.referrer) {
         sessionUpdates.referrer = firstPv.ref;
       }
+
+      // Classify traffic source from UTM + referrer
+      const utmForSource = firstPv.utm as Record<string, string> | undefined;
+      sessionUpdates.trafficSource = classifyTrafficSource(
+        firstPv.ref,
+        utmForSource?.utm_source,
+        utmForSource?.utm_medium,
+      );
     }
 
     if (converted) {
@@ -347,9 +363,15 @@ export async function POST(req: NextRequest) {
         conversionGoalUrl,
       );
 
+      // Bounce = single page view, < 10s duration
+      const durationMs = fullSession.endedAt && fullSession.startedAt
+        ? fullSession.endedAt.getTime() - fullSession.startedAt.getTime()
+        : 0;
+      const isBounce = fullSession.pageCount <= 1 && durationMs < 10000;
+
       await tx.visitorSession.update({
         where: { id: session.id },
-        data: { intentScore: score, intentClass },
+        data: { intentScore: score, intentClass, isBounce, durationMs },
       });
     }
 

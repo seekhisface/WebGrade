@@ -517,16 +517,22 @@ model VisitorSession {
   endedAt    DateTime?
   durationMs Int?
 
+  // Traffic classification
+  trafficSource String? // "organic", "paid", "social", "referral", "direct", "email"
+  isReturning   Boolean @default(false) // Seen this ipHash before on this site
+
   // Classification (P1-06)
   intentScore   Int? // 0–100
   intentClass   IntentClass?
   isBotFiltered Boolean      @default(false) // P1-05
   botReason     String?
+  botCategory   String? // "search_engine", "seo_tool", "automation", "monitoring", "generic"
 
-  // Pages visited
-  pageCount Int     @default(0)
-  entryPage String?
-  exitPage  String?
+  // Session quality
+  isBounce   Boolean @default(false) // Single page, < 10s duration
+  pageCount  Int     @default(0)
+  entryPage  String?
+  exitPage   String?
 
   // Conversion
   convertedAt       DateTime?

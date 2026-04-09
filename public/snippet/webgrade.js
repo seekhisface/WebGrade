@@ -541,30 +541,104 @@
   };
 
   // -------------------------------------------------------------------------
-  // Page load complete — captures performance timing data
-  // (Goal URL match is validated server-side)
+  // Page load complete + Core Web Vitals
+  // Uses PerformanceObserver for LCP, CLS, INP (replaces FID).
+  // Falls back to performance.timing for basic metrics.
   // -------------------------------------------------------------------------
-  if (document.readyState === 'complete') {
-    // Already loaded — fire immediately with timing if available
-    var perf = window.performance && window.performance.timing;
-    track('page_load_complete', {
-      metadata: perf ? {
-        domReady: perf.domContentLoadedEventEnd - perf.navigationStart,
-        fullLoad: perf.loadEventEnd - perf.navigationStart,
-        ttfb: perf.responseStart - perf.navigationStart,
-      } : {},
+  var cwvData = {};
+
+  // LCP — Largest Contentful Paint
+  try {
+    var lcpObserver = new PerformanceObserver(function (list) {
+      var entries = list.getEntries();
+      if (entries.length > 0) {
+        cwvData.lcp = Math.round(entries[entries.length - 1].startTime);
+      }
     });
+    lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
+  } catch (e) { /* PerformanceObserver not supported */ }
+
+  // CLS — Cumulative Layout Shift
+  try {
+    var clsValue = 0;
+    var clsObserver = new PerformanceObserver(function (list) {
+      var entries = list.getEntries();
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].hadRecentInput) {
+          clsValue += entries[i].value;
+        }
+      }
+      cwvData.cls = Math.round(clsValue * 1000) / 1000; // 3 decimal places
+    });
+    clsObserver.observe({ type: 'layout-shift', buffered: true });
+  } catch (e) { /* not supported */ }
+
+  // INP — Interaction to Next Paint (replaces FID)
+  try {
+    var inpObserver = new PerformanceObserver(function (list) {
+      var entries = list.getEntries();
+      for (var i = 0; i < entries.length; i++) {
+        var dur = entries[i].duration;
+        if (!cwvData.inp || dur > cwvData.inp) {
+          cwvData.inp = Math.round(dur);
+        }
+      }
+    });
+    inpObserver.observe({ type: 'event', buffered: true, durationThreshold: 16 });
+  } catch (e) { /* not supported */ }
+
+  function firePageLoadComplete() {
+    var perf = window.performance && window.performance.timing;
+    var navTiming = {};
+    if (perf && perf.navigationStart > 0) {
+      navTiming.ttfb = perf.responseStart - perf.navigationStart;
+      navTiming.domReady = perf.domContentLoadedEventEnd - perf.navigationStart;
+      navTiming.fullLoad = perf.loadEventEnd > 0
+        ? perf.loadEventEnd - perf.navigationStart
+        : Date.now() - perf.navigationStart;
+    }
+
+    track('page_load_complete', {
+      metadata: Object.assign({}, navTiming, cwvData),
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    // Delay slightly to let CWV observers collect data
+    setTimeout(firePageLoadComplete, 200);
   } else {
     window.addEventListener('load', function () {
-      var perf = window.performance && window.performance.timing;
-      track('page_load_complete', {
-        metadata: perf ? {
-          domReady: perf.domContentLoadedEventEnd - perf.navigationStart,
-          fullLoad: perf.loadEventEnd - perf.navigationStart,
-          ttfb: perf.responseStart - perf.navigationStart,
-        } : {},
-      });
+      setTimeout(firePageLoadComplete, 200);
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Mobile exit intent detection
+  // Desktop: cursor leaves viewport top (already tracked above).
+  // Mobile: rapid scroll back to top after reading = likely about to leave.
+  // Also detect back-button intent via touchend near screen edge.
+  // -------------------------------------------------------------------------
+  var lastScrollY = 0;
+  var lastScrollTime = 0;
+  var mobileExitFired = false;
+
+  if (/mobile|android|iphone/i.test(navigator.userAgent)) {
+    window.addEventListener('scroll', function () {
+      var now = Date.now();
+      var scrollY = window.pageYOffset || 0;
+      var elapsed = now - lastScrollTime;
+
+      // Fast upward scroll (>500px in <300ms) from below the fold
+      if (!mobileExitFired && lastScrollY > 400 && scrollY < 100 && elapsed < 300) {
+        mobileExitFired = true;
+        track('exit_intent', { metadata: { trigger: 'mobile_scroll_top' } });
+        // Reset after 10s so it can fire again on a long session
+        setTimeout(function () { mobileExitFired = false; }, 10000);
+      }
+
+      lastScrollY = scrollY;
+      lastScrollTime = now;
+    }, { passive: true });
   }
 
   if (CONFIG.debug) {

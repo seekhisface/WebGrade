@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
       'Country', 'Region', 'Device', 'Browser', 'OS',
       'Entry Page', 'Exit Page', 'Total Pages', 'Total Events',
       'Intent Score', 'Intent Class', 'Converted',
+      'Traffic Source', 'Is Returning', 'Is Bounce',
       'UTM Source', 'UTM Medium', 'UTM Campaign', 'Referrer',
       // Event detail
       'Step', 'Time in Session', 'Event Type', 'Page', 'Page (last segment)',
@@ -118,6 +119,9 @@ export async function GET(req: NextRequest) {
         s.intentScore ?? '',
         s.intentClass ?? '',
         s.conversionGoalHit ? 'Yes' : 'No',
+        s.trafficSource ?? '',
+        s.isReturning ? 'Yes' : 'No',
+        s.isBounce ? 'Yes' : 'No',
         s.utmSource ?? '',
         s.utmMedium ?? '',
         s.utmCampaign ?? '',
