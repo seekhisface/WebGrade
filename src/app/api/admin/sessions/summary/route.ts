@@ -410,6 +410,25 @@ export async function GET(req: NextRequest) {
     doc.text(`${site.domain}  |  ${periodLabel}`, 300, 36, { width: 272, align: 'right' });
 
     let y = 85;
+    const PAGE_BOTTOM = 740; // usable bottom before margin
+
+    /** Add a new page with slim header bar, reset y */
+    function newPage(): number {
+      doc.addPage();
+      doc.rect(0, 0, 612, 36).fill(COLORS.navy);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.white);
+      doc.text(`${site!.name} - Session Summary`, 40, 11);
+      doc.fontSize(7).font('Helvetica').fillColor('#7dd3fc');
+      doc.text(periodLabel, 350, 14, { width: 222, align: 'right' });
+      return 52;
+    }
+
+    /** Check if we need a page break for the next section */
+    function ensureSpace(needed: number): void {
+      if (y + needed > PAGE_BOTTOM) {
+        y = newPage();
+      }
+    }
 
     // Key Metrics
     y = drawSectionTitle(doc, 'Key Metrics', y);
@@ -425,7 +444,8 @@ export async function GET(req: NextRequest) {
       { label: 'Bots Filtered', value: `${totalBots.toLocaleString()} of ${totalAll.toLocaleString()} total` },
     ], y);
 
-    // Traffic Source + Device side by side
+    // Traffic Source + Device + Intent + Bot — all in one compact block
+    ensureSpace(120);
     y = drawSectionTitle(doc, 'Traffic & Visitor Breakdown', y);
     const breakdownY = y;
 
@@ -435,76 +455,54 @@ export async function GET(req: NextRequest) {
       count,
       pct: ((count / totalSessions) * 100).toFixed(1) + '%',
     }));
-    const leftY1 = drawMiniTable(doc, 'By Traffic Source', sourceItems, 40, breakdownY, 250);
+    const leftY1 = drawMiniTable(doc, 'By Traffic Source', sourceItems, 40, breakdownY, 165);
 
-    // Device (right side)
+    // Device (middle)
     const deviceItems = deviceSorted.map(([dev, count]) => ({
       label: dev.charAt(0).toUpperCase() + dev.slice(1),
       count,
       pct: ((count / totalSessions) * 100).toFixed(1) + '%',
     }));
-    const rightY1 = drawMiniTable(doc, 'By Device', deviceItems, 310, breakdownY, 245);
+    const midY1 = drawMiniTable(doc, 'By Device', deviceItems, 215, breakdownY, 165);
 
-    y = Math.max(leftY1, rightY1) + 4;
-
-    // Intent + Bot breakdown side by side
-    y = drawSectionTitle(doc, 'Intent Classification & Bot Filtering', y);
-    const row2Y = y;
-
-    // Intent (left side)
+    // Intent (right side)
     const intentItems = intentSorted.map(([cls, count]) => ({
       label: cls,
       count,
       pct: ((count / totalSessions) * 100).toFixed(1) + '%',
     }));
-    const leftY2 = drawMiniTable(doc, 'By Visitor Intent', intentItems, 40, row2Y, 250);
+    const rightY1 = drawMiniTable(doc, 'By Intent', intentItems, 390, breakdownY, 165);
 
-    // Bot breakdown (right side)
-    const botItems = botCategorySorted.slice(0, 8).map(([cat, count]) => ({
-      label: cat,
-      count,
-      pct: ((count / totalBots) * 100).toFixed(1) + '%',
-    }));
-    const rightY2 = totalBots > 0
-      ? drawMiniTable(doc, `Bots Detected (${totalBots})`, botItems, 310, row2Y, 245)
-      : row2Y;
-    if (totalBots === 0) {
-      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medText);
-      doc.text('No bots detected in this period', 310, row2Y + 14);
+    y = Math.max(leftY1, midY1, rightY1) + 4;
+
+    // Bot summary line (compact, not a full section)
+    if (totalBots > 0) {
+      doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.medText);
+      const botSummary = botCategorySorted.slice(0, 5).map(([cat, count]) => `${cat}: ${count}`).join(' | ');
+      doc.text(`Bots filtered: ${totalBots} total — ${botSummary}`, 40, y);
+      y += 14;
     }
 
-    y = Math.max(leftY2, rightY2) + 4;
-
     // Top 10 Visitor Locations
+    ensureSpace(200);
     y = drawSectionTitle(doc, 'Top Visitor Locations', y);
     const locRows = locationTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
     y = drawTable(doc, ['#', 'Location', 'Sessions', '%'], locRows, [30, 280, 100, 105], y, [2, 3]);
 
     // Top 10 Pages Visited
+    ensureSpace(200);
     y = drawSectionTitle(doc, 'Top Pages Visited', y);
     const pageRows = pageTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
     y = drawTable(doc, ['#', 'Page', 'Views', '%'], pageRows, [30, 280, 100, 105], y, [2, 3]);
 
-    // --- Page 2: Entry + Exit ---
-    doc.addPage();
-
-    // Slim header bar on page 2
-    doc.rect(0, 0, 612, 36).fill(COLORS.navy);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.white);
-    doc.text(`${site.name} - Session Summary`, 40, 11);
-    doc.fontSize(7).font('Helvetica').fillColor('#7dd3fc');
-    doc.text(periodLabel, 350, 14, { width: 222, align: 'right' });
-
-    y = 52;
-
     // Top 10 Entry Pages
+    ensureSpace(200);
     y = drawSectionTitle(doc, 'Top Entry Pages (where visitors land first)', y);
     const entryRows = entryTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
     y = drawTable(doc, ['#', 'Entry Page', 'Sessions', '%'], entryRows, [30, 280, 100, 105], y, [2, 3]);
 
-    y += 8;
-
     // Top 10 Exit Pages
+    ensureSpace(200);
     y = drawSectionTitle(doc, 'Top Exit Pages (where visitors leave)', y);
     const exitRows = exitTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
     y = drawTable(doc, ['#', 'Exit Page', 'Sessions', '%'], exitRows, [30, 280, 100, 105], y, [2, 3]);
