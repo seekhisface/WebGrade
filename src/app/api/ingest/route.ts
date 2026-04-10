@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
         sessionUpdates.entryPage = firstPv.entry;
       }
 
-      // Capture UTM parameters from first page_view
+      // Capture UTM parameters + ad click IDs from first page_view
       const utm = firstPv.utm as Record<string, string> | undefined;
       if (utm) {
         if (utm.utm_source) sessionUpdates.utmSource = utm.utm_source;
@@ -316,6 +316,8 @@ export async function POST(req: NextRequest) {
         if (utm.utm_campaign) sessionUpdates.utmCampaign = utm.utm_campaign;
         if (utm.utm_term) sessionUpdates.utmTerm = utm.utm_term;
         if (utm.utm_content) sessionUpdates.utmContent = utm.utm_content;
+        if (utm._click_id) sessionUpdates.clickIdType = utm._click_id;
+        if (utm._click_id_value) sessionUpdates.clickId = utm._click_id_value;
       }
 
       // Capture referrer

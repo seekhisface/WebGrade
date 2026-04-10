@@ -207,26 +207,76 @@
   window.addEventListener('beforeunload', flushAndExit);
 
   // -------------------------------------------------------------------------
-  // UTM parameter extraction
+  // UTM + ad click ID extraction
+  // Captures standard UTMs plus platform-specific click IDs (gclid, fbclid, etc.)
   // -------------------------------------------------------------------------
   function extractUtm() {
     try {
       var params = new URLSearchParams(window.location.search);
       var utm = {};
+
+      // Standard UTM params
       ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(function(key) {
         var val = params.get(key);
         if (val) utm[key] = val;
       });
+
+      // Ad platform click IDs — infer source/medium when UTMs are missing
+      var clickIds = {
+        gclid:   { source: 'google',   medium: 'cpc' },  // Google Ads
+        gbraid:  { source: 'google',   medium: 'cpc' },  // Google Ads (iOS)
+        wbraid:  { source: 'google',   medium: 'cpc' },  // Google Ads (web-to-app)
+        fbclid:  { source: 'facebook', medium: 'cpc' },  // Meta Ads
+        msclkid: { source: 'bing',     medium: 'cpc' },  // Microsoft Ads
+        li_fat_id: { source: 'linkedin', medium: 'cpc' }, // LinkedIn Ads
+        ttclid:  { source: 'tiktok',   medium: 'cpc' },  // TikTok Ads
+        twclid:  { source: 'twitter',  medium: 'cpc' },  // Twitter/X Ads
+        rdt_cid: { source: 'reddit',   medium: 'cpc' },  // Reddit Ads
+      };
+
+      for (var cid in clickIds) {
+        var cidVal = params.get(cid);
+        if (cidVal) {
+          utm['_click_id'] = cid;
+          utm['_click_id_value'] = cidVal;
+          // Only set source/medium if not already provided by UTM
+          if (!utm.utm_source) utm.utm_source = clickIds[cid].source;
+          if (!utm.utm_medium) utm.utm_medium = clickIds[cid].medium;
+          break; // Only capture the first match
+        }
+      }
+
       return Object.keys(utm).length > 0 ? utm : null;
     } catch (e) { return null; }
   }
 
   // -------------------------------------------------------------------------
-  // Page view — fire immediately (with UTM + referrer)
+  // Referrer filtering — ignore self-referrals
+  // -------------------------------------------------------------------------
+  function getExternalReferrer() {
+    var ref = document.referrer;
+    if (!ref) return null;
+    try {
+      var refHost = new URL(ref).hostname;
+      var curHost = window.location.hostname;
+      // Strip www for comparison
+      refHost = refHost.replace(/^www\./, '');
+      curHost = curHost.replace(/^www\./, '');
+      // Self-referral = same domain = not a real external source
+      if (refHost === curHost) return null;
+      return ref;
+    } catch (e) {
+      return ref;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Page view — fire immediately (with UTM + referrer + landing page)
   // -------------------------------------------------------------------------
   var utmData = extractUtm();
+  var externalRef = getExternalReferrer();
   track('page_view', {
-    ref: document.referrer,
+    ref: externalRef,
     entry: window.location.pathname,
     utm: utmData,
   });

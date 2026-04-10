@@ -511,6 +511,8 @@ model VisitorSession {
   utmTerm     String?
   utmContent  String?
   referrer    String?
+  clickId     String? // gclid, fbclid, msclkid, etc. — identifies paid click source
+  clickIdType String? // "gclid", "fbclid", "msclkid", etc.
 
   // Timing
   startedAt  DateTime  @default(now())
