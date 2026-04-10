@@ -441,3 +441,161 @@ export async function crawlSite(options: CrawlOptions): Promise<{ crawlId: strin
 
   return { crawlId: crawl.id, pagesFound: results.length, issues: totalIssues };
 }
+
+// ── CTA auto-detection ─────────────────────────────────────────────────
+// Crawls a site's key pages and identifies forms, buttons, and links that
+// look like conversion actions. Returns suggested conversion goals.
+
+export interface DetectedCta {
+  pageUrl: string;
+  pageTitle: string;
+  type: 'form' | 'button' | 'link';
+  text: string;
+  destination: string | null; // form action or link href
+  confidence: 'high' | 'medium' | 'low';
+  suggestedGoalName: string;
+}
+
+const CTA_KEYWORDS = [
+  'contact', 'get in touch', 'reach out', 'request', 'schedule', 'book',
+  'demo', 'free trial', 'sign up', 'signup', 'register', 'subscribe',
+  'get started', 'start free', 'try', 'buy', 'purchase', 'checkout',
+  'download', 'apply', 'submit', 'quote', 'consultation', 'call',
+  'learn more', 'enquire', 'inquiry', 'join', 'reserve',
+];
+
+const FORM_ACTION_KEYWORDS = [
+  'contact', 'form', 'submit', 'inquiry', 'lead', 'request', 'newsletter',
+  'subscribe', 'signup', 'register', 'apply', 'book', 'schedule',
+];
+
+export async function detectCtas(siteUrl: string, maxPages = 10): Promise<DetectedCta[]> {
+  const ctas: DetectedCta[] = [];
+  const visited = new Set<string>();
+  const toVisit = [siteUrl];
+  const base = new URL(siteUrl);
+
+  while (toVisit.length > 0 && visited.size < maxPages) {
+    const url = toVisit.shift()!;
+    if (visited.has(url)) continue;
+    visited.add(url);
+
+    let html: string;
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'WebGrade-Crawler/1.0 (+https://webgrade.io/bot)' },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      html = await res.text();
+    } catch { continue; }
+
+    const title = extractTag(html, 'title') ?? url;
+
+    // Detect forms
+    const formRegex = /<form\s[^>]*>([\s\S]*?)<\/form>/gi;
+    let formMatch;
+    while ((formMatch = formRegex.exec(html)) !== null) {
+      const formHtml = formMatch[0];
+      const formContent = formMatch[1];
+      const actionMatch = formHtml.match(/action=["']([^"']*)["']/i);
+      const action = actionMatch ? actionMatch[1] : null;
+      const hasInputs = /<input\s/i.test(formContent);
+      const submitBtn = formContent.match(/<(?:button|input)[^>]*(?:type=["']submit["'])[^>]*>/i);
+      const submitText = submitBtn
+        ? (submitBtn[0].match(/value=["']([^"']*)["']/i)?.[1] || submitBtn[0].replace(/<[^>]+>/g, '').trim() || 'Submit')
+        : 'Submit';
+
+      if (hasInputs) {
+        const isContact = CTA_KEYWORDS.some(kw => formContent.toLowerCase().includes(kw))
+          || (action && FORM_ACTION_KEYWORDS.some(kw => action.toLowerCase().includes(kw)));
+
+        ctas.push({
+          pageUrl: url,
+          pageTitle: title,
+          type: 'form',
+          text: submitText.slice(0, 100),
+          destination: action,
+          confidence: isContact ? 'high' : 'medium',
+          suggestedGoalName: isContact ? `Form: ${submitText}` : `Form submission on ${new URL(url).pathname}`,
+        });
+      }
+    }
+
+    // Detect CTA buttons and links
+    const btnLinkRegex = /<(?:a|button)\s[^>]*>([\s\S]*?)<\/(?:a|button)>/gi;
+    let btnMatch;
+    while ((btnMatch = btnLinkRegex.exec(html)) !== null) {
+      const tag = btnMatch[0];
+      const innerText = btnMatch[1].replace(/<[^>]+>/g, '').trim().slice(0, 100);
+      if (!innerText || innerText.length < 2) continue;
+
+      const textLower = innerText.toLowerCase();
+      const isCtaText = CTA_KEYWORDS.some(kw => textLower.includes(kw));
+      const hasCtaClass = /class=["'][^"']*(cta|btn|button|action|primary)[^"']*["']/i.test(tag);
+      const href = tag.match(/href=["']([^"']*)["']/i)?.[1] ?? null;
+
+      if (isCtaText || hasCtaClass) {
+        const isLink = tag.startsWith('<a');
+
+        // Resolve href for links
+        let destination: string | null = null;
+        if (href && isLink) {
+          try {
+            destination = new URL(href, url).href;
+          } catch { destination = href; }
+        }
+
+        ctas.push({
+          pageUrl: url,
+          pageTitle: title,
+          type: isLink ? 'link' : 'button',
+          text: innerText,
+          destination,
+          confidence: isCtaText ? 'high' : 'low',
+          suggestedGoalName: isCtaText ? `CTA: ${innerText}` : `Button: ${innerText}`,
+        });
+
+        // If this links to a contact/demo page, queue it for crawling
+        if (destination && isLink) {
+          try {
+            const destUrl = new URL(destination);
+            if (destUrl.hostname === base.hostname && !visited.has(destUrl.href)) {
+              toVisit.unshift(destUrl.href); // prioritize CTA destinations
+            }
+          } catch { /* invalid */ }
+        }
+      }
+    }
+
+    // Find internal links to crawl next (prioritize common high-value pages)
+    const { internal } = extractLinks(html, url);
+    const priorityPaths = ['contact', 'demo', 'pricing', 'about', 'team', 'get-started', 'signup', 'apply'];
+    const sorted = internal.sort((a, b) => {
+      const aPri = priorityPaths.some(p => a.toLowerCase().includes(p)) ? 0 : 1;
+      const bPri = priorityPaths.some(p => b.toLowerCase().includes(p)) ? 0 : 1;
+      return aPri - bPri;
+    });
+    for (const path of sorted) {
+      try {
+        const full = new URL(path, url).href;
+        if (!visited.has(full)) toVisit.push(full);
+      } catch { /* invalid */ }
+    }
+  }
+
+  // Deduplicate and sort by confidence
+  const seen = new Set<string>();
+  return ctas
+    .filter(c => {
+      const key = `${c.type}:${c.text}:${c.pageUrl}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2 };
+      return order[a.confidence] - order[b.confidence];
+    });
+}

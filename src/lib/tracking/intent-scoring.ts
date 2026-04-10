@@ -76,7 +76,11 @@ export function scoreSessionIntent(
   // Factor 2: Engagement depth (0–25 points)
   // Time on site + page depth
   // -------------------------------------------------------------------------
-  const sessionDurationMs = session.durationMs ?? 0;
+  // Use durationMs if available, otherwise compute from timestamps
+  const sessionDurationMs = session.durationMs
+    ?? (session.endedAt && session.startedAt
+      ? new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()
+      : 0);
   const pageCount = session.pageCount;
 
   let engagementScore = 0;
@@ -105,9 +109,20 @@ export function scoreSessionIntent(
   // Visited more than just the homepage
   if (pageCount >= 2) pageSequenceScore += 5;
 
-  // Visited a pricing, features, or product page (common buying signals)
-  // Check both page URLs and section_view events for single-page sites
-  const buyingSignalPages = ['pricing', 'plans', 'features', 'product', 'buy', 'checkout'];
+  // Visited a high-intent page (buying signals vary by business type)
+  // Ecommerce: pricing, checkout, cart
+  // B2B/services: contact, demo, team, about, case studies
+  // VC/investing: portfolio, team, contact
+  const buyingSignalPages = [
+    // Ecommerce / SaaS
+    'pricing', 'plans', 'features', 'product', 'buy', 'checkout', 'cart', 'trial', 'signup', 'register',
+    // B2B / services / consulting
+    'contact', 'demo', 'request', 'schedule', 'book', 'quote', 'consultation', 'get-started',
+    // Research / evaluation
+    'case-stud', 'testimonial', 'review', 'comparison', 'vs', 'roi', 'results',
+    // VC / investing / partnerships
+    'portfolio', 'team', 'about', 'thesis', 'approach', 'criteria',
+  ];
   const sectionViews = events
     .filter(e => e.eventType === 'SECTION_VIEW' && e.metadata)
     .map(e => {
@@ -129,6 +144,12 @@ export function scoreSessionIntent(
   // Visited the conversion goal page
   if (conversionGoalUrl && pageViews.some(pv => pv.url.includes(conversionGoalUrl))) {
     pageSequenceScore += 5;
+  }
+
+  // Deep exploration bonus — 3+ pages AND 2+ min = clearly evaluating, even without
+  // hitting a named buying-signal page. Important for sites without pricing/checkout pages.
+  if (pageCount >= 3 && sessionDurationMs >= 2 * 60 * 1000 && !visitedBuyingPage) {
+    pageSequenceScore += 7;
   }
 
   pageSequenceScore = Math.min(20, pageSequenceScore);

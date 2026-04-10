@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import SubscriptionBanner from '@/components/dashboard/SubscriptionBanner';
 import ReportModal from '@/components/dashboard/ReportModal';
+import SetupBanner from '@/components/dashboard/SetupBanner';
 import { useSetupState } from '@/hooks/useSetupState';
 
 // =============================================================================
@@ -286,6 +287,11 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
 
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
+
+      {/* ── SETUP BANNER: Sticky reminder for missing vital configuration ── */}
+      {!setup.setupComplete && !setup.isDemo && (
+        <SetupBanner missingItems={setup.missingItems} percentComplete={setup.percentComplete} />
+      )}
 
       {/* ── SUB-HEADER: Title + Date Picker + Report Archive ── */}
       <div className="bg-white border-b border-[#e0f2fe] px-6 py-3">

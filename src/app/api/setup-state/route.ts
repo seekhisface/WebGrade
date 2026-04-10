@@ -55,10 +55,44 @@ export async function GET(req: NextRequest) {
     } catch { /* non-fatal */ }
   }
 
+  const ob = site.onboarding;
+  const hasConversionGoal = !!(ob?.conversionGoalUrl || ob?.conversionGoalName);
+  const hasRevenueData = !!(ob?.averageOrderValue && ob?.conversionRate);
+  const hasAdSpend = !!(ob?.monthlyAdSpend && ob.monthlyAdSpend > 0);
+  const hasBusinessContext = !!(ob?.businessDescription && ob?.targetAudience);
+
+  // Build list of missing vital items for the banner
+  const missingItems: { key: string; label: string; description: string; link: string }[] = [];
+
+  if (!snippetInstalled) {
+    missingItems.push({ key: 'snippet', label: 'Install Tracking Snippet', description: 'No behavioral data without the snippet on your site', link: `/dashboard/${siteId}/settings` });
+  }
+  if (!hasConversionGoal) {
+    missingItems.push({ key: 'conversion', label: 'Set Conversion Goal', description: 'Define what counts as a conversion so we can track it', link: `/onboarding?siteId=${siteId}&step=1` });
+  }
+  if (!hasRevenueData) {
+    missingItems.push({ key: 'revenue', label: 'Complete Revenue Questionnaire', description: 'Needed to calculate Revenue at Risk and dollar impact', link: `/dashboard/${siteId}/revenue` });
+  }
+  if (!gscConnected) {
+    missingItems.push({ key: 'gsc', label: 'Connect Google Search Console', description: 'Unlocks keyword rankings, organic traffic, and SEO intelligence', link: `/onboarding?siteId=${siteId}&step=4` });
+  }
+  if (!hasBusinessContext) {
+    missingItems.push({ key: 'context', label: 'Add Business Context', description: 'Helps AI generate relevant, specific recommendations', link: `/onboarding?siteId=${siteId}&step=2` });
+  }
+  if (!hasAdSpend) {
+    missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/revenue` });
+  }
+
   return NextResponse.json({
     snippetInstalled,
     ga4Connected,
     gscConnected,
     businessContextComplete,
+    hasConversionGoal,
+    hasRevenueData,
+    hasAdSpend,
+    hasBusinessContext,
+    missingItems,
+    setupComplete: missingItems.length === 0,
   });
 }
