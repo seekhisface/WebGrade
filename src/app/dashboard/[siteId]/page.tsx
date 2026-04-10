@@ -20,6 +20,7 @@ interface DashboardData {
   revenueAtRisk: number;
   hasRevenueData?: boolean;
   intentDistribution: Record<string, number>;
+  intentCounts?: Record<string, number>;
   dropOffPages: DropOffPage[];
   topPageSessions: { url: string; sessions: number } | null;
   bounceRate?: number;
@@ -202,10 +203,13 @@ function CwvPill({ value, good, ok, unit, label }: { value: number; good: number
   );
 }
 
-const INTENT_CONFIG: Record<string, { label: string; color: string }> = {
-  HIGH: { label: 'High Intent', color: '#0d9488' }, MEDIUM: { label: 'Medium', color: '#b45309' },
-  LOW: { label: 'Low Intent', color: '#b91c1c' }, RESEARCHER: { label: 'Researcher', color: '#7c3aed' },
-  COMPETITOR: { label: 'Competitor', color: '#64748b' }, BOT: { label: 'Bot/Filtered', color: '#cbd5e1' },
+const INTENT_CONFIG: Record<string, { label: string; color: string; criteria: string }> = {
+  HIGH:       { label: 'High Intent',   color: '#0d9488', criteria: 'Score 70+: Deep scrolling, multiple pages, CTA clicks, form interactions, 2+ minutes on site' },
+  MEDIUM:     { label: 'Medium',        color: '#b45309', criteria: 'Score 40-69: Engaged browsing with some interaction signals but no strong conversion behavior' },
+  LOW:        { label: 'Low Intent',    color: '#b91c1c', criteria: 'Score 0-39: Quick visits, limited scrolling, single page views, minimal engagement' },
+  RESEARCHER: { label: 'Researcher',    color: '#7c3aed', criteria: '10+ minutes, 6+ pages viewed, no CTA clicks or conversions — exploring in depth but not buying' },
+  COMPETITOR: { label: 'Competitor',    color: '#64748b', criteria: 'Short visit (<90s) focused on pricing/plans pages with zero interactions — likely benchmarking' },
+  BOT:        { label: 'Bot/Filtered',  color: '#cbd5e1', criteria: 'Identified by user-agent pattern matching (Googlebot, SEMrush, headless browsers, etc.)' },
 };
 
 // =============================================================================
@@ -501,16 +505,22 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                 </div>
 
                 {/* Ranking distribution */}
+                <h3 className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-2">Keyword Rankings (Google Search Console)</h3>
                 <div className="grid grid-cols-4 gap-3">
                   {[
-                    { label: 'Top 3', value: S.keywordsTop3, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-                    { label: 'Top 10', value: S.keywordsTop10, color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-200' },
-                    { label: 'Top 30', value: S.keywordsTop30, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
-                    { label: 'Total', value: S.keywordsTotal, color: 'text-[#0c4a6e]', bg: 'bg-[#f0f9ff] border-[#bae6fd]' },
+                    { label: 'TOP 3', value: S.keywordsTop3, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200', desc: 'Keywords ranking in positions 1-3 on Google — highest visibility, most clicks' },
+                    { label: 'TOP 10', value: S.keywordsTop10, color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-200', desc: 'Keywords ranking on page 1 (positions 1-10) — visible to most searchers' },
+                    { label: 'TOP 30', value: S.keywordsTop30, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', desc: 'Keywords ranking on pages 1-3 (positions 1-30) — within striking distance of page 1' },
+                    { label: 'TOTAL', value: S.keywordsTotal, color: 'text-[#0c4a6e]', bg: 'bg-[#f0f9ff] border-[#bae6fd]', desc: 'Total keywords your site appears for in Google Search results' },
                   ].map((r, i) => (
-                    <div key={i} className={`p-4 border rounded-xl ${r.bg}`}>
+                    <div key={i} className={`group relative p-4 border rounded-xl ${r.bg} cursor-help`}>
                       <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">{r.label}</p>
                       <p className={`text-2xl font-bold ${r.color}`}>{r.value}</p>
+                      <p className="text-[9px] text-[#94a3b8] mt-1">{r.label === 'TOTAL' ? 'keywords tracked' : `keywords in pos ${r.label === 'TOP 3' ? '1-3' : r.label === 'TOP 10' ? '1-10' : '1-30'}`}</p>
+                      {/* Hover tooltip */}
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2.5 bg-[#0c4a6e] text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-10">
+                        {r.desc}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -669,12 +679,21 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                 {Object.entries(D.intentDistribution).map(([key, pct]) => {
                   const cfg = INTENT_CONFIG[key];
                   if (!cfg) return null;
+                  const count = D.intentCounts?.[key] ?? 0;
                   return (
-                    <div key={key} className="flex items-center gap-3">
+                    <div key={key} className="group relative flex items-center gap-3">
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
                       <div className="flex-1">
-                        <div className="flex justify-between mb-1"><span className="text-xs text-[#334155]">{cfg.label}</span><span className="text-xs font-bold text-[#1e293b]">{pct}%</span></div>
+                        <div className="flex justify-between mb-1">
+                          <span className="text-xs text-[#334155] cursor-help border-b border-dotted border-slate-300">{cfg.label}</span>
+                          <span className="text-xs font-bold text-[#1e293b]">{count.toLocaleString()} ({pct}%)</span>
+                        </div>
                         <div className="h-1.5 bg-[#f0f9ff] rounded-full overflow-hidden border border-[#e0f2fe]"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: cfg.color }} /></div>
+                      </div>
+                      {/* Hover tooltip */}
+                      <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-[#0c4a6e] text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-10">
+                        <p className="font-semibold mb-1">{cfg.label}: {count.toLocaleString()} sessions</p>
+                        <p className="text-sky-200 leading-relaxed">{cfg.criteria}</p>
                       </div>
                     </div>
                   );

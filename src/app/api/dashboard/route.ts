@@ -116,9 +116,13 @@ export async function GET(req: NextRequest) {
     const intentDist: Record<string, number> = {
       HIGH: 0, MEDIUM: 0, LOW: 0, RESEARCHER: 0, COMPETITOR: 0, BOT: 0,
     };
+    const intentCounts: Record<string, number> = {
+      HIGH: 0, MEDIUM: 0, LOW: 0, RESEARCHER: 0, COMPETITOR: 0, BOT: 0,
+    };
     for (const group of intentDistribution) {
       if (group.intentClass && totalClassified > 0) {
         intentDist[group.intentClass] = Math.round((group._count / totalClassified) * 100);
+        intentCounts[group.intentClass] = group._count;
       }
     }
 
@@ -170,6 +174,7 @@ export async function GET(req: NextRequest) {
       hasRevenueData: !!(site.onboarding?.averageOrderValue && site.onboarding?.leadToWinRate),
       bounceRate,
       intentDistribution: intentDist,
+      intentCounts,
       dropOffPages,
       topPageSessions: dropOff.topPageSessions,
       healthStatus: latestHealth?.overallStatus ?? 'YELLOW',
