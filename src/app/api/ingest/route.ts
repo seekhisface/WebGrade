@@ -371,9 +371,43 @@ export async function POST(req: NextRequest) {
         : 0;
       const isBounce = fullSession.pageCount <= 1 && durationMs < 10000;
 
+      // Behavioral bot suspect detection — flag sessions that look non-human
+      // but passed the UA check. These stay in human counts but are flagged.
+      let isBotSuspect = false;
+      let botSuspectReason: string | null = null;
+
+      const evTypes = new Set(fullSession.events.map(e => e.eventType));
+      const hasScroll = evTypes.has('SCROLL');
+      const hasClick = evTypes.has('CLICK') || evTypes.has('CTA_CLICK') || evTypes.has('NAV_CLICK');
+      const hasHesitation = evTypes.has('HESITATION');
+      const hasMouse = hasClick || hasHesitation;
+      const eventCount = fullSession.events.length;
+
+      // Pattern 1: PAGE_VIEW + PAGE_EXIT only, no interaction, under 3s
+      // Classic scraper that runs JS but doesn't interact
+      if (eventCount <= 3 && !hasScroll && !hasMouse && durationMs < 3000 && durationMs > 0) {
+        isBotSuspect = true;
+        botSuspectReason = 'instant_exit_no_interaction';
+      }
+
+      // Pattern 2: Single page, no scroll at all, 3-10s duration
+      // Could be a human glance, but suspicious without any scroll
+      if (!isBotSuspect && fullSession.pageCount <= 1 && !hasScroll && !hasMouse
+          && durationMs >= 3000 && durationMs < 10000 && eventCount <= 4) {
+        isBotSuspect = true;
+        botSuspectReason = 'no_scroll_single_page';
+      }
+
+      // Pattern 3: Many pages visited very fast (> 5 pages in < 30s)
+      // Programmatic crawling with JS execution
+      if (!isBotSuspect && fullSession.pageCount >= 5 && durationMs < 30000 && durationMs > 0) {
+        isBotSuspect = true;
+        botSuspectReason = 'rapid_multipage';
+      }
+
       await tx.visitorSession.update({
         where: { id: session.id },
-        data: { intentScore: score, intentClass, isBounce, durationMs },
+        data: { intentScore: score, intentClass, isBounce, durationMs, isBotSuspect, botSuspectReason },
       });
     }
 

@@ -252,6 +252,8 @@ export async function GET(req: NextRequest) {
         isBounce: true,
         isReturning: true,
         trafficSource: true,
+        isBotSuspect: true,
+        botSuspectReason: true,
       },
     });
 
@@ -459,7 +461,7 @@ export async function GET(req: NextRequest) {
       { label: 'Conversion Rate', value: conversionRate },
       { label: 'New Visitors', value: newCount.toLocaleString() },
       { label: 'Returning Visitors', value: returningCount.toLocaleString() },
-      { label: 'Bots Filtered', value: `${totalBots.toLocaleString()} of ${totalAll.toLocaleString()} total` },
+      { label: 'Confirmed Bots (filtered)', value: `${totalBots.toLocaleString()} of ${totalAll.toLocaleString()}` },
     ], y);
 
     // Traffic Source + Device + Intent + Bot — all in one compact block
@@ -493,12 +495,30 @@ export async function GET(req: NextRequest) {
 
     y = Math.max(leftY1, midY1, rightY1) + 4;
 
-    // Bot summary line (compact, not a full section)
+    // Bot + suspect summary line
+    const suspectCount = sessions.filter(s => s.isBotSuspect).length;
+    doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.medText);
+    const botParts: string[] = [];
     if (totalBots > 0) {
-      doc.fontSize(7.5).font('Helvetica').fillColor(COLORS.medText);
-      const botSummary = botCategorySorted.slice(0, 5).map(([cat, count]) => `${cat}: ${count}`).join(' | ');
-      doc.text(`Bots filtered: ${totalBots} total — ${botSummary}`, 40, y);
-      y += 14;
+      const botSummary = botCategorySorted.slice(0, 5).map(([cat, count]) => `${cat}: ${count}`).join(', ');
+      botParts.push(`Confirmed bots filtered: ${totalBots} (${botSummary})`);
+    }
+    if (suspectCount > 0) {
+      const suspectReasons = new Map<string, number>();
+      for (const s of sessions) {
+        if (s.isBotSuspect && s.botSuspectReason) {
+          suspectReasons.set(s.botSuspectReason, (suspectReasons.get(s.botSuspectReason) ?? 0) + 1);
+        }
+      }
+      const reasonStr = [...suspectReasons.entries()].sort((a, b) => b[1] - a[1]).map(([r, c]) => `${r}: ${c}`).join(', ');
+      botParts.push(`Suspected bots (not filtered): ${suspectCount} (${reasonStr})`);
+    }
+    if (botParts.length > 0) {
+      for (const line of botParts) {
+        doc.text(line, 40, y);
+        y += 11;
+      }
+      y += 4;
     }
 
     // Top 10 Visitor Locations
