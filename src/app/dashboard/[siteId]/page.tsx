@@ -257,11 +257,18 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const intentScore = useCountUp(dashData?.avgIntentScore ?? 0, 1400, triggered);
   const revenueRisk = useCountUp(dashData?.revenueAtRisk ?? 0, 1800, triggered);
 
-  function applyPreset(p: typeof PRESETS[number]) { setDays(p.days); setRangePreset(p.id); setPickerOpen(false); setShowCustom(false); }
+  function applyPreset(p: typeof PRESETS[number]) {
+    // Clamp to audit window
+    const clamped = Math.min(p.days, maxDays);
+    setDays(clamped); setRangePreset(p.id); setPickerOpen(false); setShowCustom(false);
+  }
   function applyCustomRange() {
     if (!customStart || !customEnd) return;
-    const start = new Date(customStart);
-    const end = new Date(customEnd);
+    let start = new Date(customStart);
+    let end = new Date(customEnd);
+    // Clamp to audit window
+    if (auditStart && start < auditStart) start = auditStart;
+    if (end > effectiveEnd) end = effectiveEnd;
     const diff = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
     setDays(diff);
     setRangePreset('custom');
@@ -285,6 +292,16 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const D = dashData;
   const S = seoData;
 
+  // Audit window bounds — constrain all date selections
+  const auditStart = D?.subscription?.webauditStartDate ? new Date(D.subscription.webauditStartDate) : null;
+  const auditEnd = D?.subscription?.webauditEndDate ? new Date(D.subscription.webauditEndDate) : new Date();
+  const effectiveEnd = auditEnd > new Date() ? new Date() : auditEnd;
+  const maxDays = auditStart
+    ? Math.floor((effectiveEnd.getTime() - auditStart.getTime()) / 86400000)
+    : 90;
+  const auditStartStr = auditStart?.toISOString().split('T')[0] ?? '';
+  const effectiveEndStr = effectiveEnd.toISOString().split('T')[0];
+
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
 
@@ -302,11 +319,21 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             {D && <span className="text-sm text-[#64748b]">{D.site.domain}</span>}
           </div>
           <div className="flex items-center gap-3">
+            {/* Audit start label */}
+            {auditStart && (
+              <div className="flex items-center gap-1.5 text-[10px] text-[#64748b]">
+                <span className="font-semibold text-[#0c4a6e]">Audit started</span>
+                <span>{auditStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            )}
+
             {/* Date range picker */}
             <div className="relative">
               {(() => {
-                const endDate = new Date();
+                const endDate = effectiveEnd;
                 const startDate = new Date(endDate.getTime() - days * 86400000);
+                // Clamp start to audit window
+                const clampedStart = auditStart && startDate < auditStart ? auditStart : startDate;
                 const fmtShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 return (
                   <button onClick={() => setPickerOpen(o => !o)}
@@ -314,7 +341,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                     <svg className="w-3.5 h-3.5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {fmtShort(startDate)} – {fmtShort(endDate)}
+                    {fmtShort(clampedStart)} – {fmtShort(endDate)}
                     <svg className={`w-3 h-3 text-[#64748b] transition-transform ${pickerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
@@ -325,12 +352,15 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => { setPickerOpen(false); setShowCustom(false); }} />
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#bae6fd] rounded-xl shadow-xl z-50 overflow-hidden p-1">
-                    {PRESETS.map(p => (
-                      <button key={p.id} onClick={() => applyPreset(p)}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${rangePreset === p.id ? 'bg-[#e0f2fe] text-[#0c4a6e] font-semibold' : 'text-[#64748b] hover:bg-[#f0f9ff]'}`}>
-                        Last {p.days} days
-                      </button>
-                    ))}
+                    {PRESETS.map(p => {
+                      const exceeds = p.days > maxDays;
+                      return (
+                        <button key={p.id} onClick={() => !exceeds && applyPreset(p)} disabled={exceeds}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${exceeds ? 'text-[#cbd5e1] cursor-not-allowed' : rangePreset === p.id ? 'bg-[#e0f2fe] text-[#0c4a6e] font-semibold' : 'text-[#64748b] hover:bg-[#f0f9ff]'}`}>
+                          Last {p.days} days{exceeds ? ' (before audit)' : ''}
+                        </button>
+                      );
+                    })}
                     <div className="border-t border-[#e0f2fe] mt-1 pt-1">
                       <button onClick={() => setShowCustom(c => !c)}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${rangePreset === 'custom' ? 'bg-[#e0f2fe] text-[#0c4a6e] font-semibold' : 'text-[#0891b2] hover:bg-[#f0f9ff] font-medium'}`}>
@@ -341,11 +371,13 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
                           <div>
                             <label className="text-[10px] text-[#64748b] uppercase font-bold">Start</label>
                             <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+                              min={auditStartStr} max={effectiveEndStr}
                               className="w-full mt-0.5 px-2 py-1 border border-[#bae6fd] rounded-lg text-xs text-[#334155] focus:outline-none focus:ring-1 focus:ring-[#0891b2]" />
                           </div>
                           <div>
                             <label className="text-[10px] text-[#64748b] uppercase font-bold">End</label>
                             <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+                              min={auditStartStr} max={effectiveEndStr}
                               className="w-full mt-0.5 px-2 py-1 border border-[#bae6fd] rounded-lg text-xs text-[#334155] focus:outline-none focus:ring-1 focus:ring-[#0891b2]" />
                           </div>
                           <button onClick={applyCustomRange} disabled={!customStart || !customEnd}
