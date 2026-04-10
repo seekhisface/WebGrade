@@ -246,6 +246,8 @@ export async function GET(req: NextRequest) {
         intentClass: true,
         conversionGoalHit: true,
         durationMs: true,
+        startedAt: true,
+        endedAt: true,
         pageCount: true,
         isBounce: true,
         isReturning: true,
@@ -284,7 +286,16 @@ export async function GET(req: NextRequest) {
     const conversions = sessions.filter(s => s.conversionGoalHit).length;
     const conversionRate = totalSessions > 0 ? ((conversions / totalSessions) * 100).toFixed(2) + '%' : '0%';
 
-    const durations = sessions.map(s => s.durationMs ?? 0).filter(d => d > 0);
+    // Compute duration from timestamps (durationMs field is null on older sessions)
+    // Cap at 30 min — sessions left open in background tabs inflate averages
+    const MAX_DURATION_MS = 30 * 60 * 1000;
+    const durations = sessions.map(s => {
+      if (s.endedAt && s.startedAt) {
+        const d = new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime();
+        return Math.min(d, MAX_DURATION_MS);
+      }
+      return s.durationMs ? Math.min(s.durationMs, MAX_DURATION_MS) : 0;
+    }).filter(d => d > 0);
     const avgDurationSec = durations.length > 0
       ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 1000)
       : 0;
@@ -292,8 +303,15 @@ export async function GET(req: NextRequest) {
       ? `${Math.floor(avgDurationSec / 60)}m ${avgDurationSec % 60}s`
       : `${avgDurationSec}s`;
 
-    // Bounce rate
-    const bounces = sessions.filter(s => s.isBounce).length;
+    // Bounce = single page AND under 10s (compute from timestamps, not stored field)
+    const bounces = sessions.filter(s => {
+      if (s.pageCount > 1) return false;
+      if (s.endedAt && s.startedAt) {
+        const d = new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime();
+        return d < 10000;
+      }
+      return s.isBounce; // fallback to stored field
+    }).length;
     const bounceRate = totalSessions > 0 ? ((bounces / totalSessions) * 100).toFixed(1) + '%' : '0%';
 
     // New vs returning
