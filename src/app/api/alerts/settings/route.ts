@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -19,6 +20,9 @@ export async function GET(req: NextRequest) {
 
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const settings = await prisma.alertSetting.findMany({
     where: { siteId },
@@ -38,6 +42,9 @@ export async function PATCH(req: NextRequest) {
   if (!siteId || !alertType) {
     return NextResponse.json({ error: 'siteId and alertType required' }, { status: 400 });
   }
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   // If alertType is __all__, update all settings for the site (e.g. Slack webhook)
   if (alertType === '__all__') {

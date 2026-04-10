@@ -109,7 +109,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Attach the DB user id so the jwt callback picks it up
-          (user as Record<string, unknown>).id = dbUser.id;
+          (user as unknown as Record<string, unknown>).id = dbUser.id;
         } catch (err) {
           console.error('[auth] Google signIn callback error:', err);
           return true;

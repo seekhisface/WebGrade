@@ -120,9 +120,9 @@ export async function aggregateReportData(
   const periodStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
 
   // Run drop-off analysis
-  const dropoff = await computeDropOffAnalysis(siteId, {
-    startDate: periodStart,
-    endDate: now,
+  const dropoff = await computeDropOffAnalysis({
+    siteId,
+    periodDays: 45,
   });
 
   // Load GA4 baseline metrics

@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { sendEmail, buildAlertEmail } from '@/lib/email/sender';
 
 export async function POST(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   const { siteId } = await req.json();
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  const site = await prisma.site.findUnique({ where: { id: siteId } });
+  const site = await verifySiteAccess(session.user.email, siteId);
   if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://webgrade.io';

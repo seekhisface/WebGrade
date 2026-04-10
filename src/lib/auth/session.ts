@@ -55,3 +55,21 @@ export async function requireSiteAccess(userId: string, siteId: string) {
 
   return site;
 }
+
+/**
+ * API-route version of requireSiteAccess.
+ * Returns the site if the user (by email) belongs to its org, or null.
+ * Use this in route.ts handlers instead of requireSiteAccess (which redirects).
+ */
+export async function verifySiteAccess(email: string, siteId: string) {
+  return prisma.site.findFirst({
+    where: {
+      id: siteId,
+      org: {
+        members: {
+          some: { user: { email } },
+        },
+      },
+    },
+  });
+}

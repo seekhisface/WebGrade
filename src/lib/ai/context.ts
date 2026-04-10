@@ -115,10 +115,10 @@ export async function loadSiteContext(
     conversionRate: ob?.conversionRate ?? null,
     leadToWinRate: ob?.leadToWinRate ?? null,
 
-    dataScenario: (ob?.dataScenario as 'A' | 'B' | 'C' | null) ?? null,
-    hasGA4: ob?.ga4Connected ?? false,
-    hasGSC: ob?.gscConnected ?? false,
-    hasSnippet: site.snippetInstalled ?? false,
+    dataScenario: ob?.ga4PropertyId ? 'A' : ob?.isComplete ? 'B' : 'C',
+    hasGA4: !!ob?.ga4PropertyId,
+    hasGSC: site.gscConnected ?? false,
+    hasSnippet: !!site.snippetId,
 
     hasFullContext: missingFields.length === 0,
     missingFields,

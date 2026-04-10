@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 // GET /api/settings/integrations?siteId=...
 export async function GET(req: NextRequest) {
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: 'siteId required' }, { status: 400 });
   }
+
+  const access = await verifySiteAccess(session.user.email, siteId);
+  if (!access) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const site = await prisma.site.findUnique({
     where: { id: siteId },
@@ -71,6 +75,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { siteId, posthogEnabled, posthogApiKey } = parsed.data;
+
+  const patchAccess = await verifySiteAccess(session.user.email, siteId);
+  if (!patchAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const data: Record<string, unknown> = {};
   if (posthogEnabled !== undefined) data.posthogEnabled = posthogEnabled;

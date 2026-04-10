@@ -46,14 +46,9 @@ export async function GET(req: NextRequest) {
       include: {
         onboarding: {
           select: {
-            avgOrderValue: true,
+            averageOrderValue: true,
             leadToWinRate: true,
           },
-        },
-        installations: {
-          select: { status: true },
-          orderBy: { installedAt: 'desc' },
-          take: 1,
         },
       },
     });
@@ -62,8 +57,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Site not found' }, { status: 404 });
     }
 
-    // Check if snippet is actually installed and firing
-    const snippetInstalled = site.installations[0]?.status === 'VERIFIED';
+    // Check if snippet is installed by looking for recent session events
+    const recentEvent = await prisma.sessionEvent.findFirst({
+      where: { siteId, timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    });
+    const snippetInstalled = recentEvent !== null;
 
     // If no snippet, return demo data immediately — no DB query needed
     if (!snippetInstalled) {
@@ -78,7 +76,7 @@ export async function GET(req: NextRequest) {
     const analysis = await computeDropOffAnalysis({
       siteId,
       periodDays: days,
-      avgOrderValue: site.onboarding?.avgOrderValue ?? 500,
+      avgOrderValue: site.onboarding?.averageOrderValue ?? 500,
       leadToWinRate: site.onboarding?.leadToWinRate ?? 0.08,
     });
 

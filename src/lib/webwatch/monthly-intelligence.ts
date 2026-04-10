@@ -300,7 +300,7 @@ async function getMetricsForPeriod(
 ): Promise<MonthlyMetrics> {
   const sessions = await prisma.visitorSession.findMany({
     where: { siteId, startedAt: { gte: start, lte: end }, isBotFiltered: false },
-    select: { intentScore: true, converted: true, durationSec: true, landingPage: true, exitPage: true },
+    select: { intentScore: true, convertedAt: true, durationMs: true, entryPage: true, exitPage: true },
   });
 
   if (sessions.length === 0) {
@@ -310,8 +310,8 @@ async function getMetricsForPeriod(
   const total = sessions.length;
   const avgIntent = Math.round(sessions.reduce((s, r) => s + (r.intentScore ?? 0), 0) / total);
   const highIntent = sessions.filter(r => (r.intentScore ?? 0) >= 70).length;
-  const conversions = sessions.filter(r => r.converted).length;
-  const singlePage = sessions.filter(r => r.landingPage === r.exitPage).length;
+  const conversions = sessions.filter(r => r.convertedAt !== null).length;
+  const singlePage = sessions.filter(r => r.entryPage === r.exitPage).length;
 
   // Exit page analysis
   const exitCounts: Record<string, number> = {};
@@ -320,8 +320,8 @@ async function getMetricsForPeriod(
     if (s.exitPage) {
       exitCounts[s.exitPage] = (exitCounts[s.exitPage] ?? 0) + 1;
     }
-    if (s.landingPage) {
-      sessionCounts[s.landingPage] = (sessionCounts[s.landingPage] ?? 0) + 1;
+    if (s.entryPage) {
+      sessionCounts[s.entryPage] = (sessionCounts[s.entryPage] ?? 0) + 1;
     }
   }
 
@@ -338,7 +338,7 @@ async function getMetricsForPeriod(
   // Revenue at risk estimate
   const aov = onboarding?.averageOrderValue ?? 0;
   const baseConvRate = onboarding?.conversionRate ?? (conversions / total);
-  const highIntentNotConverting = sessions.filter(r => (r.intentScore ?? 0) >= 70 && !r.converted).length;
+  const highIntentNotConverting = sessions.filter(r => (r.intentScore ?? 0) >= 70 && r.convertedAt === null).length;
   const revenueAtRisk = Math.round(highIntentNotConverting * baseConvRate * aov * 0.15); // 15% recovery assumption
 
   return {

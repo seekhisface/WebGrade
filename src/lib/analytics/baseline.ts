@@ -110,9 +110,9 @@ export async function checkBaselineReadiness(siteId: string): Promise<{
     // GA4 baselines are stored with period strings like "2024-Q4"
     // We approximate: use the range from import
     const onboarding = await prisma.siteOnboarding.findUnique({ where: { siteId } });
-    if (onboarding?.ga4ConnectedAt) {
-      earliestDate = new Date(onboarding.ga4ConnectedAt.getTime() - 90 * 24 * 60 * 60 * 1000);
-      latestDate = onboarding.ga4ConnectedAt;
+    if (onboarding?.ga4BaselineImportedAt) {
+      earliestDate = new Date(onboarding.ga4BaselineImportedAt.getTime() - 90 * 24 * 60 * 60 * 1000);
+      latestDate = onboarding.ga4BaselineImportedAt;
     }
   }
 
@@ -215,18 +215,26 @@ export async function establishBaseline(siteId: string): Promise<BaselineConfig>
   }
 
   for (const m of metricsToStore) {
-    await prisma.siteBaseline.upsert({
-      where: { siteId_metricKey: { siteId, metricKey: m.key } },
-      create: {
-        siteId,
-        metricKey: m.key,
-        value: m.value,
-        period: baselineLabel,
-        source: 'baseline_establishment',
-        capturedAt: new Date(),
-      },
-      update: { value: m.value, period: baselineLabel, collectedAt: new Date() },
+    const existing = await prisma.siteBaseline.findFirst({
+      where: { siteId, metricKey: m.key },
     });
+    if (existing) {
+      await prisma.siteBaseline.update({
+        where: { id: existing.id },
+        data: { value: m.value, period: baselineLabel, capturedAt: new Date() },
+      });
+    } else {
+      await prisma.siteBaseline.create({
+        data: {
+          siteId,
+          metricKey: m.key,
+          value: m.value,
+          period: baselineLabel,
+          source: 'baseline_establishment',
+          capturedAt: new Date(),
+        },
+      });
+    }
   }
 
   return {
@@ -333,7 +341,7 @@ async function aggregateBaselineMetrics(
   if (dataSource === 'snippet' || dataSource === 'mixed') {
     const sessions = await prisma.visitorSession.findMany({
       where: { siteId, startedAt: { gte: startDate, lte: endDate } },
-      select: { intentScore: true, converted: true, durationSec: true, isBotFiltered: true },
+      select: { intentScore: true, convertedAt: true, durationMs: true, isBotFiltered: true },
     });
 
     const realSessions = sessions.filter(s => !s.isBotFiltered);
@@ -341,10 +349,10 @@ async function aggregateBaselineMetrics(
     const avgIntentScore = totalSessions > 0
       ? Math.round(realSessions.reduce((sum, s) => sum + (s.intentScore ?? 0), 0) / totalSessions)
       : 0;
-    const conversions = realSessions.filter(s => s.converted).length;
+    const conversions = realSessions.filter(s => s.convertedAt !== null).length;
     const conversionRate = totalSessions > 0 ? (conversions / totalSessions) * 100 : 0;
     const avgDuration = totalSessions > 0
-      ? Math.round(realSessions.reduce((sum, s) => sum + (s.durationSec ?? 0), 0) / totalSessions)
+      ? Math.round(realSessions.reduce((sum, s) => sum + ((s.durationMs ?? 0) / 1000), 0) / totalSessions)
       : 0;
 
     return {

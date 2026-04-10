@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest) {
   if (!siteId || !itemKey) {
     return NextResponse.json({ error: 'siteId and itemKey required' }, { status: 400 });
   }
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const onboarding = await prisma.siteOnboarding.findUnique({ where: { siteId } });
   if (!onboarding) {

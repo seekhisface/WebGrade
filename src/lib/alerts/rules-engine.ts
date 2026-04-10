@@ -69,7 +69,7 @@ export async function evaluateAlertRules(siteId: string): Promise<number> {
         severity: eval_.severity,
         productModule: mapAlertTypeToModule(eval_.alertType),
         message: eval_.message,
-        metadata: eval_.metadata,
+        metadata: eval_.metadata as object ?? undefined,
       },
     });
 

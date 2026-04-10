@@ -216,7 +216,7 @@ export async function getCompetitorKeywords(
         keyword: string;
         ranked_serp_element?: { serp_item?: { rank_group: number; etv: number } };
         keyword_data?: { keyword_info?: { search_volume: number } };
-      }[]>; }[] };
+      }>; }[] };
 
       const items = data?.tasks?.[0]?.result ?? [];
       for (const item of items) {

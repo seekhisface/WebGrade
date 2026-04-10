@@ -57,7 +57,7 @@ export const scoreSessionIntent = inngest.createFunction(
 
     const result = await step.run('score-intent', async () => {
       return scoreIntent(
-        { session, events: session.events, pageViews: session.pageViews },
+        { session: session as never, events: session.events as never, pageViews: session.pageViews as never },
         site?.onboarding?.conversionGoalUrl ?? null
       );
     });
@@ -184,7 +184,7 @@ export const sendWeeklyDigest = inngest.createFunction(
   { cron: '0 9 * * 1' },  // Monday 9am UTC
   async ({ step }) => {
     const { prisma } = await import('@/lib/db/client');
-    const { sendWeeklyDigestEmail } = await import('@/lib/email/digest');
+    const { sendDigestEmail } = await import('@/lib/email/digest');
 
     const sites = await step.run('load-sites-with-email', async () => {
       return prisma.site.findMany({
@@ -205,7 +205,7 @@ export const sendWeeklyDigest = inngest.createFunction(
     let emailsSent = 0;
     for (const site of sites) {
       await step.run(`digest-${site.id}`, async () => {
-        return sendWeeklyDigestEmail(site);
+        return sendDigestEmail();
       }).catch(() => null); // Non-fatal per site
       emailsSent++;
     }

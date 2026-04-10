@@ -10,7 +10,10 @@ export const runtime = 'nodejs'
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { sendEmail, sendSlack, buildAlertEmail, buildAlertSlackBlocks } from '@/lib/email/sender';
 
 export async function POST(req: NextRequest) {
@@ -49,12 +52,12 @@ export async function POST(req: NextRequest) {
 
   // ── Email delivery ────────────────────────────────────────────────────────
   if (settings.emailEnabled) {
-    const recipients = settings.emailRecipients.length > 0
-      ? settings.emailRecipients
-      : [alert.site.onboarding ? null : null].filter(Boolean) as string[];
+    const recipients: string[] = settings.emailRecipients.length > 0
+      ? [...settings.emailRecipients]
+      : [];
 
     // Also get org owner email
-    const orgOwner = await prisma.orgMembership.findFirst({
+    const orgOwner = await prisma.orgMember.findFirst({
       where: { orgId: alert.site.orgId, role: 'OWNER' },
       include: { user: true },
     });
@@ -90,7 +93,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Slack delivery ────────────────────────────────────────────────────────
-  if (settings.slackEnabled && settings.slackWebhookUrl) {
+  if (settings.slackEnabled && settings.slackChannel) {
     const blocks = buildAlertSlackBlocks({
       siteName: alert.site.name,
       alertType: alert.alertType,
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
     });
 
     const result = await sendSlack({
-      webhookUrl: settings.slackWebhookUrl,
+      webhookUrl: settings.slackChannel,
       text: `${alert.severity} Alert — ${alert.site.name}: ${alert.message}`,
       blocks,
     });
@@ -121,8 +124,14 @@ export async function POST(req: NextRequest) {
 // ── GET — test delivery config ────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const settings = await prisma.alertSetting.findMany({ where: { siteId } });
   const recentAlerts = await prisma.alert.findMany({

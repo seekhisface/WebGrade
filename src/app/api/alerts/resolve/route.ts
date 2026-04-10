@@ -17,7 +17,10 @@ export const runtime = 'nodejs'
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -69,8 +72,14 @@ export async function POST(req: NextRequest) {
 // ── GET — list open alerts for a site ────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const [open, resolved] = await Promise.all([
     prisma.alert.findMany({
@@ -115,7 +124,7 @@ async function checkResolution(alert: {
     case 'SNIPPET_FIRING_STOPPED': {
       // Resolved if we've received any events in the last 24h
       const recentEvent = await prisma.pageView.findFirst({
-        where: { siteId, timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        where: { siteId, enteredAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
       });
       return recentEvent !== null;
     }
@@ -132,7 +141,7 @@ async function checkResolution(alert: {
       const recentWindow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const sessions = await prisma.visitorSession.count({ where: { siteId, startedAt: { gte: recentWindow } } });
       const conversions = await prisma.visitorSession.count({
-        where: { siteId, startedAt: { gte: recentWindow }, converted: true },
+        where: { siteId, startedAt: { gte: recentWindow }, convertedAt: { not: null } },
       });
 
       if (sessions < 50) return false; // Not enough data
@@ -152,7 +161,7 @@ async function checkResolution(alert: {
       const recentWindow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const sessions = await prisma.visitorSession.count({ where: { siteId, startedAt: { gte: recentWindow } } });
       const bounces = await prisma.visitorSession.count({
-        where: { siteId, startedAt: { gte: recentWindow }, pageViewCount: 1 },
+        where: { siteId, startedAt: { gte: recentWindow }, pageCount: 1 },
       });
 
       if (sessions < 50) return false;

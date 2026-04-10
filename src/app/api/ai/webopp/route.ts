@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { loadSiteContext, buildSystemPrompt } from '@/lib/ai/context';
 import { aggregateSearchDemand, extractSeedKeywords } from '@/lib/webopp/search-demand';
 
@@ -222,6 +223,9 @@ export async function GET(req: NextRequest) {
 
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const analysis = await prisma.webOppAnalysis.findFirst({
     where: { siteId, status: 'COMPLETE' },

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { crawlSite } from '@/lib/seo/crawler';
 
 export const runtime = 'nodejs';
@@ -63,6 +64,9 @@ export async function GET(req: NextRequest) {
 
     const siteId = req.nextUrl.searchParams.get('siteId');
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+    const site = await verifySiteAccess(session.user.email, siteId);
+    if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
     const latestCrawl = await prisma.seoCrawl.findFirst({
       where: { siteId },

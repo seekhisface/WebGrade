@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { aggregateReportData } from '@/lib/report/aggregator';
 import { buildReportPrompts } from '@/lib/report/prompt';
 
@@ -101,12 +102,10 @@ export async function POST(req: NextRequest) {
     try {
       const parsed = JSON.parse(cleanJson(actionsRes));
       topRecommendations = parsed.actions ?? [];
-      topFindings = topRecommendations.slice(0, 3).map((a: Record<string, unknown>) => ({
-        title: a.title,
-        problem: a.problem,
-        impact: a.impact,
-        category: a.category,
-      }));
+      topFindings = topRecommendations.slice(0, 3).map((item: unknown) => {
+        const a = item as Record<string, unknown>;
+        return { title: a.title, problem: a.problem, impact: a.impact, category: a.category };
+      });
     } catch (e) {
       console.error('[Report] Action items JSON parse failed:', e);
       topRecommendations = [];
@@ -177,6 +176,9 @@ export async function GET(req: NextRequest) {
 
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const report = await prisma.report.findFirst({
     where: { siteId, type: 'INTERIM' },

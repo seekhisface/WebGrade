@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 const HealthCheckRequestSchema = z.object({
   siteId: z.string(),
@@ -81,6 +82,9 @@ export async function GET(req: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: 'siteId required' }, { status: 400 });
   }
+
+  const site = await verifySiteAccess(session.user.email, siteId);
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const healthCheck = await prisma.siteHealthCheck.findFirst({
     where: { siteId },

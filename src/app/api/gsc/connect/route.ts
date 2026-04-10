@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { z } from 'zod';
 import { listGscProperties } from '@/lib/gsc/client';
 
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest) {
 
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const siteAccess = await verifySiteAccess(session.user.email, siteId);
+  if (!siteAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
@@ -62,6 +66,9 @@ export async function POST(req: NextRequest) {
   const parsed = connectSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
+  const postAccess = await verifySiteAccess(session.user.email, parsed.data.siteId);
+  if (!postAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: { id: true },
@@ -88,6 +95,9 @@ export async function DELETE(req: NextRequest) {
 
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
+
+  const deleteAccess = await verifySiteAccess(session.user.email, siteId);
+  if (!deleteAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   await prisma.site.update({
     where: { id: siteId },
