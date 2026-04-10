@@ -303,7 +303,8 @@ model SiteOnboarding {
   // Completion state
   isComplete     Boolean   @default(false)
   completedAt    DateTime?
-  completedSteps Int[]     @default([]) // Steps completed: [1,2,3,4,5]
+  completedSteps    Int[]     @default([]) // Steps completed: [1,2,3,4,5]
+  skippedSetupItems String[]  @default([]) // Items user opted out of: ["revenue","adspend","gsc",etc.]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

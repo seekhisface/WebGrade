@@ -290,7 +290,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
 
       {/* ── SETUP BANNER: Sticky reminder for missing vital configuration ── */}
       {!setup.setupComplete && !setup.isDemo && (
-        <SetupBanner missingItems={setup.missingItems} percentComplete={setup.percentComplete} />
+        <SetupBanner missingItems={setup.missingItems} percentComplete={setup.percentComplete} siteId={params.siteId} />
       )}
 
       {/* ── SUB-HEADER: Title + Date Picker + Report Archive ── */}

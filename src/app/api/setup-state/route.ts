@@ -83,6 +83,10 @@ export async function GET(req: NextRequest) {
     missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/revenue` });
   }
 
+  // Filter out items the user has permanently opted out of
+  const skipped = ob?.skippedSetupItems ?? [];
+  const activeMissing = missingItems.filter(item => !skipped.includes(item.key));
+
   return NextResponse.json({
     snippetInstalled,
     ga4Connected,
@@ -92,7 +96,8 @@ export async function GET(req: NextRequest) {
     hasRevenueData,
     hasAdSpend,
     hasBusinessContext,
-    missingItems,
-    setupComplete: missingItems.length === 0,
+    missingItems: activeMissing,
+    skippedItems: skipped,
+    setupComplete: activeMissing.length === 0,
   });
 }
