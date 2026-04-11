@@ -132,10 +132,11 @@ resource "aws_security_group" "ecs" {
   name_prefix = "${var.environment}-webgrade-ecs-"
   vpc_id      = aws_vpc.main.id
 
+  # Ephemeral port range for bridge-mode dynamic port mapping
   ingress {
-    description     = "From ALB"
-    from_port       = 3000
-    to_port         = 3000
+    description     = "From ALB (dynamic host ports)"
+    from_port       = 32768
+    to_port         = 65535
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }

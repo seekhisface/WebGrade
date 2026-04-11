@@ -9,15 +9,15 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "web" {
-  name        = "${var.environment}-webgrade-web"
-  port        = 3000
+  name_prefix = substr("${var.environment}-wg", 0, 6)
+  port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "ip"
+  target_type = "instance"
 
   health_check {
     enabled             = true
-    path                = "/api/health-check"
+    path                = "/api/healthz"
     port                = "traffic-port"
     protocol            = "HTTP"
     healthy_threshold   = 2
@@ -27,7 +27,11 @@ resource "aws_lb_target_group" "web" {
     matcher             = "200"
   }
 
-  tags = var.tags
+  tags = merge(var.tags, { Name = "${var.environment}-webgrade-web" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # HTTP listener — redirects to HTTPS when certificate is configured

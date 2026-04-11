@@ -2,6 +2,9 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
+# libc6-compat: glibc shim required by Prisma engines on Alpine
+RUN apk add --no-cache libc6-compat openssl
+
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
@@ -10,6 +13,8 @@ RUN npm ci --ignore-scripts && npx prisma generate
 # Stage 2: Build
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+RUN apk add --no-cache libc6-compat openssl
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
@@ -26,6 +31,11 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+
+# libc6-compat: glibc shim required by Prisma engines on Alpine
+# openssl: required so Prisma detects OpenSSL 3 and loads the correct engine
+# wget: used by the ECS container health check
+RUN apk add --no-cache libc6-compat openssl wget
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs

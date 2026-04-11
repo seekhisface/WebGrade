@@ -24,13 +24,13 @@ variable "web_image" {
 }
 
 variable "web_cpu" {
-  description = "CPU units for the web task (1024 = 1 vCPU)"
+  description = "CPU units for the web container (1024 = 1 vCPU)"
   type        = number
   default     = 512
 }
 
 variable "web_memory" {
-  description = "Memory in MiB for the web task"
+  description = "Memory in MiB for the web container (hard limit)"
   type        = number
   default     = 1024
 }
@@ -45,6 +45,32 @@ variable "web_max_count" {
   description = "Maximum number of web tasks for auto-scaling"
   type        = number
   default     = 6
+}
+
+# --- EC2 / ASG configuration ---
+
+variable "instance_type" {
+  description = "EC2 instance type for ECS hosts"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "asg_min_size" {
+  description = "Minimum EC2 instances in the ECS Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_size" {
+  description = "Maximum EC2 instances in the ECS Auto Scaling Group"
+  type        = number
+  default     = 4
+}
+
+variable "asg_desired_capacity" {
+  description = "Initial desired EC2 instance count"
+  type        = number
+  default     = 1
 }
 
 variable "log_retention_days" {

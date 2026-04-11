@@ -90,12 +90,31 @@ wait_for_service() {
     return 1
 }
 
+# Look up the latest task definition revision
+# (The Terraform module has lifecycle { ignore_changes = [task_definition] }
+# on the service, so we have to update the service to point at the latest
+# revision explicitly — otherwise --force just restarts whatever revision
+# the service was first created with.)
+LATEST_TASK_DEF=$(aws ecs describe-task-definition \
+    --task-definition "${ENVIRONMENT}-webgrade-web" \
+    --region $AWS_REGION \
+    --query 'taskDefinition.taskDefinitionArn' \
+    --output text)
+
+if [ -z "$LATEST_TASK_DEF" ] || [ "$LATEST_TASK_DEF" = "None" ]; then
+    echo "Error: could not look up latest task definition for ${ENVIRONMENT}-webgrade-web"
+    exit 1
+fi
+
+echo "Latest task definition: $LATEST_TASK_DEF"
+
 # Update the web service
 echo "Updating web service..."
 if [ "$FORCE_DEPLOY" = true ]; then
     aws ecs update-service \
         --cluster $CLUSTER_NAME \
         --service web \
+        --task-definition "$LATEST_TASK_DEF" \
         --force-new-deployment \
         --region $AWS_REGION \
         --output text --query 'service.serviceName' > /dev/null
@@ -103,6 +122,7 @@ else
     aws ecs update-service \
         --cluster $CLUSTER_NAME \
         --service web \
+        --task-definition "$LATEST_TASK_DEF" \
         --region $AWS_REGION \
         --output text --query 'service.serviceName' > /dev/null
 fi

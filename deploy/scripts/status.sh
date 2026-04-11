@@ -51,7 +51,7 @@ ALB_DNS=$(aws elbv2 describe-load-balancers --names "${ENVIRONMENT}-webgrade-alb
 
 if [ "$ALB_DNS" != "NOT_FOUND" ]; then
     echo "URL: http://$ALB_DNS"
-    HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/api/health-check" 2>/dev/null || echo "000")
+    HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/api/healthz" 2>/dev/null || echo "000")
     echo "Health check: HTTP $HEALTH"
 else
     echo "ALB not found"

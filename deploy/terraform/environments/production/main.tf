@@ -81,6 +81,12 @@ module "ecs" {
   web_desired_count = 2
   web_max_count     = 8
 
+  # EC2 host sizing
+  instance_type        = "t3.medium"
+  asg_min_size         = 2
+  asg_max_size         = 5
+  asg_desired_capacity = 2
+
   # App config
   nextauth_url    = "https://app.webgrade.io"
   email_from      = "noreply@webgrade.io"

@@ -20,10 +20,165 @@ resource "aws_cloudwatch_log_group" "web" {
   tags = var.tags
 }
 
-# --- IAM: Task Execution Role ---
-
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
+
+# --- ECS-optimized AMI (Amazon Linux 2023) ---
+
+data "aws_ssm_parameter" "ecs_ami" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
+}
+
+# --- IAM: EC2 instance role (for ECS agent) ---
+
+resource "aws_iam_role" "ec2_instance" {
+  name = "${var.environment}-webgrade-ec2-instance"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ecs_agent" {
+  role       = aws_iam_role.ec2_instance.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_instance.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_instance" {
+  name = "${var.environment}-webgrade-ec2-instance"
+  role = aws_iam_role.ec2_instance.name
+  tags = var.tags
+}
+
+# --- Launch Template ---
+
+resource "aws_launch_template" "ecs" {
+  name_prefix   = "${var.environment}-webgrade-ecs-"
+  image_id      = data.aws_ssm_parameter.ecs_ami.value
+  instance_type = var.instance_type
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_instance.name
+  }
+
+  vpc_security_group_ids = [var.ecs_security_group_id]
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    echo "ECS_CLUSTER=${aws_ecs_cluster.main.name}" >> /etc/ecs/ecs.config
+    echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config
+  EOF
+  )
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 30
+      volume_type           = "gp3"
+      delete_on_termination = true
+      encrypted             = true
+    }
+  }
+
+  metadata_options {
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(var.tags, { Name = "${var.environment}-webgrade-ecs-instance" })
+  }
+
+  tags = var.tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# --- Auto Scaling Group ---
+
+resource "aws_autoscaling_group" "ecs" {
+  name_prefix         = "${var.environment}-webgrade-ecs-"
+  vpc_zone_identifier = var.private_subnet_ids
+  min_size            = var.asg_min_size
+  max_size            = var.asg_max_size
+  desired_capacity    = var.asg_desired_capacity
+
+  health_check_type         = "EC2"
+  health_check_grace_period = 300
+
+  launch_template {
+    id      = aws_launch_template.ecs.id
+    version = "$Latest"
+  }
+
+  # Required for capacity provider managed termination protection
+  protect_from_scale_in = true
+
+  tag {
+    key                 = "Name"
+    value               = "${var.environment}-webgrade-ecs-asg"
+    propagate_at_launch = false
+  }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = "true"
+    propagate_at_launch = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [desired_capacity]
+  }
+}
+
+# --- ECS Capacity Provider ---
+
+resource "aws_ecs_capacity_provider" "main" {
+  name = "${var.environment}-webgrade-cp"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
+    managed_termination_protection = "ENABLED"
+
+    managed_scaling {
+      status                    = "ENABLED"
+      target_capacity           = 100
+      minimum_scaling_step_size = 1
+      maximum_scaling_step_size = 2
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name       = aws_ecs_cluster.main.name
+  capacity_providers = [aws_ecs_capacity_provider.main.name]
+
+  default_capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.main.name
+    weight            = 1
+    base              = 1
+  }
+}
+
+# --- IAM: Task Execution Role ---
 
 resource "aws_iam_role" "task_execution" {
   name = "${var.environment}-webgrade-task-execution"
@@ -76,29 +231,32 @@ resource "aws_iam_role" "task" {
   tags = var.tags
 }
 
-# --- Task Definition ---
+# --- Task Definition (EC2 launch type, bridge networking) ---
 
 resource "aws_ecs_task_definition" "web" {
   family                   = "${var.environment}-webgrade-web"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = var.web_cpu
-  memory                   = var.web_memory
+  network_mode             = "bridge"
+  requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
   container_definitions = jsonencode([{
-    name  = "web"
-    image = "${var.web_image}:${var.environment}"
+    name      = "web"
+    image     = "${var.web_image}:${var.environment}"
+    cpu       = var.web_cpu
+    memory    = var.web_memory
+    essential = true
 
     portMappings = [{
       containerPort = 3000
+      hostPort      = 0  # dynamic — allows multiple tasks per host
       protocol      = "tcp"
     }]
 
     environment = [
       { name = "NODE_ENV", value = "production" },
       { name = "PORT", value = "3000" },
+      { name = "HOSTNAME", value = "0.0.0.0" },
       { name = "NEXTAUTH_URL", value = var.nextauth_url },
       { name = "EMAIL_FROM", value = var.email_from },
       { name = "INGEST_RATE_LIMIT_PER_MINUTE", value = tostring(var.ingest_rate_limit) },
@@ -129,14 +287,6 @@ resource "aws_ecs_task_definition" "web" {
         "awslogs-stream-prefix" = "web"
       }
     }
-
-    healthCheck = {
-      command     = ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health-check || exit 1"]
-      interval    = 30
-      timeout     = 10
-      retries     = 3
-      startPeriod = 60
-    }
   }])
 
   tags = var.tags
@@ -149,18 +299,27 @@ resource "aws_ecs_service" "web" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.web.arn
   desired_count   = var.web_desired_count
-  launch_type     = "FARGATE"
 
-  network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = false
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.main.name
+    weight            = 1
+    base              = 1
   }
 
   load_balancer {
     target_group_arn = var.web_target_group_arn
     container_name   = "web"
     container_port   = 3000
+  }
+
+  ordered_placement_strategy {
+    type  = "spread"
+    field = "attribute:ecs.availability-zone"
+  }
+
+  ordered_placement_strategy {
+    type  = "binpack"
+    field = "memory"
   }
 
   deployment_circuit_breaker {
@@ -173,12 +332,14 @@ resource "aws_ecs_service" "web" {
 
   tags = var.tags
 
+  depends_on = [aws_ecs_cluster_capacity_providers.main]
+
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 }
 
-# --- Auto Scaling ---
+# --- Service Auto Scaling ---
 
 resource "aws_appautoscaling_target" "web" {
   max_capacity       = var.web_max_count

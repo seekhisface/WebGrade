@@ -9,13 +9,13 @@ Internet
 ALB (public subnets)
     │
     ▼
-ECS Fargate — web (private subnets, port 3000)
-    │
+ECS on EC2 — web tasks in bridge mode (private subnets)
+    │  (managed by Auto Scaling Group + Capacity Provider)
     ▼
 External PostgreSQL (existing cluster, not managed by Terraform)
 ```
 
-Single-service deployment: one Next.js app (`web`) running on ECS Fargate behind an ALB. Database is an existing PostgreSQL cluster — provide the `DATABASE_URL` via Secrets Manager. Secrets stored in AWS Secrets Manager. Images stored in ECR.
+Single-service deployment: one Next.js app (`web`) running on EC2-backed ECS behind an ALB. EC2 instances are managed by an Auto Scaling Group, with an ECS Capacity Provider handling instance scaling based on task demand. Tasks use `bridge` networking with dynamic port mapping, so multiple tasks can co-locate on the same host. Database is an existing PostgreSQL cluster — provide the `DATABASE_URL` via Secrets Manager. Secrets stored in AWS Secrets Manager. Images stored in ECR.
 
 ## Naming Conventions
 
@@ -93,7 +93,9 @@ This interactively prompts for all required secrets:
 | Setting | Staging | Production |
 |---------|---------|------------|
 | VPC CIDR | `10.0.0.0/16` | `10.1.0.0/16` |
-| ECS CPU/Memory | 512 / 1024 | 1024 / 2048 |
+| EC2 instance type | `t3.small` | `t3.medium` |
+| ASG min/desired/max | 1 / 1 / 2 | 2 / 2 / 5 |
+| Container CPU/Memory | 512 / 1024 | 1024 / 2048 |
 | Desired tasks | 1 | 2 |
 | Max tasks (autoscale) | 2 | 8 |
 | Ingest rate limit | 100/min | 200/min |
