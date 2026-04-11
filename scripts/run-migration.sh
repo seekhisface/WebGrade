@@ -47,24 +47,49 @@ echo "Connection: postgresql://${DB_USER}:***@${DB_HOST}:${DB_PORT}/${DB_NAME}${
 echo ""
 
 # Choose migration command
-if [ -z "$MIGRATION_NAME" ]; then
-    if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
-        echo "Found existing migrations — running 'prisma migrate deploy'"
-        read -p "Continue? [Y/n]: " CONFIRM
-        CONFIRM=${CONFIRM:-Y}
-        if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+if [ -n "$MIGRATION_NAME" ]; then
+    # Migration name passed on command line — always create a new migration
+    echo "Running 'prisma migrate dev --name $MIGRATION_NAME'"
+    DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate dev --name "$MIGRATION_NAME"
+elif [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null | grep -v migration_lock.toml)" ]; then
+    # Existing migrations found — ask whether to apply or create a new one
+    echo "Found existing migrations."
+    echo ""
+    echo "  1) Apply pending migrations            (prisma migrate deploy)"
+    echo "  2) Create a new migration from schema  (prisma migrate dev --name ...)"
+    echo "  3) Cancel"
+    echo ""
+    read -p "Choose [1]: " CHOICE
+    CHOICE=${CHOICE:-1}
+
+    case $CHOICE in
+        1)
+            echo "Running 'prisma migrate deploy'"
+            DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate deploy
+            ;;
+        2)
+            read -p "New migration name: " MIGRATION_NAME
+            if [ -z "$MIGRATION_NAME" ]; then
+                echo "Migration name is required."
+                exit 1
+            fi
+            echo "Running 'prisma migrate dev --name $MIGRATION_NAME'"
+            DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate dev --name "$MIGRATION_NAME"
+            ;;
+        3)
             echo "Aborted."
             exit 0
-        fi
-        DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate deploy
-    else
-        echo "No existing migrations found."
-        read -p "Migration name [init]: " MIGRATION_NAME
-        MIGRATION_NAME=${MIGRATION_NAME:-init}
-        echo "Running 'prisma migrate dev --name $MIGRATION_NAME'"
-        DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate dev --name "$MIGRATION_NAME"
-    fi
+            ;;
+        *)
+            echo "Invalid choice."
+            exit 1
+            ;;
+    esac
 else
+    # No migrations exist yet — bootstrap with init
+    echo "No existing migrations found."
+    read -p "Migration name [init]: " MIGRATION_NAME
+    MIGRATION_NAME=${MIGRATION_NAME:-init}
     echo "Running 'prisma migrate dev --name $MIGRATION_NAME'"
     DATABASE_URL="$DB_URL" DIRECT_URL="$DB_URL" npx prisma migrate dev --name "$MIGRATION_NAME"
 fi
