@@ -65,29 +65,29 @@ export async function GET(req: NextRequest) {
   const missingItems: { key: string; label: string; description: string; link: string }[] = [];
 
   if (!snippetInstalled) {
-    missingItems.push({ key: 'snippet', label: 'Install Tracking Snippet', description: 'No behavioral data without the snippet on your site', link: `/dashboard/${siteId}/settings` });
+    missingItems.push({ key: 'snippet', label: 'Install Tracking Snippet', description: 'No behavioral data without the snippet on your site', link: `/dashboard/${siteId}/settings#site-info` });
   }
   if (!hasConversionGoal) {
-    missingItems.push({ key: 'conversion', label: 'Set Conversion Goal', description: 'Define what counts as a conversion so we can track it', link: `/onboarding?siteId=${siteId}&step=1` });
+    missingItems.push({ key: 'conversion', label: 'Set Conversion Goal', description: 'Define what counts as a conversion so we can track it', link: `/dashboard/${siteId}/settings#conversion-goals` });
   }
   if (!hasRevenueData) {
-    missingItems.push({ key: 'revenue', label: 'Complete Revenue Questionnaire', description: 'Needed to calculate Revenue at Risk and dollar impact', link: `/dashboard/${siteId}/revenue` });
+    missingItems.push({ key: 'revenue', label: 'Complete Revenue Questionnaire', description: 'Needed to calculate Revenue at Risk and dollar impact', link: `/dashboard/${siteId}/settings#revenue` });
   }
   if (!gscConnected) {
-    missingItems.push({ key: 'gsc', label: 'Connect Google Search Console', description: 'Unlocks keyword rankings, organic traffic, and SEO intelligence', link: `/onboarding?siteId=${siteId}&step=4` });
+    missingItems.push({ key: 'gsc', label: 'Connect Google Search Console', description: 'Unlocks keyword rankings, organic traffic, and SEO intelligence', link: `/dashboard/${siteId}/settings#integrations` });
   }
   if (!hasBusinessContext) {
-    missingItems.push({ key: 'context', label: 'Add Business Context', description: 'Helps AI generate relevant, specific recommendations', link: `/onboarding?siteId=${siteId}&step=2` });
+    missingItems.push({ key: 'context', label: 'Add Business Context', description: 'Helps AI generate relevant, specific recommendations', link: `/dashboard/${siteId}/settings#business-context` });
   }
   if (!hasAdSpend) {
-    missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/revenue` });
+    missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/settings#revenue` });
   }
   if (!ga4Connected) {
-    missingItems.push({ key: 'ga4', label: 'Connect Google Analytics', description: 'Import baseline metrics to measure improvement over time', link: `/api/ga4/authorize?siteId=${siteId}` });
+    missingItems.push({ key: 'ga4', label: 'Connect Google Analytics', description: 'Import baseline metrics to measure improvement over time', link: `/dashboard/${siteId}/settings#integrations` });
   }
   const gadsConnected = site.gadsConnected ?? false;
   if (!gadsConnected) {
-    missingItems.push({ key: 'gads', label: 'Connect Google Ads', description: 'Automatic campaign spend sync — see exactly which ads convert vs. waste money', link: `/api/gads/authorize?siteId=${siteId}` });
+    missingItems.push({ key: 'gads', label: 'Connect Google Ads', description: 'Automatic campaign spend sync — see exactly which ads convert vs. waste money', link: `/dashboard/${siteId}/settings#integrations` });
   }
 
   // Filter out items the user has permanently opted out of
