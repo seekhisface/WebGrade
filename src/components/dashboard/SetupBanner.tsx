@@ -51,6 +51,15 @@ const SKIP_WARNINGS: Record<string, { title: string; consequences: string[]; rec
     ],
     recommendation: 'Two sentences about your business makes every insight 10x more relevant.',
   },
+  gads: {
+    title: 'Skip Google Ads Connection?',
+    consequences: [
+      'No automatic campaign spend data — you\'d need to enter spend manually',
+      'Can\'t match specific ad clicks (gclid) back to their campaign and cost',
+      'Wasted spend detection will only work with manually entered data',
+    ],
+    recommendation: 'If you run Google Ads, connecting takes 30 seconds and gives you automatic daily spend sync. If you don\'t run Google Ads, skip this safely.',
+  },
   adspend: {
     title: 'Skip Ad Spend Data?',
     consequences: [

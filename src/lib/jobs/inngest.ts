@@ -475,6 +475,39 @@ export const syncGscDaily = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// GADS: Daily Google Ads sync — every day at 7am UTC
+// Syncs campaign spend, clicks, impressions for all connected sites
+// ---------------------------------------------------------------------------
+export const syncGadsDaily = inngest.createFunction(
+  { id: 'sync-gads-daily', retries: 2, concurrency: { limit: 3 } },
+  { cron: '0 7 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-gads-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true, gadsConnected: true, gadsCustomerId: { not: null } },
+        select: { id: true, gadsCustomerId: true, gadsConnectedByUserId: true },
+      });
+    });
+
+    let synced = 0;
+    for (const site of sites) {
+      if (!site.gadsConnectedByUserId || !site.gadsCustomerId) continue;
+      await step.run(`gads-sync-${site.id}`, async () => {
+        const { syncCampaignData } = await import('@/lib/gads/client');
+        await syncCampaignData(site.id, site.gadsConnectedByUserId!, site.gadsCustomerId!, 7);
+      }).catch(err => {
+        console.error(`[GAds sync] Failed for site ${site.id}:`, err);
+      });
+      synced++;
+    }
+
+    return { sitesSynced: synced };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // SEO-01: Weekly SEO crawl — every Sunday at 3am UTC
 // Crawls all active sites for SEO health scoring
 // ---------------------------------------------------------------------------
@@ -538,6 +571,7 @@ export const inngestFunctions = [
   webauditSnapshot,
   archiveMonthlyReport,
   syncGscDaily,
+  syncGadsDaily,
   runWeeklySeoCrawl,
   runDailyVerification,
 ];

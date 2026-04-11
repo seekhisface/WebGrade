@@ -180,6 +180,13 @@ model Site {
   gscLastSyncAt      DateTime?
   gscConnectedByUserId String? // User.id who connected GSC (for token lookup)
 
+  // Integrations — Google Ads
+  gadsConnected        Boolean   @default(false)
+  gadsCustomerId       String?   // Google Ads customer/account ID (xxx-xxx-xxxx)
+  gadsConnectedAt      DateTime?
+  gadsLastSyncAt       DateTime?
+  gadsConnectedByUserId String?  // User.id who connected Google Ads (for token lookup)
+
   // Snippet
   snippetId String @unique @default(cuid()) // Public ID embedded in snippet
 
@@ -195,6 +202,7 @@ model Site {
   seoKeywordRankings       SeoKeywordRanking[]
   seoTrafficSnapshots      SeoTrafficSnapshot[]
   adSources                AdSource[]
+  gadsCampaignMetrics      GadsCampaignMetric[]
   reports                  Report[]
   alerts                   Alert[]
   alertSettings            AlertSetting[]
@@ -892,6 +900,38 @@ model AdSource {
   @@unique([siteId, source, medium, campaign])
   @@index([siteId])
   @@map("ad_sources")
+}
+
+// Google Ads campaign-level daily spend data synced from the API
+model GadsCampaignMetric {
+  id     String @id @default(cuid())
+  siteId String
+
+  date         DateTime // Day this metric covers
+  campaignId   String   // Google Ads campaign ID
+  campaignName String
+  campaignType String?  // SEARCH, DISPLAY, SHOPPING, VIDEO, PMAX, etc.
+  status       String?  // ENABLED, PAUSED, REMOVED
+
+  // Spend & performance
+  costMicros   BigInt   // Cost in micros (divide by 1,000,000 for USD)
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  conversions  Float    @default(0)
+  conversionValue Float @default(0)
+
+  // Derived (computed at sync time)
+  cpc          Float?   // cost / clicks
+  ctr          Float?   // clicks / impressions
+  costPerConversion Float?
+
+  createdAt DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, campaignId, date])
+  @@index([siteId, date])
+  @@map("gads_campaign_metrics")
 }
 
 // =============================================================================

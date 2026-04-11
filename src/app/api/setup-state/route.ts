@@ -82,6 +82,10 @@ export async function GET(req: NextRequest) {
   if (!hasAdSpend) {
     missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/revenue` });
   }
+  const gadsConnected = site.gadsConnected ?? false;
+  if (!gadsConnected) {
+    missingItems.push({ key: 'gads', label: 'Connect Google Ads', description: 'Automatic campaign spend sync — see exactly which ads convert vs. waste money', link: `/api/gads/authorize?siteId=${siteId}` });
+  }
 
   // Filter out items the user has permanently opted out of
   const skipped = ob?.skippedSetupItems ?? [];
