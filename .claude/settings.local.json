@@ -12,7 +12,8 @@
       "Bash(git pull:*)",
       "Bash(npx tsx:*)",
       "Bash(npx prisma:*)",
-      "Bash(curl -s -X POST http://localhost:3000/api/alerts/test -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"mike.stephensjr@gmail.com\"\"}')"
+      "Bash(curl -s -X POST http://localhost:3000/api/alerts/test -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"mike.stephensjr@gmail.com\"\"}')",
+      "Bash(chmod +x /Users/jasonbutler/Documents/ClaudeCode/WebGrade/deploy/scripts/*.sh)"
     ]
   }
 }
