@@ -521,17 +521,132 @@ function Field({ label, hint, error, children }: {
   );
 }
 
+interface DetectedCta {
+  pageUrl: string;
+  pageTitle: string;
+  type: 'form' | 'button' | 'link';
+  text: string;
+  destination: string;
+  confidence: 'high' | 'medium' | 'low';
+  suggestedGoalName: string;
+}
+
 function Step1({ form, update, errors }: {
   form: OnboardingFormData;
   update: (f: keyof OnboardingFormData, v: unknown) => void;
   errors: Record<string, string>;
 }) {
+  const [scanning, setScanning] = useState(false);
+  const [ctas, setCtas] = useState<DetectedCta[]>([]);
+  const [scanError, setScanError] = useState('');
+  const [selectedCtaIndex, setSelectedCtaIndex] = useState<number | null>(null);
+
+  async function scanForCtas() {
+    if (!form.siteUrl) return;
+    setScanning(true);
+    setScanError('');
+    setCtas([]);
+    setSelectedCtaIndex(null);
+    try {
+      const res = await fetch('/api/detect-ctas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: form.siteUrl }),
+      });
+      if (!res.ok) throw new Error('Scan failed');
+      const data = await res.json();
+      setCtas(data.ctas || []);
+      if (!data.ctas?.length) setScanError('No CTAs detected — enter your goal manually below.');
+    } catch {
+      setScanError("Couldn't scan your site — enter your goal manually below.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function selectCta(cta: DetectedCta, index: number) {
+    setSelectedCtaIndex(index);
+    update('conversionGoalUrl', cta.destination.startsWith('http') ? cta.destination : `${form.siteUrl.replace(/\/$/, '')}${cta.destination}`);
+    update('conversionGoalName', cta.suggestedGoalName);
+  }
+
+  const showScanButton = form.siteUrl.length > 8 && form.siteUrl.startsWith('http');
+
   return (
     <>
       <Field label="Site URL" error={errors.siteUrl}>
         <input type="url" placeholder="https://yoursite.com" value={form.siteUrl}
           onChange={e => update('siteUrl', e.target.value)} className={inputClass} />
       </Field>
+
+      {showScanButton && (
+        <div className="mt-1">
+          <button
+            type="button"
+            onClick={scanForCtas}
+            disabled={scanning}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-[#0c4a6e] bg-[#e0f2fe] border border-[#bae6fd] rounded-lg hover:bg-[#bae6fd] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {scanning ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                Scanning your site...
+              </>
+            ) : (
+              <>Scan for CTAs</>
+            )}
+          </button>
+        </div>
+      )}
+
+      {scanError && (
+        <p className="text-xs text-amber-500 mt-2">{scanError}</p>
+      )}
+
+      {ctas.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-[#64748b] font-medium">Detected CTAs — click to select:</p>
+          <div className="grid gap-2">
+            {ctas.map((cta, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => selectCta(cta, i)}
+                className={`text-left p-3 rounded-lg border transition-colors ${
+                  selectedCtaIndex === i
+                    ? 'border-[#0c4a6e] bg-[#e0f2fe] ring-1 ring-[#0c4a6e]'
+                    : cta.confidence === 'high'
+                    ? 'border-[#bae6fd] bg-[#f0f9ff] hover:border-[#0c4a6e]'
+                    : 'border-[#e2e8f0] bg-white/5 hover:border-[#bae6fd]'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-[#1e293b]">{cta.text}</span>
+                  <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                    cta.confidence === 'high'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : cta.confidence === 'medium'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {cta.confidence}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#64748b]">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#f1f5f9] rounded text-[10px] font-medium uppercase text-[#475569]">
+                    {cta.type}
+                  </span>
+                  <span className="truncate">on {cta.pageTitle || cta.pageUrl}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Field label="Site name" error={errors.siteName}>
         <input type="text" placeholder="Acme Inc" value={form.siteName}
           onChange={e => update('siteName', e.target.value)} className={inputClass} />
@@ -659,12 +774,12 @@ function Step4({ form, update, dataAvail }: {
 
   function connectGA4() {
     if (!siteId) return;
-    window.location.href = `/api/auth/google?siteId=${siteId}&scope=ga4`;
+    window.location.href = `/api/ga4/authorize?siteId=${siteId}`;
   }
 
   function connectGSC() {
     if (!siteId) return;
-    window.location.href = `/api/auth/google?siteId=${siteId}&scope=gsc`;
+    window.location.href = `/api/gsc/authorize?siteId=${siteId}`;
   }
 
   return (

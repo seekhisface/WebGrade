@@ -187,6 +187,13 @@ model Site {
   gadsLastSyncAt       DateTime?
   gadsConnectedByUserId String?  // User.id who connected Google Ads (for token lookup)
 
+  // Integrations — Google Analytics 4
+  ga4Connected         Boolean   @default(false)
+  ga4PropertyId        String?   // GA4 property ID (e.g. "properties/123456789")
+  ga4ConnectedAt       DateTime?
+  ga4LastSyncAt        DateTime?
+  ga4ConnectedByUserId String?   // User.id who connected GA4 (for token lookup)
+
   // Snippet
   snippetId String @unique @default(cuid()) // Public ID embedded in snippet
 

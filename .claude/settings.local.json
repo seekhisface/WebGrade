@@ -13,7 +13,10 @@
       "Bash(npx tsx:*)",
       "Bash(npx prisma:*)",
       "Bash(curl -s -X POST http://localhost:3000/api/alerts/test -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"mike.stephensjr@gmail.com\"\"}')",
-      "Bash(chmod +x /Users/jasonbutler/Documents/ClaudeCode/WebGrade/deploy/scripts/*.sh)"
+      "WebFetch(domain:webgrade.io)",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"const D\" /mnt/c/Users/MikeStephens/webgrade/src/app/dashboard/[siteId]/page.tsx)"
     ]
   }
 }

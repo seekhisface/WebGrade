@@ -508,6 +508,39 @@ export const syncGadsDaily = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// GA4-01: Daily Google Analytics 4 sync — 8am UTC
+// Syncs daily metrics for GA4-connected sites
+// ---------------------------------------------------------------------------
+export const syncGa4Daily = inngest.createFunction(
+  { id: 'sync-ga4-daily', retries: 2, concurrency: { limit: 3 } },
+  { cron: '0 8 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-ga4-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true, ga4Connected: true, ga4PropertyId: { not: null } },
+        select: { id: true, ga4ConnectedByUserId: true },
+      });
+    });
+
+    let synced = 0;
+    for (const site of sites) {
+      if (!site.ga4ConnectedByUserId) continue;
+      await step.run(`ga4-sync-${site.id}`, async () => {
+        const { syncGa4Data } = await import('@/lib/ga4/client');
+        await syncGa4Data(site.id);
+      }).catch(err => {
+        console.error(`[GA4 sync] Failed for site ${site.id}:`, err);
+      });
+      synced++;
+    }
+
+    return { sitesSynced: synced };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // SEO-01: Weekly SEO crawl — every Sunday at 3am UTC
 // Crawls all active sites for SEO health scoring
 // ---------------------------------------------------------------------------
@@ -572,6 +605,7 @@ export const inngestFunctions = [
   archiveMonthlyReport,
   syncGscDaily,
   syncGadsDaily,
+  syncGa4Daily,
   runWeeklySeoCrawl,
   runDailyVerification,
 ];

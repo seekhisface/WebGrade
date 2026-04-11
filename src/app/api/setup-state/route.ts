@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const snippetInstalled = site.siteInstallations?.[0]?.status === 'VERIFIED' || sessionCount > 0;
-  const ga4Connected = false;
+  const ga4Connected = !!(site.onboarding?.ga4BaselineImportedAt);
   const gscConnected = site.gscConnected ?? false;
   const businessContextComplete = !!(
     site.onboarding?.businessDescription &&
@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
   }
   if (!hasAdSpend) {
     missingItems.push({ key: 'adspend', label: 'Enter Ad Spend Data', description: 'Required for wasted spend analysis and campaign ROI', link: `/dashboard/${siteId}/revenue` });
+  }
+  if (!ga4Connected) {
+    missingItems.push({ key: 'ga4', label: 'Connect Google Analytics', description: 'Import baseline metrics to measure improvement over time', link: `/api/ga4/authorize?siteId=${siteId}` });
   }
   const gadsConnected = site.gadsConnected ?? false;
   if (!gadsConnected) {

@@ -51,6 +51,15 @@ const SKIP_WARNINGS: Record<string, { title: string; consequences: string[]; rec
     ],
     recommendation: 'Two sentences about your business makes every insight 10x more relevant.',
   },
+  ga4: {
+    title: 'Skip Google Analytics Connection?',
+    consequences: [
+      'No historical baseline for comparison',
+      'Can\'t show improvement over time',
+      'Reports won\'t include before/after metrics from GA4',
+    ],
+    recommendation: 'GA4 data gives us a pre-WebGrade baseline so we can prove the ROI of every recommendation we make.',
+  },
   gads: {
     title: 'Skip Google Ads Connection?',
     consequences: [
