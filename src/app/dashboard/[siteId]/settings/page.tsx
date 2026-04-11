@@ -318,6 +318,8 @@ export default function SettingsPage() {
   // CTA scan
   const [scanningCtas, setScanningCtas] = useState(false);
   const [detectedCtas, setDetectedCtas] = useState<DetectedCta[]>([]);
+  const [showCtaModal, setShowCtaModal] = useState(false);
+  const [ctaFilter, setCtaFilter] = useState<'all' | 'high' | 'form' | 'button' | 'link'>('all');
 
   // Re-auth
   const [showReauthModal, setShowReauthModal] = useState(false);
@@ -632,24 +634,26 @@ export default function SettingsPage() {
 
         {/* Settings nav */}
         <div className="flex gap-2 border-b border-[#bae6fd] pb-px">
-          <Link
-            href={`/dashboard/${siteId}/settings`}
-            className="px-4 py-2 text-sm font-medium text-sky-700 border-b-2 border-sky-600 -mb-px"
-          >
-            Site Profile
-          </Link>
-          <Link
-            href={`/dashboard/${siteId}/settings/alerts`}
-            className="px-4 py-2 text-sm font-medium text-[#64748b] hover:text-[#0c4a6e]"
-          >
-            Alerts
-          </Link>
-          <Link
-            href={`/dashboard/${siteId}/settings/distributions`}
-            className="px-4 py-2 text-sm font-medium text-[#64748b] hover:text-[#0c4a6e]"
-          >
-            Distributions
-          </Link>
+          {[
+            { id: 'profile', label: 'Site Profile', href: `/dashboard/${siteId}/settings` },
+            { id: 'alerts', label: 'Alerts', href: `/dashboard/${siteId}/settings/alerts` },
+            { id: 'distributions', label: 'Distributions', href: `/dashboard/${siteId}/settings/distributions` },
+          ].map(tab => {
+            const isActive = tab.id === 'profile';
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-sky-700 border-b-2 border-sky-600 -mb-px'
+                    : 'text-[#64748b] hover:text-[#0c4a6e] hover:bg-[#f0f9ff] rounded-t-lg'
+                }`}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Save message */}
@@ -739,104 +743,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ================================================================= */}
-        {/* 2. CONVERSION GOALS */}
-        {/* ================================================================= */}
-        <div id="conversion-goals" className="bg-white rounded-2xl border border-[#bae6fd] shadow-sm">
-          <div className="px-6 py-5 border-b border-[#e0f2fe]">
-            <div className="flex items-center">
-              <h2 className="text-base font-bold text-[#0c4a6e]">Conversion Goals</h2>
-              <Tooltip text="Conversion goals define what counts as a successful action on your site. WebGrade uses this to calculate conversion rates, drop-off points, and revenue impact." />
-            </div>
-            <p className="text-xs text-[#94a3b8] mt-0.5">Define what counts as a conversion on your site</p>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal URL</label>
-              <input
-                type="url"
-                value={convGoalUrl}
-                onChange={e => setConvGoalUrl(e.target.value)}
-                placeholder="https://yoursite.com/thank-you"
-                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal Name</label>
-              <input
-                type="text"
-                value={convGoalName}
-                onChange={e => setConvGoalName(e.target.value)}
-                placeholder="e.g. Free trial signup"
-                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSaveConversionGoals}
-                disabled={saving}
-                className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
-              >
-                Save Goals
-              </button>
-              <button
-                onClick={handleScanCtas}
-                disabled={scanningCtas || !profile?.siteUrl}
-                className="px-4 py-2 border border-[#bae6fd] text-[#0c4a6e] text-sm font-medium rounded-lg hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                {scanningCtas ? (
-                  <>
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Scanning...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    Scan for CTAs
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* CTA scan results */}
-            {detectedCtas.length > 0 && (
-              <div className="border border-[#e0f2fe] rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 bg-[#f0f9ff] border-b border-[#e0f2fe]">
-                  <p className="text-xs font-semibold text-[#0c4a6e]">Detected CTAs ({detectedCtas.length})</p>
-                </div>
-                <div className="divide-y divide-[#f0f9ff] max-h-48 overflow-y-auto">
-                  {detectedCtas.map((cta, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        if (cta.url) setConvGoalUrl(cta.url);
-                        if (cta.text) setConvGoalName(cta.text);
-                      }}
-                      className="w-full px-4 py-2.5 text-left hover:bg-[#f0f9ff] transition-colors flex items-center gap-3"
-                    >
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        cta.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
-                        cta.confidence === 'medium' ? 'bg-sky-100 text-sky-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {cta.type}
-                      </span>
-                      <span className="text-sm text-[#0f172a] truncate flex-1">{cta.text || cta.url}</span>
-                      <span className="text-xs text-[#94a3b8]">Click to use</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ================================================================= */}
-        {/* 3. BUSINESS CONTEXT */}
+        {/* 2. BUSINESS CONTEXT */}
         {/* ================================================================= */}
         <div id="business-context" className="bg-white rounded-2xl border border-[#bae6fd] shadow-sm">
           <div className="px-6 py-5 border-b border-[#e0f2fe]">
@@ -896,6 +803,72 @@ export default function SettingsPage() {
             >
               Save Business Context
             </button>
+          </div>
+        </div>
+
+        {/* ================================================================= */}
+        {/* 3. CONVERSION GOALS */}
+        {/* ================================================================= */}
+        <div id="conversion-goals" className="bg-white rounded-2xl border border-[#bae6fd] shadow-sm">
+          <div className="px-6 py-5 border-b border-[#e0f2fe]">
+            <div className="flex items-center">
+              <h2 className="text-base font-bold text-[#0c4a6e]">Conversion Goals</h2>
+              <Tooltip text="Conversion goals define what counts as a successful action on your site. WebGrade uses this to calculate conversion rates, drop-off points, and revenue impact." />
+            </div>
+            <p className="text-xs text-[#94a3b8] mt-0.5">Define what counts as a conversion on your site</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal URL</label>
+              <input
+                type="url"
+                value={convGoalUrl}
+                onChange={e => setConvGoalUrl(e.target.value)}
+                placeholder="https://yoursite.com/thank-you"
+                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal Name</label>
+              <input
+                type="text"
+                value={convGoalName}
+                onChange={e => setConvGoalName(e.target.value)}
+                placeholder="e.g. Free trial signup"
+                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveConversionGoals}
+                disabled={saving}
+                className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
+              >
+                Save Goals
+              </button>
+              <button
+                onClick={() => { handleScanCtas(); setShowCtaModal(true); }}
+                disabled={scanningCtas || !profile?.siteUrl}
+                className="px-4 py-2 border border-[#bae6fd] text-[#0c4a6e] text-sm font-medium rounded-lg hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {scanningCtas ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Scanning...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Scan for CTAs
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1331,6 +1304,117 @@ export default function SettingsPage() {
           onSuccess={handleReauthSuccess}
           onClose={() => setShowReauthModal(false)}
         />
+      )}
+
+      {/* CTA Scan Results Modal */}
+      {showCtaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden border border-[#bae6fd]">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-[#e0f2fe] flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-[#0c4a6e]">Detected Conversion Actions</h3>
+                <p className="text-xs text-[#94a3b8] mt-0.5">
+                  {scanningCtas ? 'Scanning your site...' : `Found ${detectedCtas.length} potential conversions`}
+                </p>
+              </div>
+              <button onClick={() => setShowCtaModal(false)} className="p-1.5 text-[#94a3b8] hover:text-[#0c4a6e] transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Loading state */}
+            {scanningCtas && (
+              <div className="flex flex-col items-center justify-center py-16 px-6">
+                <div className="w-8 h-8 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-sm text-[#64748b]">Scanning your site for forms, buttons, and links...</p>
+                <p className="text-xs text-[#94a3b8] mt-1">This usually takes 5-10 seconds</p>
+              </div>
+            )}
+
+            {/* Filter tabs */}
+            {!scanningCtas && detectedCtas.length > 0 && (
+              <>
+                <div className="px-6 py-2 border-b border-[#f0f9ff] flex gap-1 shrink-0 overflow-x-auto">
+                  {([
+                    { id: 'all' as const, label: 'All', count: detectedCtas.length },
+                    { id: 'high' as const, label: 'Recommended', count: detectedCtas.filter(c => c.confidence === 'high').length },
+                    { id: 'form' as const, label: 'Forms', count: detectedCtas.filter(c => c.type === 'form').length },
+                    { id: 'button' as const, label: 'Buttons', count: detectedCtas.filter(c => c.type === 'button').length },
+                    { id: 'link' as const, label: 'Links', count: detectedCtas.filter(c => c.type === 'link').length },
+                  ] as const).filter(t => t.count > 0).map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setCtaFilter(tab.id)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+                        ctaFilter === tab.id
+                          ? 'bg-[#0c4a6e] text-white'
+                          : 'text-[#64748b] hover:bg-[#f0f9ff]'
+                      }`}
+                    >
+                      {tab.label} ({tab.count})
+                    </button>
+                  ))}
+                </div>
+
+                {/* Results list */}
+                <div className="overflow-y-auto flex-1">
+                  <div className="divide-y divide-[#f0f9ff]">
+                    {detectedCtas
+                      .filter(cta => {
+                        if (ctaFilter === 'all') return true;
+                        if (ctaFilter === 'high') return cta.confidence === 'high';
+                        return cta.type === ctaFilter;
+                      })
+                      .map((cta, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (cta.url) setConvGoalUrl(cta.url);
+                            if (cta.text) setConvGoalName(cta.text);
+                            setShowCtaModal(false);
+                            flash('Conversion goal set from detected CTA');
+                          }}
+                          className="w-full px-6 py-3.5 text-left hover:bg-[#f0f9ff] transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-[#0f172a]">{cta.text || 'Unnamed action'}</span>
+                                {cta.confidence === 'high' && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-emerald-100 text-emerald-700 rounded">Recommended</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-[#94a3b8]">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#f1f5f9] rounded text-[10px] font-semibold uppercase text-[#475569]">
+                                  {cta.type}
+                                </span>
+                                {cta.url && <span className="truncate">{cta.url}</span>}
+                              </div>
+                            </div>
+                            <span className="text-xs text-sky-600 font-medium shrink-0 mt-1">Select</span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Empty state */}
+            {!scanningCtas && detectedCtas.length === 0 && (
+              <div className="py-12 px-6 text-center">
+                <p className="text-sm text-[#64748b]">No CTAs detected on your site.</p>
+                <p className="text-xs text-[#94a3b8] mt-1">You can enter your conversion goal manually.</p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-[#e0f2fe] shrink-0 bg-[#f8fafc]">
+              <p className="text-[10px] text-[#94a3b8]">Click any action to set it as your conversion goal. You can change this anytime.</p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
