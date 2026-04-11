@@ -605,14 +605,9 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f0f9ff] p-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-sky-100 rounded w-48" />
-            <div className="h-48 bg-sky-100 rounded-xl" />
-            <div className="h-48 bg-sky-100 rounded-xl" />
-          </div>
-        </div>
+      <div className="animate-pulse space-y-4">
+        <div className="h-48 bg-sky-100 rounded-xl" />
+        <div className="h-48 bg-sky-100 rounded-xl" />
       </div>
     );
   }
@@ -621,41 +616,7 @@ export default function SettingsPage() {
   const displayMsg = isFail ? saveMessage?.replace('FAIL:', '') : saveMessage;
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff] p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-[#0c4a6e]">Settings</h1>
-          <p className="text-sm text-[#64748b] mt-1">
-            Manage your site configuration, integrations, and business context
-          </p>
-        </div>
-
-        {/* Settings nav */}
-        <div className="flex gap-2 border-b border-[#bae6fd] pb-px">
-          {[
-            { id: 'profile', label: 'Site Profile', href: `/dashboard/${siteId}/settings` },
-            { id: 'alerts', label: 'Alerts', href: `/dashboard/${siteId}/settings/alerts` },
-            { id: 'distributions', label: 'Distributions', href: `/dashboard/${siteId}/settings/distributions` },
-          ].map(tab => {
-            const isActive = tab.id === 'profile';
-            return (
-              <Link
-                key={tab.id}
-                href={tab.href}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-sky-700 border-b-2 border-sky-600 -mb-px'
-                    : 'text-[#64748b] hover:text-[#0c4a6e] hover:bg-[#f0f9ff] rounded-t-lg'
-                }`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </div>
-
+    <div className="space-y-6">
         {/* Save message */}
         {saveMessage && (
           <div className={`px-4 py-2 rounded-xl text-sm font-medium ${
@@ -1295,8 +1256,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-
-      </div>
 
       {/* Re-auth Modal */}
       {showReauthModal && (

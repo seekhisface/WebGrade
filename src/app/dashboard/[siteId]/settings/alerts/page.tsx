@@ -107,27 +107,23 @@ export default function AlertSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff] flex flex-col">
+    <div className="space-y-6">
       {/* Sub-header */}
-      <div className="bg-white border-b border-[#e0f2fe] px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#1e293b]">Alert Settings</span>
-          <span className="text-[#cbd5e1]">·</span>
-          <span className="text-xs text-[#94a3b8]">Configure when and how you're notified</span>
-        </div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[#64748b]">Configure when and how you're notified</p>
         <button onClick={sendTestAlert} disabled={testingEmail}
-          className="text-xs px-3 py-1.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-[#64748b] hover:bg-[#e0f2fe] transition-colors disabled:opacity-50">
+          className="text-xs px-3 py-1.5 bg-white border border-[#bae6fd] rounded-lg text-[#0c4a6e] font-medium hover:bg-[#f0f9ff] transition-colors disabled:opacity-50">
           {testingEmail ? 'Sending…' : '📧 Send Test Alert'}
         </button>
       </div>
 
       {testResult && (
-        <div className={`mx-6 mt-4 p-3 rounded-lg text-sm ${testResult.startsWith('✓') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`p-3 rounded-lg text-sm ${testResult.startsWith('✓') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {testResult}
         </div>
       )}
 
-      <div className="flex-1 px-6 py-8 max-w-3xl mx-auto w-full space-y-6">
+      <div className="space-y-6">
 
         {/* Delivery channels */}
         <div className="bg-white rounded-2xl border border-[#e0f2fe] p-6">

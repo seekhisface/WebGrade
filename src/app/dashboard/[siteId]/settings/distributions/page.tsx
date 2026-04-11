@@ -445,23 +445,11 @@ export default function DistributionsPage() {
   const activeCount = recipients.filter((r: Recipient) => r.isActive).length;
 
   return (
-    <div className="min-h-screen bg-[#f0f9ff] text-slate-900">
-      <div className="max-w-3xl mx-auto px-6 py-7">
-
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-slate-400 mb-6">
-          <Link href={`/dashboard/${siteId}`} className="hover:text-sky-600 transition-colors">Dashboard</Link>
-          <span>›</span>
-          <Link href={`/dashboard/${siteId}/settings`} className="hover:text-sky-600 transition-colors">Settings</Link>
-          <span>›</span>
-          <span className="text-slate-600 font-medium">Report Distribution</span>
-        </div>
-
+    <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 mb-1">Report Distribution</h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[#64748b]">
               Control who receives WebGrade reports and when. Reports are only delivered when they contain real data.
             </p>
           </div>
@@ -541,8 +529,6 @@ export default function DistributionsPage() {
             </div>
           </div>
         </div>
-
-      </div>
 
       {/* Drawer */}
       {drawerOpen && (
