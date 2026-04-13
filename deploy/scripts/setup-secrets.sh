@@ -97,9 +97,7 @@ set_secret "webgrade/${ENVIRONMENT}/posthog" \
     "{\"key\":\"$POSTHOG_KEY\",\"host\":\"$POSTHOG_HOST\"}"
 
 # --- Database URL ---
-# Build the DATABASE_URL from parts to ensure the password is URL-encoded.
-# Special characters in the password (e.g., @, :, /, ?, #, %) would break
-# the connection string if pasted raw.
+# Build the DATABASE_URL from parts to avoid malformed URLs.
 
 echo ""
 echo "Database connection:"
@@ -114,15 +112,12 @@ echo ""
 read -p "  Use SSL? [Y/n]: " DB_SSL
 DB_SSL=${DB_SSL:-Y}
 
-# URL-encode the password
-ENCODED_DB_PASSWORD=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$DB_PASSWORD")
-
 SSL_PARAM=""
 if [[ "$DB_SSL" =~ ^[Yy]$ ]]; then
     SSL_PARAM="?sslmode=require"
 fi
 
-DATABASE_URL="postgresql://${DB_USER}:${ENCODED_DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}${SSL_PARAM}"
+DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}${SSL_PARAM}"
 echo "  Built URL: postgresql://${DB_USER}:***@${DB_HOST}:${DB_PORT}/${DB_NAME}${SSL_PARAM}"
 set_secret "webgrade/${ENVIRONMENT}/db-credentials" "$DATABASE_URL"
 
