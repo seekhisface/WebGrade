@@ -5,6 +5,15 @@ resource "aws_vpc_peering_connection" "ecs_to_rds" {
   peer_vpc_id = var.rds_vpc_id
   auto_accept = true
 
+  # Enable DNS resolution so RDS hostnames resolve to private IPs across the peering
+  requester {
+    allow_remote_vpc_dns_resolution = true
+  }
+
+  accepter {
+    allow_remote_vpc_dns_resolution = true
+  }
+
   tags = merge(var.tags, { Name = "${var.environment}-webgrade-ecs-to-rds" })
 }
 
