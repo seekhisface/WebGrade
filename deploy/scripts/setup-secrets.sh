@@ -97,12 +97,33 @@ set_secret "webgrade/${ENVIRONMENT}/posthog" \
     "{\"key\":\"$POSTHOG_KEY\",\"host\":\"$POSTHOG_HOST\"}"
 
 # --- Database URL ---
+# Build the DATABASE_URL from parts to ensure the password is URL-encoded.
+# Special characters in the password (e.g., @, :, /, ?, #, %) would break
+# the connection string if pasted raw.
 
 echo ""
-echo "Database (DATABASE_URL for Prisma):"
-echo "  Format: postgresql://user:pass@host:5432/webgrade?sslmode=require"
-read -sp "  DATABASE_URL: " DATABASE_URL
+echo "Database connection:"
+read -p "  Host: " DB_HOST
+read -p "  Port [5432]: " DB_PORT
+DB_PORT=${DB_PORT:-5432}
+read -p "  Database name [webgrade]: " DB_NAME
+DB_NAME=${DB_NAME:-webgrade}
+read -p "  Username: " DB_USER
+read -sp "  Password: " DB_PASSWORD
 echo ""
+read -p "  Use SSL? [Y/n]: " DB_SSL
+DB_SSL=${DB_SSL:-Y}
+
+# URL-encode the password
+ENCODED_DB_PASSWORD=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$DB_PASSWORD")
+
+SSL_PARAM=""
+if [[ "$DB_SSL" =~ ^[Yy]$ ]]; then
+    SSL_PARAM="?sslmode=require"
+fi
+
+DATABASE_URL="postgresql://${DB_USER}:${ENCODED_DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}${SSL_PARAM}"
+echo "  Built URL: postgresql://${DB_USER}:***@${DB_HOST}:${DB_PORT}/${DB_NAME}${SSL_PARAM}"
 set_secret "webgrade/${ENVIRONMENT}/db-credentials" "$DATABASE_URL"
 
 echo ""

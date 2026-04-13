@@ -58,6 +58,19 @@ module "secrets" {
   tags        = local.tags
 }
 
+module "peering" {
+  source                     = "../../modules/peering"
+  environment                = local.environment
+  ecs_vpc_id                 = module.networking.vpc_id
+  ecs_vpc_cidr               = var.vpc_cidr
+  ecs_private_route_table_id = module.networking.private_route_table_id
+  rds_vpc_id                 = var.rds_vpc_id
+  rds_vpc_cidr               = var.rds_vpc_cidr
+  rds_route_table_id         = var.rds_route_table_id
+  rds_security_group_id      = var.rds_security_group_id
+  tags                       = local.tags
+}
+
 module "alb" {
   source            = "../../modules/alb"
   environment       = local.environment
@@ -88,7 +101,7 @@ module "ecs" {
   asg_desired_capacity = 1
 
   # App config
-  nextauth_url    = "https://staging.webgrade.io"
+  nextauth_url    = "http://staging-webgrade-alb-1713850749.us-east-1.elb.amazonaws.com"
   email_from      = "noreply@webgrade.io"
   ingest_rate_limit   = 100
   data_retention_days = 90

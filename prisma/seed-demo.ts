@@ -212,9 +212,30 @@ async function main() {
       adSourceId: Math.random() < 0.4 ? adSourceRecords[Math.floor(Math.random() * adSourceRecords.length)].id : null,
     });
 
-    // Create pageviews for this session
+    // Create pageviews for this session.
+    // PageView has a unique constraint on (sessionId, siteId, url), so we can't
+    // visit the same URL twice in one session. Track which URLs we've already
+    // emitted and pick a different one if we'd collide.
+    const usedUrls = new Set<string>();
     for (let p = 0; p < pageCount; p++) {
-      const url = p === 0 ? entryPage : (p === pageCount - 1 ? exitPage : pageUrls[Math.floor(Math.random() * pageUrls.length)]);
+      let url: string;
+      if (p === 0) {
+        url = entryPage;
+      } else if (p === pageCount - 1) {
+        url = exitPage;
+      } else {
+        url = pageUrls[Math.floor(Math.random() * pageUrls.length)];
+      }
+
+      // If this URL was already visited in this session, find an unused one.
+      // If every URL has been visited, stop emitting more pageviews for this session.
+      if (usedUrls.has(url)) {
+        const available = pageUrls.filter(u => !usedUrls.has(u));
+        if (available.length === 0) break;
+        url = available[Math.floor(Math.random() * available.length)];
+      }
+      usedUrls.add(url);
+
       const isExit = p === pageCount - 1;
       const enteredAt = new Date(startedAt.getTime() + p * (30000 + Math.floor(Math.random() * 60000)));
 
