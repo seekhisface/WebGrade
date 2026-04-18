@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { siteUrl, siteName, conversionGoalUrl, conversionGoalName, dataScenario } = body;
+  const { siteUrl, siteName, conversionGoalUrl, conversionGoalName, conversionGoals, dataScenario } = body;
 
   if (!siteUrl || !siteName) {
     return NextResponse.json({ error: 'siteUrl and siteName are required' }, { status: 400 });
@@ -82,6 +82,18 @@ export async function POST(req: NextRequest) {
       },
     },
   });
+
+  // Bulk-create conversion goals if provided
+  const goalsToCreate: { name: string; url: string }[] = Array.isArray(conversionGoals) ? conversionGoals : [];
+  // Fall back to legacy single-goal fields
+  if (goalsToCreate.length === 0 && conversionGoalUrl) {
+    goalsToCreate.push({ name: conversionGoalName || 'Conversion', url: conversionGoalUrl });
+  }
+  if (goalsToCreate.length > 0) {
+    await prisma.conversionGoal.createMany({
+      data: goalsToCreate.map(g => ({ siteId: site.id, name: g.name, url: g.url })),
+    });
+  }
 
   // Initialize default alert settings
   await initializeAlertSettings(site.id);

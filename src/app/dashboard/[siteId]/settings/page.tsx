@@ -8,6 +8,14 @@ import Link from 'next/link';
 // Types
 // ---------------------------------------------------------------------------
 
+interface ConversionGoal {
+  id: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 interface ProfileData {
   siteId: string;
   siteName: string;
@@ -315,11 +323,18 @@ export default function SettingsPage() {
   const [selectedProperty, setSelectedProperty] = useState('');
   const [syncing, setSyncing] = useState(false);
 
+  // Conversion goals (multi)
+  const [conversionGoals, setConversionGoals] = useState<ConversionGoal[]>([]);
+  const [newGoalUrl, setNewGoalUrl] = useState('');
+  const [newGoalName, setNewGoalName] = useState('');
+  const [savingGoal, setSavingGoal] = useState(false);
+
   // CTA scan
   const [scanningCtas, setScanningCtas] = useState(false);
   const [detectedCtas, setDetectedCtas] = useState<DetectedCta[]>([]);
   const [showCtaModal, setShowCtaModal] = useState(false);
   const [ctaFilter, setCtaFilter] = useState<'all' | 'high' | 'form' | 'button' | 'link'>('all');
+  const [selectedCtaUrls, setSelectedCtaUrls] = useState<Set<string>>(new Set());
 
   // Re-auth
   const [showReauthModal, setShowReauthModal] = useState(false);
@@ -364,6 +379,15 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
+
+    // Load conversion goals separately
+    try {
+      const gr = await fetch(`/api/conversion-goals?siteId=${siteId}`);
+      if (gr.ok) {
+        const gd = await gr.json();
+        setConversionGoals(gd.goals ?? []);
+      }
+    } catch { /* non-fatal */ }
   }, [siteId]);
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
@@ -451,6 +475,62 @@ export default function SettingsPage() {
       leadToWinRate: leadToWinRate ? parseFloat(leadToWinRate) : null,
       conversionRate: conversionRate ? parseFloat(conversionRate) : null,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversion goal handlers
+  // ---------------------------------------------------------------------------
+
+  async function handleAddGoal(goalsToAdd: { name: string; url: string }[]) {
+    if (goalsToAdd.length === 0) return;
+    setSavingGoal(true);
+    try {
+      const res = await fetch('/api/conversion-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, goals: goalsToAdd }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setConversionGoals(data.goals);
+        setNewGoalUrl('');
+        setNewGoalName('');
+        flash('Conversion goal added');
+      } else {
+        flash(data.error || 'Failed to add goal', true);
+      }
+    } catch {
+      flash('Failed to add goal', true);
+    } finally {
+      setSavingGoal(false);
+    }
+  }
+
+  async function handleDeleteGoal(id: string) {
+    try {
+      const res = await fetch(`/api/conversion-goals?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setConversionGoals(prev => prev.filter(g => g.id !== id));
+        flash('Goal removed');
+      } else {
+        flash('Failed to remove goal', true);
+      }
+    } catch {
+      flash('Failed to remove goal', true);
+    }
+  }
+
+  async function handleToggleGoal(id: string, isActive: boolean) {
+    try {
+      const res = await fetch('/api/conversion-goals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isActive }),
+      });
+      if (res.ok) {
+        setConversionGoals(prev => prev.map(g => g.id === id ? { ...g, isActive } : g));
+      }
+    } catch { /* non-fatal */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -566,6 +646,7 @@ export default function SettingsPage() {
     if (!profile?.siteUrl) return;
     setScanningCtas(true);
     setDetectedCtas([]);
+    setSelectedCtaUrls(new Set());
     try {
       const res = await fetch('/api/detect-ctas', {
         method: 'POST',
@@ -575,9 +656,14 @@ export default function SettingsPage() {
       const data = await res.json();
       if (res.ok && data.ctas) {
         setDetectedCtas(data.ctas);
-        if (data.ctas.length === 0) {
-          flash('No CTAs detected on this page');
-        }
+        // Auto-select high confidence
+        const highUrls = new Set<string>(
+          (data.ctas as DetectedCta[])
+            .filter(c => c.confidence === 'high' && c.url)
+            .map(c => c.url)
+        );
+        setSelectedCtaUrls(highUrls);
+        if (data.ctas.length === 0) flash('No CTAs detected on this page');
       } else {
         flash(data.error || 'CTA scan failed', true);
       }
@@ -772,63 +858,92 @@ export default function SettingsPage() {
         {/* ================================================================= */}
         <div id="conversion-goals" className="bg-white rounded-2xl border border-[#bae6fd] shadow-sm">
           <div className="px-6 py-5 border-b border-[#e0f2fe]">
-            <div className="flex items-center">
-              <h2 className="text-base font-bold text-[#0c4a6e]">Conversion Goals</h2>
-              <Tooltip text="Conversion goals define what counts as a successful action on your site. WebGrade uses this to calculate conversion rates, drop-off points, and revenue impact." />
-            </div>
-            <p className="text-xs text-[#94a3b8] mt-0.5">Define what counts as a conversion on your site</p>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal URL</label>
-              <input
-                type="url"
-                value={convGoalUrl}
-                onChange={e => setConvGoalUrl(e.target.value)}
-                placeholder="https://yoursite.com/thank-you"
-                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#64748b] mb-1">Conversion Goal Name</label>
-              <input
-                type="text"
-                value={convGoalName}
-                onChange={e => setConvGoalName(e.target.value)}
-                placeholder="e.g. Free trial signup"
-                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSaveConversionGoals}
-                disabled={saving}
-                className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
-              >
-                Save Goals
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <h2 className="text-base font-bold text-[#0c4a6e]">Conversion Goals</h2>
+                <Tooltip text="Conversion goals define what counts as a successful action on your site. WebGrade tracks every goal URL and uses them to calculate conversion rates, drop-off points, and revenue impact." />
+              </div>
               <button
                 onClick={() => { handleScanCtas(); setShowCtaModal(true); }}
                 disabled={scanningCtas || !profile?.siteUrl}
-                className="px-4 py-2 border border-[#bae6fd] text-[#0c4a6e] text-sm font-medium rounded-lg hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#bae6fd] text-[#0c4a6e] text-xs font-medium rounded-lg hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
               >
                 {scanningCtas ? (
-                  <>
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Scanning...
-                  </>
+                  <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Scanning...</>
                 ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    Scan for CTAs
-                  </>
+                  <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>Scan for CTAs</>
                 )}
               </button>
+            </div>
+            <p className="text-xs text-[#94a3b8] mt-0.5">Track multiple conversion actions — thank-you pages, signups, purchases</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+
+            {/* Existing goals list */}
+            {conversionGoals.length > 0 ? (
+              <div className="space-y-2">
+                {conversionGoals.map(goal => (
+                  <div key={goal.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${goal.isActive ? 'border-[#bae6fd] bg-[#f0f9ff]' : 'border-[#e2e8f0] bg-[#f8fafc]'}`}>
+                    <button
+                      onClick={() => handleToggleGoal(goal.id, !goal.isActive)}
+                      title={goal.isActive ? 'Deactivate' : 'Activate'}
+                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${goal.isActive ? 'bg-emerald-500 border-emerald-500' : 'border-[#cbd5e1] bg-white'}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#0f172a] truncate">{goal.name}</p>
+                      <p className="text-xs text-[#94a3b8] truncate">{goal.url}</p>
+                    </div>
+                    {!goal.isActive && (
+                      <span className="text-[10px] font-medium text-[#94a3b8] bg-[#f1f5f9] px-2 py-0.5 rounded-full flex-shrink-0">Inactive</span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      className="text-[#cbd5e1] hover:text-red-500 transition-colors flex-shrink-0"
+                      title="Remove goal"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#94a3b8] italic">No conversion goals set. Add one below or scan your site.</p>
+            )}
+
+            {/* Add manually */}
+            <div className="pt-3 border-t border-[#e0f2fe]">
+              <p className="text-xs font-semibold text-[#64748b] mb-2">Add manually</p>
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={newGoalUrl}
+                  onChange={e => setNewGoalUrl(e.target.value)}
+                  placeholder="https://yoursite.com/thank-you"
+                  className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newGoalName}
+                    onChange={e => setNewGoalName(e.target.value)}
+                    placeholder="Goal name (e.g. Free trial signup)"
+                    className="flex-1 px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
+                  />
+                  <button
+                    onClick={() => {
+                      if (newGoalUrl.trim()) {
+                        handleAddGoal([{ url: newGoalUrl.trim(), name: newGoalName.trim() || 'Conversion' }]);
+                      }
+                    }}
+                    disabled={savingGoal || !newGoalUrl.trim()}
+                    className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors flex-shrink-0"
+                  >
+                    {savingGoal ? 'Adding...' : 'Add Goal'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1274,7 +1389,7 @@ export default function SettingsPage() {
               <div>
                 <h3 className="text-lg font-bold text-[#0c4a6e]">Detected Conversion Actions</h3>
                 <p className="text-xs text-[#94a3b8] mt-0.5">
-                  {scanningCtas ? 'Scanning your site...' : `Found ${detectedCtas.length} potential conversions`}
+                  {scanningCtas ? 'Scanning your site...' : `${detectedCtas.length} found · ${selectedCtaUrls.size} selected`}
                 </p>
               </div>
               <button onClick={() => setShowCtaModal(false)} className="p-1.5 text-[#94a3b8] hover:text-[#0c4a6e] transition-colors">
@@ -1287,7 +1402,7 @@ export default function SettingsPage() {
               <div className="flex flex-col items-center justify-center py-16 px-6">
                 <div className="w-8 h-8 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-sm text-[#64748b]">Scanning your site for forms, buttons, and links...</p>
-                <p className="text-xs text-[#94a3b8] mt-1">This usually takes 5-10 seconds</p>
+                <p className="text-xs text-[#94a3b8] mt-1">This usually takes 5–10 seconds</p>
               </div>
             )}
 
@@ -1306,9 +1421,7 @@ export default function SettingsPage() {
                       key={tab.id}
                       onClick={() => setCtaFilter(tab.id)}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-                        ctaFilter === tab.id
-                          ? 'bg-[#0c4a6e] text-white'
-                          : 'text-[#64748b] hover:bg-[#f0f9ff]'
+                        ctaFilter === tab.id ? 'bg-[#0c4a6e] text-white' : 'text-[#64748b] hover:bg-[#f0f9ff]'
                       }`}
                     >
                       {tab.label} ({tab.count})
@@ -1316,7 +1429,7 @@ export default function SettingsPage() {
                   ))}
                 </div>
 
-                {/* Results list */}
+                {/* Results list — checkboxes */}
                 <div className="overflow-y-auto flex-1">
                   <div className="divide-y divide-[#f0f9ff]">
                     {detectedCtas
@@ -1325,36 +1438,38 @@ export default function SettingsPage() {
                         if (ctaFilter === 'high') return cta.confidence === 'high';
                         return cta.type === ctaFilter;
                       })
-                      .map((cta, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (cta.url) setConvGoalUrl(cta.url);
-                            if (cta.text) setConvGoalName(cta.text);
-                            setShowCtaModal(false);
-                            flash('Conversion goal set from detected CTA');
-                          }}
-                          className="w-full px-6 py-3.5 text-left hover:bg-[#f0f9ff] transition-colors"
-                        >
-                          <div className="flex items-start gap-3">
+                      .map((cta, i) => {
+                        const url = cta.url || '';
+                        const checked = selectedCtaUrls.has(url);
+                        return (
+                          <label key={i} className={`flex items-start gap-3 px-6 py-3.5 cursor-pointer transition-colors ${checked ? 'bg-[#f0f9ff]' : 'hover:bg-[#f8fafc]'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setSelectedCtaUrls(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(url)) next.delete(url); else next.add(url);
+                                  return next;
+                                });
+                              }}
+                              className="mt-0.5 accent-[#0c4a6e]"
+                            />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-0.5">
                                 <span className="text-sm font-medium text-[#0f172a]">{cta.text || 'Unnamed action'}</span>
                                 {cta.confidence === 'high' && (
                                   <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-emerald-100 text-emerald-700 rounded">Recommended</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 text-xs text-[#94a3b8]">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#f1f5f9] rounded text-[10px] font-semibold uppercase text-[#475569]">
-                                  {cta.type}
-                                </span>
-                                {cta.url && <span className="truncate">{cta.url}</span>}
+                                <span className="inline-flex px-1.5 py-0.5 bg-[#f1f5f9] rounded text-[10px] font-semibold uppercase text-[#475569]">{cta.type}</span>
+                                {url && <span className="truncate">{url}</span>}
                               </div>
                             </div>
-                            <span className="text-xs text-sky-600 font-medium shrink-0 mt-1">Select</span>
-                          </div>
-                        </button>
-                      ))}
+                          </label>
+                        );
+                      })}
                   </div>
                 </div>
               </>
@@ -1364,14 +1479,29 @@ export default function SettingsPage() {
             {!scanningCtas && detectedCtas.length === 0 && (
               <div className="py-12 px-6 text-center">
                 <p className="text-sm text-[#64748b]">No CTAs detected on your site.</p>
-                <p className="text-xs text-[#94a3b8] mt-1">You can enter your conversion goal manually.</p>
+                <p className="text-xs text-[#94a3b8] mt-1">Add your conversion goal manually in the section above.</p>
               </div>
             )}
 
-            {/* Footer */}
-            <div className="px-6 py-3 border-t border-[#e0f2fe] shrink-0 bg-[#f8fafc]">
-              <p className="text-[10px] text-[#94a3b8]">Click any action to set it as your conversion goal. You can change this anytime.</p>
-            </div>
+            {/* Footer — Add Selected */}
+            {!scanningCtas && detectedCtas.length > 0 && (
+              <div className="px-6 py-3 border-t border-[#e0f2fe] shrink-0 bg-[#f8fafc] flex items-center justify-between gap-3">
+                <p className="text-[10px] text-[#94a3b8]">High-confidence items auto-selected. Check any others you want to track.</p>
+                <button
+                  disabled={selectedCtaUrls.size === 0 || savingGoal}
+                  onClick={async () => {
+                    const goalsToAdd = detectedCtas
+                      .filter(c => c.url && selectedCtaUrls.has(c.url))
+                      .map(c => ({ url: c.url, name: c.text || 'Conversion' }));
+                    await handleAddGoal(goalsToAdd);
+                    setShowCtaModal(false);
+                  }}
+                  className="px-4 py-2 bg-[#0c4a6e] text-white text-xs font-bold rounded-lg disabled:opacity-40 hover:bg-[#075985] transition-colors flex-shrink-0"
+                >
+                  {savingGoal ? 'Adding...' : `Add ${selectedCtaUrls.size > 0 ? selectedCtaUrls.size : ''} selected`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

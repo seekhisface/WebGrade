@@ -228,6 +228,7 @@ model Site {
   retentionTargets         SnippetRetentionTarget[]
   MonthlyPerformanceReport MonthlyPerformanceReport[]
   archivedReports          ArchivedReport[]
+  conversionGoals          ConversionGoal[]
 
   @@index([orgId])
   @@index([domain])
@@ -327,6 +328,21 @@ model SiteOnboarding {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_onboardings")
+}
+
+// Multiple conversion goals per site
+model ConversionGoal {
+  id        String   @id @default(cuid())
+  siteId    String
+  name      String   // e.g. "Free trial signup"
+  url       String   // destination URL that signals conversion
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("conversion_goals")
 }
 
 // OB-02: Site baselines — versioned, never overwritten

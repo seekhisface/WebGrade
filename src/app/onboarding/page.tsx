@@ -8,9 +8,16 @@ import { Suspense } from 'react';
 // Types
 // ---------------------------------------------------------------------------
 
+interface ConversionGoalEntry {
+  name: string;
+  url: string;
+}
+
 interface OnboardingFormData {
   siteUrl: string;
   siteName: string;
+  conversionGoals: ConversionGoalEntry[];
+  // legacy single-goal kept for backward compat with validate step
   conversionGoalUrl: string;
   conversionGoalName: string;
   businessDescription: string;
@@ -29,6 +36,7 @@ interface OnboardingFormData {
 const EMPTY_FORM: OnboardingFormData = {
   siteUrl: '',
   siteName: '',
+  conversionGoals: [],
   conversionGoalUrl: '',
   conversionGoalName: '',
   businessDescription: '',
@@ -127,8 +135,7 @@ function OnboardingFlow() {
           body: JSON.stringify({
             siteUrl: form.siteUrl,
             siteName: form.siteName,
-            conversionGoalUrl: form.conversionGoalUrl,
-            conversionGoalName: form.conversionGoalName,
+            conversionGoals: form.conversionGoals,
           }),
         });
         const data = await res.json();
@@ -297,14 +304,14 @@ function Step1({ form, update, errors }: {
   const [scanning, setScanning] = useState(false);
   const [ctas, setCtas] = useState<DetectedCta[]>([]);
   const [scanError, setScanError] = useState('');
-  const [selectedCtaIndex, setSelectedCtaIndex] = useState<number | null>(null);
+  const [manualGoalUrl, setManualGoalUrl] = useState('');
+  const [manualGoalName, setManualGoalName] = useState('');
 
   async function scanForCtas() {
     if (!form.siteUrl) return;
     setScanning(true);
     setScanError('');
     setCtas([]);
-    setSelectedCtaIndex(null);
     try {
       const res = await fetch('/api/detect-ctas', {
         method: 'POST',
@@ -313,19 +320,65 @@ function Step1({ form, update, errors }: {
       });
       if (!res.ok) throw new Error('Scan failed');
       const data = await res.json();
-      setCtas(data.ctas || []);
-      if (!data.ctas?.length) setScanError('No CTAs detected \u2014 enter your goal manually below.');
+      const found: DetectedCta[] = data.ctas || [];
+      setCtas(found);
+      if (!found.length) {
+        setScanError('No CTAs detected \u2014 add your goal manually below.');
+      } else {
+        // Auto-select all high-confidence CTAs
+        const highGoals = found
+          .filter(c => c.confidence === 'high' && c.destination)
+          .map(c => ({
+            name: c.suggestedGoalName,
+            url: c.destination!.startsWith('http') ? c.destination! : `${form.siteUrl.replace(/\/$/, '')}${c.destination}`,
+          }));
+        if (highGoals.length > 0) {
+          update('conversionGoals', highGoals);
+        }
+      }
     } catch {
-      setScanError("Couldn't scan your site \u2014 enter your goal manually below.");
+      setScanError("Couldn't scan your site \u2014 add your goal manually below.");
     } finally {
       setScanning(false);
     }
   }
 
-  function selectCta(cta: DetectedCta, index: number) {
-    setSelectedCtaIndex(index);
-    update('conversionGoalUrl', cta.destination.startsWith('http') ? cta.destination : `${form.siteUrl.replace(/\/$/, '')}${cta.destination}`);
-    update('conversionGoalName', cta.suggestedGoalName);
+  function toggleCta(cta: DetectedCta) {
+    if (!cta.destination) return;
+    const url = cta.destination.startsWith('http')
+      ? cta.destination
+      : `${form.siteUrl.replace(/\/$/, '')}${cta.destination}`;
+    const current: ConversionGoalEntry[] = form.conversionGoals;
+    const exists = current.some(g => g.url === url);
+    if (exists) {
+      update('conversionGoals', current.filter(g => g.url !== url));
+    } else {
+      update('conversionGoals', [...current, { name: cta.suggestedGoalName, url }]);
+    }
+  }
+
+  function isCtaSelected(cta: DetectedCta): boolean {
+    if (!cta.destination) return false;
+    const url = cta.destination.startsWith('http')
+      ? cta.destination
+      : `${form.siteUrl.replace(/\/$/, '')}${cta.destination}`;
+    return form.conversionGoals.some(g => g.url === url);
+  }
+
+  function addManualGoal() {
+    if (!manualGoalUrl.trim()) return;
+    const entry: ConversionGoalEntry = {
+      name: manualGoalName.trim() || 'Conversion',
+      url: manualGoalUrl.trim(),
+    };
+    update('conversionGoals', [...form.conversionGoals, entry]);
+    setManualGoalUrl('');
+    setManualGoalName('');
+  }
+
+  function removeGoal(index: number) {
+    const updated = form.conversionGoals.filter((_, i) => i !== index);
+    update('conversionGoals', updated);
   }
 
   const showScanButton = form.siteUrl.length > 8 && form.siteUrl.startsWith('http');
@@ -349,99 +402,138 @@ function Step1({ form, update, errors }: {
           onChange={e => update('siteName', e.target.value)} className={inputClass} />
       </Field>
 
-      {showScanButton && (
-        <div className="mt-1">
-          <button
-            type="button"
-            onClick={scanForCtas}
-            disabled={scanning}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-[#0c4a6e] bg-[#e0f2fe] border border-[#bae6fd] rounded-lg hover:bg-[#bae6fd] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scanning ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-                Scanning your site for conversion actions...
-              </>
-            ) : (
-              <>Scan your site</>
+      {/* Conversion Goals */}
+      <div className="pt-3 border-t border-[#e0f2fe] mt-2">
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-sm font-medium text-[#475569]">
+            Conversion Goals
+            {form.conversionGoals.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-[10px] font-bold bg-[#0c4a6e] text-white rounded-full">
+                {form.conversionGoals.length} selected
+              </span>
             )}
-          </button>
+          </label>
+          {showScanButton && (
+            <button
+              type="button"
+              onClick={scanForCtas}
+              disabled={scanning}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0c4a6e] bg-[#e0f2fe] border border-[#bae6fd] rounded-lg hover:bg-[#bae6fd] transition-colors disabled:opacity-50"
+            >
+              {scanning ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Scanning...
+                </>
+              ) : 'Scan your site'}
+            </button>
+          )}
         </div>
-      )}
+        <p className="text-xs text-[#64748b] mb-3 leading-relaxed">
+          The URL(s) someone lands on after converting \u2014 thank-you pages, confirmation pages, signup success pages. You can add multiple.
+        </p>
 
-      {scanError && (
-        <p className="text-xs text-amber-600 mt-2">{scanError}</p>
-      )}
+        {scanError && <p className="text-xs text-amber-600 mb-3">{scanError}</p>}
 
-      {ctas.length > 0 && (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-[#475569] font-medium">Detected conversion actions \u2014 click to select:</p>
-          <div className="grid gap-2">
-            {ctas.map((cta, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => selectCta(cta, i)}
-                className={`text-left p-3 rounded-lg border transition-colors ${
-                  selectedCtaIndex === i
-                    ? 'border-[#0c4a6e] bg-[#e0f2fe] ring-1 ring-[#0c4a6e]'
-                    : cta.confidence === 'high'
-                    ? 'border-[#bae6fd] bg-[#f0f9ff] hover:border-[#0c4a6e]'
-                    : 'border-[#e2e8f0] bg-white hover:border-[#bae6fd]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-[#1e293b]">{cta.text}</span>
-                  <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                    cta.confidence === 'high'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : cta.confidence === 'medium'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {cta.confidence}
-                  </span>
+        {/* Scan results — checkbox list */}
+        {ctas.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wide mb-2">
+              Detected — high confidence auto-selected
+            </p>
+            {ctas.map((cta, i) => {
+              const selected = isCtaSelected(cta);
+              return (
+                <label
+                  key={i}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    selected ? 'border-[#0c4a6e] bg-[#e0f2fe]' : 'border-[#e2e8f0] bg-white hover:border-[#bae6fd]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleCta(cta)}
+                    className="mt-0.5 accent-[#0c4a6e]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-medium text-[#1e293b]">{cta.text || cta.suggestedGoalName}</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        cta.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
+                        cta.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      }`}>{cta.confidence}</span>
+                    </div>
+                    <p className="text-xs text-[#94a3b8] truncate">{cta.destination || 'No destination'}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Selected goals summary */}
+        {form.conversionGoals.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            {ctas.length === 0 && (
+              <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wide mb-2">Selected goals</p>
+            )}
+            {form.conversionGoals.map((g, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-2 bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg">
+                <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[#166534] truncate">{g.name}</p>
+                  <p className="text-[10px] text-[#64748b] truncate">{g.url}</p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-[#64748b]">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#f1f5f9] rounded text-[10px] font-medium uppercase text-[#475569]">
-                    {cta.type}
-                  </span>
-                  <span className="truncate">on {cta.pageTitle || cta.pageUrl}</span>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => removeGoal(i)}
+                  className="text-[#94a3b8] hover:text-red-500 transition-colors flex-shrink-0"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Conversion goal fields */}
-      <div className="pt-2 border-t border-[#e0f2fe] mt-4">
-        <Field
-          label="Conversion Goal"
-          tooltip="A conversion goal tells WebGrade what success looks like on your site. Without it, we can track behavior but can't calculate revenue impact."
-        >
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs text-[#64748b] mb-1.5 leading-relaxed">
-                The URL someone lands on after converting \u2014 like a thank-you page, confirmation page, or signup success page. Example: /thank-you or /welcome
-              </p>
-              <input type="url" placeholder="https://yoursite.com/thank-you" value={form.conversionGoalUrl}
-                onChange={e => update('conversionGoalUrl', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <p className="text-xs text-[#64748b] mb-1.5 leading-relaxed">
-                A short name for this conversion \u2014 this is how it appears in your reports
-              </p>
-              <input type="text" placeholder="e.g. Free trial signup, Demo booked, Purchase complete"
-                value={form.conversionGoalName} onChange={e => update('conversionGoalName', e.target.value)}
-                className={inputClass} />
-            </div>
+        {/* Manual add */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wide">Add manually</p>
+          <input
+            type="url"
+            placeholder="https://yoursite.com/thank-you"
+            value={manualGoalUrl}
+            onChange={e => setManualGoalUrl(e.target.value)}
+            className={inputClass}
+          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Goal name (e.g. Free trial signup)"
+              value={manualGoalName}
+              onChange={e => setManualGoalName(e.target.value)}
+              className={`${inputClass} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={addManualGoal}
+              disabled={!manualGoalUrl.trim()}
+              className="px-4 py-2.5 bg-[#0d9488] hover:bg-[#0f766e] disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+            >
+              Add
+            </button>
           </div>
-        </Field>
-        <p className="text-xs text-[#94a3b8] mt-2 italic">You can set this up later in Settings</p>
+        </div>
+
+        <p className="text-xs text-[#94a3b8] mt-2 italic">You can add or change goals anytime in Settings.</p>
       </div>
     </>
   );
