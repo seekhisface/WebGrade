@@ -58,6 +58,8 @@ export default function ProfilePage() {
   const [nameValue, setNameValue] = useState('');
   const [editingSite, setEditingSite] = useState<string | null>(null);
   const [siteForm, setSiteForm] = useState<Partial<Site>>({});
+  const [managingSites, setManagingSites] = useState(false);
+  const [deletingSite, setDeletingSite] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
   const [inviteOrgId, setInviteOrgId] = useState('');
@@ -125,6 +127,24 @@ export default function ProfilePage() {
       flash(`Invitation sent to ${inviteEmail}`);
     } else {
       flash(data.error || 'Failed to send invitation');
+    }
+    setSaving(false);
+  }
+
+  async function deleteSite(siteId: string) {
+    setSaving(true);
+    const res = await fetch('/api/profile/sites', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteId }),
+    });
+    if (res.ok) {
+      setDeletingSite(null);
+      fetchProfile();
+      flash('Site deleted');
+    } else {
+      const data = await res.json();
+      flash(data.error || 'Failed to delete site');
     }
     setSaving(false);
   }
@@ -236,13 +256,34 @@ export default function ProfilePage() {
         {/* SITES SECTION */}
         {org && (
           <section className="bg-white border border-[#bae6fd] rounded-2xl p-6 mb-6">
-            <h2 className="text-lg font-black text-[#0c4a6e] mb-4">Your Sites</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-[#0c4a6e]">Your Sites</h2>
+              {isAdmin && org.sites.length > 0 && (
+                <button
+                  onClick={() => { setManagingSites(m => !m); setDeletingSite(null); setEditingSite(null); }}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    managingSites
+                      ? 'bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]'
+                      : 'bg-[#0d9488] hover:bg-[#0f766e] text-white'
+                  }`}
+                >
+                  {managingSites ? 'Done' : 'Manage Sites'}
+                </button>
+              )}
+            </div>
+
+            {managingSites && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-xs text-amber-700 font-medium">Deleting a site permanently removes all tracking data, reports, and history. This cannot be undone.</p>
+              </div>
+            )}
+
             {org.sites.length === 0 ? (
               <p className="text-sm text-[#64748b]">No sites added yet. <Link href="/onboarding" className="text-[#0891b2] hover:underline">Add your first site</Link></p>
             ) : (
               <div className="space-y-4">
                 {org.sites.map(site => (
-                  <div key={site.id} className="border border-[#e2e8f0] rounded-xl p-4">
+                  <div key={site.id} className={`border rounded-xl p-4 transition-colors ${deletingSite === site.id ? 'border-red-300 bg-red-50' : 'border-[#e2e8f0]'}`}>
                     {editingSite === site.id ? (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
@@ -277,6 +318,25 @@ export default function ProfilePage() {
                           <button onClick={() => { setEditingSite(null); setSiteForm({}); }} className="px-4 py-2 text-xs text-[#64748b]">Cancel</button>
                         </div>
                       </div>
+                    ) : deletingSite === site.id ? (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={`w-2 h-2 rounded-full ${site.isActive ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                          <p className="text-sm font-bold text-[#1e293b]">{site.name}</p>
+                        </div>
+                        <p className="text-xs text-red-700 font-semibold mb-1">Delete this site?</p>
+                        <p className="text-xs text-red-600 mb-4">All sessions, events, reports, and history will be permanently erased and cannot be recovered.</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => deleteSite(site.id)}
+                            disabled={saving}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors"
+                          >
+                            {saving ? 'Deleting...' : 'Yes, delete permanently'}
+                          </button>
+                          <button onClick={() => setDeletingSite(null)} className="px-4 py-2 text-xs text-[#64748b] hover:text-[#1e293b]">Cancel</button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex items-center justify-between">
                         <div>
@@ -288,12 +348,22 @@ export default function ProfilePage() {
                           {site.industry && <p className="text-xs text-[#94a3b8] mt-0.5">{site.industry}</p>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Link href={`/dashboard/${site.id}`} className="px-3 py-1.5 text-xs font-semibold text-[#0891b2] hover:bg-[#f0f9ff] rounded-lg transition-colors">
-                            Dashboard →
-                          </Link>
-                          {isAdmin && (
+                          {!managingSites && (
+                            <Link href={`/dashboard/${site.id}`} className="px-3 py-1.5 text-xs font-semibold text-[#0891b2] hover:bg-[#f0f9ff] rounded-lg transition-colors">
+                              Dashboard →
+                            </Link>
+                          )}
+                          {isAdmin && !managingSites && (
                             <button onClick={() => startEditSite(site)} className="px-3 py-1.5 text-xs font-semibold text-[#64748b] hover:bg-[#f8fafc] rounded-lg transition-colors">
                               Edit
+                            </button>
+                          )}
+                          {managingSites && (
+                            <button
+                              onClick={() => setDeletingSite(site.id)}
+                              className="px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors"
+                            >
+                              Delete
                             </button>
                           )}
                         </div>

@@ -53,3 +53,37 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json(updated);
 }
+
+// DELETE /api/profile/sites — permanently delete a site and all its data
+const deleteSiteSchema = z.object({ siteId: z.string() });
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
+  const parsed = deleteSiteSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
+
+  const { siteId } = parsed.data;
+
+  const [user, site] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } }),
+    prisma.site.findUnique({ where: { id: siteId }, select: { orgId: true } }),
+  ]);
+
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+  const membership = await prisma.orgMember.findUnique({
+    where: { orgId_userId: { orgId: site.orgId, userId: user.id } },
+    select: { role: true },
+  });
+  if (!membership || membership.role === 'VIEWER') {
+    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+  }
+
+  await prisma.site.delete({ where: { id: siteId } });
+
+  return NextResponse.json({ ok: true });
+}

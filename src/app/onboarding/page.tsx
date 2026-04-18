@@ -333,8 +333,15 @@ function Step1({ form, update, errors }: {
   return (
     <>
       <Field label="Site URL" error={errors.siteUrl}>
-        <input type="url" placeholder="https://yoursite.com" value={form.siteUrl}
-          onChange={e => update('siteUrl', e.target.value)} className={inputClass} />
+        <input
+          type="url"
+          placeholder="https://www.yoursite.com"
+          value={form.siteUrl}
+          onChange={e => update('siteUrl', e.target.value)}
+          onFocus={() => { if (!form.siteUrl) update('siteUrl', 'https://www.'); }}
+          onBlur={() => { if (form.siteUrl === 'https://www.') update('siteUrl', ''); }}
+          className={inputClass}
+        />
       </Field>
 
       <Field label="Site name" error={errors.siteName}>
