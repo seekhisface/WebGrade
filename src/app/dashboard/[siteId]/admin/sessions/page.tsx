@@ -145,15 +145,21 @@ export default function SessionExplorerPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [dateStart, setDateStart] = useState('');
-  const [dateEnd, setDateEnd] = useState('');
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const [dateStart, setDateStart] = useState(fmt(monthStart));
+  const [dateEnd, setDateEnd] = useState(fmt(today));
   const [downloading, setDownloading] = useState(false);
   const [downloadingSummary, setDownloadingSummary] = useState(false);
 
   function fetchSessions() {
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/sessions?siteId=${siteId}&page=${page}&pageSize=${pageSize}&showBots=${showBots}`)
+    const params = new URLSearchParams({ siteId, page: String(page), pageSize: String(pageSize), showBots: String(showBots) });
+    if (dateStart) params.set('start', dateStart);
+    if (dateEnd) params.set('end', dateEnd);
+    fetch(`/api/admin/sessions?${params}`)
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
@@ -171,7 +177,7 @@ export default function SessionExplorerPage() {
   // Fetch on mount and when filters/page/refreshKey change
   useEffect(() => {
     fetchSessions();
-  }, [siteId, page, pageSize, showBots, refreshKey]);
+  }, [siteId, page, pageSize, showBots, dateStart, dateEnd, refreshKey]);
 
   // Auto-refresh every 10 seconds
   useEffect(() => {

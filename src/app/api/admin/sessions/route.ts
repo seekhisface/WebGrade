@@ -22,10 +22,18 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') ?? '25', 10)));
   const showBots = url.searchParams.get('showBots') === 'true';
+  const start = url.searchParams.get('start');
+  const end = url.searchParams.get('end');
 
   const where = {
     siteId,
     ...(!showBots ? { isBotFiltered: false } : {}),
+    ...(start || end ? {
+      startedAt: {
+        ...(start ? { gte: new Date(start) } : {}),
+        ...(end ? { lte: new Date(`${end}T23:59:59.999Z`) } : {}),
+      },
+    } : {}),
   };
 
   // All 3 queries in a single batch transaction (1 connection)
