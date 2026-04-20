@@ -247,7 +247,12 @@ export default function ProfilePage() {
               <p className="text-sm text-[#64748b]">{profile.email}</p>
               <p className="text-xs text-[#94a3b8] mt-1">Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
               {org && (
-                <p className="text-xs text-[#64748b] mt-1">Organization: <span className="font-semibold text-[#0c4a6e]">{org.name}</span> · Role: <span className="font-semibold">{membership.role}</span></p>
+                <p className="text-xs text-[#64748b] mt-1">
+                  Organization: <span className="font-semibold text-[#0c4a6e]">{org.name}</span>
+                  {' · '}Role: <span className="font-semibold">
+                    {membership.role === 'OWNER' ? 'Owner' : membership.role === 'ADMIN' ? 'Editor' : 'Viewer'}
+                  </span>
+                </p>
               )}
             </div>
           </div>
@@ -414,7 +419,7 @@ export default function ProfilePage() {
                       className="px-3 py-2 border border-[#bae6fd] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0891b2]"
                     >
                       <option value="VIEWER">Viewer</option>
-                      <option value="ADMIN">Admin</option>
+                      <option value="ADMIN">Editor</option>
                     </select>
                   </div>
                   <button
@@ -453,7 +458,7 @@ export default function ProfilePage() {
                           onChange={e => updateRole(member.id, e.target.value as 'ADMIN' | 'VIEWER')}
                           className="text-xs border border-[#e2e8f0] rounded-lg px-2 py-1 text-[#64748b]"
                         >
-                          <option value="ADMIN">Admin</option>
+                          <option value="ADMIN">Editor</option>
                           <option value="VIEWER">Viewer</option>
                         </select>
                         <button onClick={() => removeMember(member.id)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
@@ -464,7 +469,7 @@ export default function ProfilePage() {
                         member.role === 'ADMIN' ? 'bg-[#e0f2fe] text-[#0891b2]' :
                         'bg-[#f1f5f9] text-[#64748b]'
                       }`}>
-                        {member.role}
+                        {member.role === 'ADMIN' ? 'Editor' : member.role === 'OWNER' ? 'Owner' : 'Viewer'}
                       </span>
                     )}
                   </div>
@@ -481,7 +486,7 @@ export default function ProfilePage() {
                     <div key={inv.id} className="flex items-center justify-between py-2 px-4 bg-[#fffbeb] border border-[#fde68a] rounded-xl">
                       <div>
                         <p className="text-sm text-[#1e293b]">{inv.email}</p>
-                        <p className="text-xs text-[#94a3b8]">Invited as {inv.role} · Expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-[#94a3b8]">Invited as {inv.role === 'ADMIN' ? 'Editor' : inv.role === 'OWNER' ? 'Owner' : 'Viewer'} · Expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
                       </div>
                       {isAdmin && (
                         <button onClick={() => revokeInvite(inv.id)} className="text-xs text-red-500 hover:text-red-700">Revoke</button>

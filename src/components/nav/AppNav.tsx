@@ -5,6 +5,13 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 
+function isSuperAdminSession(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const list = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ?? '')
+    .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  return list.includes(email.toLowerCase());
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -258,6 +265,15 @@ export function AppNav() {
                 >
                   Profile & Team
                 </Link>
+                {isSuperAdminSession(session?.user?.email) && (
+                  <Link
+                    href="/admin/accounts"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors font-semibold"
+                  >
+                    Platform Admin
+                  </Link>
+                )}
                 <Link
                   href={currentSiteId ? `/dashboard/${currentSiteId}/settings` : '/dashboard'}
                   onClick={() => setUserMenuOpen(false)}
