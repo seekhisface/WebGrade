@@ -7,7 +7,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await requireSession();
-  const sites = await getUserSites(session.user.id);
+  const sites = await getUserSites(session.user.id, session.user.email ?? undefined);
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
