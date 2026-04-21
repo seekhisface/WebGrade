@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { checkSuperAdmin } from '@/lib/auth/super-admin';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardRootPage() {
@@ -8,6 +9,10 @@ export default async function DashboardRootPage() {
 
   if (!session?.user?.email) {
     redirect('/login');
+  }
+
+  if (await checkSuperAdmin(session.user.email)) {
+    redirect('/admin/accounts');
   }
 
   // Look up by email — resilient to NextAuth creating duplicate user records
