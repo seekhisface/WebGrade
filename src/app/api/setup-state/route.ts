@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,12 +16,12 @@ export async function GET(req: NextRequest) {
   const siteId = new URL(req.url).searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
+  const accessCheck = await verifySiteAccess(session.user.email, siteId);
+  if (!accessCheck) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
   const [site, sessionCount] = await prisma.$transaction([
-    prisma.site.findFirst({
-      where: {
-        id: siteId,
-        org: { members: { some: { user: { email: session.user.email } } } },
-      },
+    prisma.site.findUnique({
+      where: { id: siteId },
       include: {
         siteInstallations: { orderBy: { installedAt: 'desc' }, take: 1 },
         onboarding: true,

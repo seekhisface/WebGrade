@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -24,11 +25,14 @@ export async function GET(req: NextRequest) {
 
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-    const site = await prisma.site.findFirst({
-      where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
+    const site = await verifySiteAccess(session.user.email, siteId);
+    if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+    const siteDetails = await prisma.site.findUnique({
+      where: { id: siteId },
       select: { id: true, name: true },
     });
-    if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+    if (!siteDetails) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
     const start = startStr ? new Date(startStr) : new Date(Date.now() - 30 * 86400000);
     const end = endStr ? new Date(endStr + 'T23:59:59') : new Date();
@@ -179,7 +183,7 @@ export async function GET(req: NextRequest) {
       }).join(',')),
     ].join('\n');
 
-    const filename = `webgrade-events-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv`;
+    const filename = `webgrade-events-${siteDetails.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv`;
 
     return new NextResponse(csvContent, {
       headers: {

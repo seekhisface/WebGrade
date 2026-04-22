@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { checkSuperAdmin } from '@/lib/auth/super-admin';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -36,16 +37,23 @@ export async function GET(req: NextRequest) {
     } : {}),
   };
 
-  // All 3 queries in a single batch transaction (1 connection)
-  const [membership, sessions, total] = await prisma.$transaction([
-    prisma.orgMember.findFirst({
+  // Super admins bypass role check
+  const isSuperAdmin = await checkSuperAdmin(session.user.email);
+
+  if (!isSuperAdmin) {
+    const membership = await prisma.orgMember.findFirst({
       where: {
         user: { email: session.user.email },
         org: { sites: { some: { id: siteId } } },
         role: { in: ['OWNER', 'ADMIN'] },
       },
       select: { id: true },
-    }),
+    });
+    if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // All queries in a single batch transaction (1 connection)
+  const [sessions, total] = await prisma.$transaction([
     prisma.visitorSession.findMany({
       where,
       include: {
@@ -60,10 +68,6 @@ export async function GET(req: NextRequest) {
     }),
     prisma.visitorSession.count({ where }),
   ]);
-
-  if (!membership) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   return NextResponse.json({
     sessions,

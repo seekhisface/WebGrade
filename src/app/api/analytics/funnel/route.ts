@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -21,10 +22,7 @@ export async function GET(req: NextRequest) {
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
     // Verify access
-    const site = await prisma.site.findFirst({
-      where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
-      select: { id: true },
-    });
+    const site = await verifySiteAccess(session.user.email, siteId);
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
     const periodStart = new Date(Date.now() - days * 86400000);

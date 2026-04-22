@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { listAccessibleAccounts } from '@/lib/gads/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -18,8 +19,11 @@ export async function GET(req: NextRequest) {
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  const site = await prisma.site.findFirst({
-    where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
+  const accessCheck = await verifySiteAccess(session.user.email, siteId);
+  if (!accessCheck) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
     select: { gadsConnectedByUserId: true },
   });
 

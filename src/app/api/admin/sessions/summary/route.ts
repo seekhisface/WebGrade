@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import PDFDocument from 'pdfkit';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -216,11 +217,15 @@ export async function GET(req: NextRequest) {
 
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-    const site = await prisma.site.findFirst({
-      where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
+    const site = await verifySiteAccess(session.user.email, siteId);
+    if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+    const siteDetails = await prisma.site.findUnique({
+      where: { id: siteId },
       select: { id: true, name: true, domain: true },
     });
-    if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+    if (!siteDetails) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+    const { name: siteName, domain: siteDomain } = siteDetails;
 
     const start = startStr ? new Date(startStr) : new Date(Date.now() - 30 * 86400000);
     const end = endStr ? new Date(endStr + 'T23:59:59') : new Date();
@@ -401,7 +406,7 @@ export async function GET(req: NextRequest) {
       size: 'letter',
       margins: { top: 40, bottom: 40, left: 40, right: 40 },
       info: {
-        Title: `WebGrade Summary - ${site.name}`,
+        Title: `WebGrade Summary - ${siteName}`,
         Author: 'WebGrade',
       },
     });
@@ -425,9 +430,9 @@ export async function GET(req: NextRequest) {
 
     // Site name + period (right-aligned)
     doc.fontSize(12).font('Helvetica-Bold').fillColor(COLORS.white);
-    doc.text(site.name, 300, 18, { width: 272, align: 'right' });
+    doc.text(siteName, 300, 18, { width: 272, align: 'right' });
     doc.fontSize(8).font('Helvetica').fillColor('#7dd3fc');
-    doc.text(`${site.domain}  |  ${periodLabel}`, 300, 36, { width: 272, align: 'right' });
+    doc.text(`${siteDomain}  |  ${periodLabel}`, 300, 36, { width: 272, align: 'right' });
 
     let y = 85;
     const PAGE_BOTTOM = 740; // usable bottom before margin
@@ -437,7 +442,7 @@ export async function GET(req: NextRequest) {
       doc.addPage();
       doc.rect(0, 0, 612, 36).fill(COLORS.navy);
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.white);
-      doc.text(`${site!.name} - Session Summary`, 40, 11);
+      doc.text(`${siteName} - Session Summary`, 40, 11);
       doc.fontSize(7).font('Helvetica').fillColor('#7dd3fc');
       doc.text(periodLabel, 350, 14, { width: 222, align: 'right' });
       return 52;
@@ -557,7 +562,7 @@ export async function GET(req: NextRequest) {
 
     const pdfBuffer = await pdfReady;
 
-    const filename = `webgrade-summary-${site.name.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.pdf`;
+    const filename = `webgrade-summary-${siteName.replace(/\s+/g, '-').toLowerCase()}-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.pdf`;
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {

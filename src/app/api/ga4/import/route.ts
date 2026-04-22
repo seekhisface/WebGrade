@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { importGa4Baseline } from '@/lib/ga4/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 // GET /api/ga4/import?siteId=xxx — check import status
 export async function GET(req: NextRequest) {
@@ -17,11 +18,11 @@ export async function GET(req: NextRequest) {
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-  const site = await prisma.site.findFirst({
-    where: {
-      id: siteId,
-      org: { members: { some: { user: { email: session.user.email } } } },
-    },
+  const accessCheck = await verifySiteAccess(session.user.email, siteId);
+  if (!accessCheck) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
     include: { onboarding: { select: { ga4BaselineImportedAt: true, ga4PropertyId: true } } },
   });
 
@@ -55,12 +56,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
   // Verify site access
-  const site = await prisma.site.findFirst({
-    where: {
-      id: siteId,
-      org: { members: { some: { userId: user.id } } },
-    },
-  });
+  const site = await verifySiteAccess(session.user.email, siteId);
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   try {

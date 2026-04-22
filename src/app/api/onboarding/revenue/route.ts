@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { z } from 'zod';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -16,11 +17,11 @@ export async function GET(req: NextRequest) {
   const siteId = req.nextUrl.searchParams.get('siteId');
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
+  const accessCheck = await verifySiteAccess(session.user.email, siteId);
+  if (!accessCheck) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
   const onboarding = await prisma.siteOnboarding.findFirst({
-    where: {
-      siteId,
-      site: { org: { members: { some: { user: { email: session.user.email } } } } },
-    },
+    where: { siteId },
     select: {
       averageOrderValue: true,
       leadToWinRate: true,
@@ -51,10 +52,7 @@ export async function POST(req: NextRequest) {
   const { siteId, averageOrderValue, leadToWinRate, conversionRate, monthlyAdSpend } = parsed.data;
 
   // Verify access
-  const site = await prisma.site.findFirst({
-    where: { id: siteId, org: { members: { some: { user: { email: session.user.email } } } } },
-    select: { id: true },
-  });
+  const site = await verifySiteAccess(session.user.email, siteId);
   if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   await prisma.siteOnboarding.updateMany({

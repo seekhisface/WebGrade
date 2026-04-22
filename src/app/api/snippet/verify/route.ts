@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -18,18 +19,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'siteId required' }, { status: 400 });
   }
 
-  // Single query: verify access and check for recent events in parallel
+  // Verify access and check for recent events in parallel
   const since = new Date();
   since.setHours(since.getHours() - 24);
 
   const [site, recentEvent] = await Promise.all([
-    prisma.site.findFirst({
-      where: {
-        id: siteId,
-        org: { members: { some: { user: { email: session.user.email } } } },
-      },
-      select: { id: true },
-    }),
+    verifySiteAccess(session.user.email, siteId),
     prisma.sessionEvent.findFirst({
       where: { siteId, timestamp: { gte: since } },
       select: { id: true },

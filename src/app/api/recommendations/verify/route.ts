@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { markImplemented } from '@/lib/verification/engine';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 
@@ -25,9 +26,7 @@ export async function POST(req: NextRequest) {
     });
     if (!rec) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const site = await prisma.site.findFirst({
-      where: { id: rec.siteId, org: { members: { some: { user: { email: session.user.email } } } } },
-    });
+    const site = await verifySiteAccess(session.user.email, rec.siteId);
     if (!site) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const result = await markImplemented(recommendationId, customerNote);

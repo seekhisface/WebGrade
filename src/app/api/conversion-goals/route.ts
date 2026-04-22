@@ -6,8 +6,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
 import { z } from 'zod';
+import { checkSuperAdmin } from '@/lib/auth/super-admin';
 
 async function resolveAccess(email: string, siteId: string) {
+  if (await checkSuperAdmin(email)) return { userId: null, role: 'OWNER' as const };
   const [user, site] = await prisma.$transaction([
     prisma.user.findUnique({ where: { email }, select: { id: true } }),
     prisma.site.findUnique({ where: { id: siteId }, select: { orgId: true } }),

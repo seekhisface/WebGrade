@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -31,32 +32,16 @@ export async function PATCH(req: NextRequest) {
   // Verify the user has access to this recommendation's site
   const rec = await prisma.recommendation.findFirst({
     where: { id: recId },
-    include: {
-      site: {
-        include: {
-          org: {
-            include: { members: { include: { user: true } } },
-          },
-        },
-      },
-    },
+    select: { siteId: true },
   });
 
   if (!rec) {
     return NextResponse.json({ error: 'Recommendation not found' }, { status: 404 });
   }
 
-  const isMember = rec.site.org.members.some(m => m.user.email === session.user!.email);
-  // Fallback: also allow if user's org owns the site
-  if (!isMember) {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { orgMemberships: { select: { orgId: true } } },
-    });
-    const orgIds = user?.orgMemberships.map(m => m.orgId) ?? [];
-    if (!orgIds.includes(rec.site.orgId)) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+  const siteAccess = await verifySiteAccess(session.user.email, rec.siteId);
+  if (!siteAccess) {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
   // Save the update
