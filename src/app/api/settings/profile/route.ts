@@ -150,6 +150,10 @@ const PatchSchema = z.object({
   // Integrations
   posthogEnabled: z.boolean().optional(),
   posthogApiKey: z.string().nullable().optional(),
+
+  // Disconnect flags
+  disconnectGa4: z.boolean().optional(),
+  disconnectGads: z.boolean().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -170,7 +174,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
   }
 
-  const { siteId, siteName, posthogEnabled, posthogApiKey, ...onboardingFields } = parsed.data;
+  const { siteId, siteName, posthogEnabled, posthogApiKey, disconnectGa4, disconnectGads, ...onboardingFields } = parsed.data;
 
   const access = await verifySiteAccess(session.user.email, siteId);
   if (!access) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
@@ -180,6 +184,20 @@ export async function PATCH(req: NextRequest) {
   if (siteName !== undefined) siteData.name = siteName;
   if (posthogEnabled !== undefined) siteData.posthogEnabled = posthogEnabled;
   if (posthogApiKey !== undefined) siteData.posthogApiKey = posthogApiKey;
+  if (disconnectGa4) {
+    siteData.ga4Connected = false;
+    siteData.ga4PropertyId = null;
+    siteData.ga4ConnectedAt = null;
+    siteData.ga4LastSyncAt = null;
+    siteData.ga4ConnectedByUserId = null;
+  }
+  if (disconnectGads) {
+    siteData.gadsConnected = false;
+    siteData.gadsCustomerId = null;
+    siteData.gadsConnectedAt = null;
+    siteData.gadsLastSyncAt = null;
+    siteData.gadsConnectedByUserId = null;
+  }
 
   if (Object.keys(siteData).length > 0) {
     await prisma.site.update({ where: { id: siteId }, data: siteData });

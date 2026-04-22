@@ -277,7 +277,9 @@ resource "aws_ecs_task_definition" "web" {
       { name = "INNGEST_SIGNING_KEY", valueFrom = "${var.inngest_secret_arn}:signing_key::" },
       { name = "NEXT_PUBLIC_POSTHOG_KEY", valueFrom = "${var.posthog_secret_arn}:key::" },
       { name = "NEXT_PUBLIC_POSTHOG_HOST", valueFrom = "${var.posthog_secret_arn}:host::" },
-    ]
+    ] + (var.google_ads_developer_token_secret_arn != "" ? [
+      { name = "GOOGLE_ADS_DEVELOPER_TOKEN", valueFrom = var.google_ads_developer_token_secret_arn },
+    ] : [])
 
     logConfiguration = {
       logDriver = "awslogs"

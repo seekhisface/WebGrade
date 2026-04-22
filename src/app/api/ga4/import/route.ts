@@ -4,7 +4,6 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
-import { prisma } from '@/lib/db/client';
 import { importGa4Baseline } from '@/lib/ga4/client';
 import { verifySiteAccess } from '@/lib/auth/session';
 
@@ -49,18 +48,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'siteId and propertyId are required' }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
   // Verify site access
   const site = await verifySiteAccess(session.user.email, siteId);
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   try {
-    const result = await importGa4Baseline(siteId, user.id, propertyId);
+    const result = await importGa4Baseline(siteId, propertyId);
     return NextResponse.json({ success: true, metricsImported: result.metricsImported });
   } catch (err) {
     console.error('[ga4/import] Import failed:', err);

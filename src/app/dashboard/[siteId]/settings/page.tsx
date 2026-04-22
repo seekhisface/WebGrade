@@ -323,6 +323,18 @@ export default function SettingsPage() {
   const [selectedProperty, setSelectedProperty] = useState('');
   const [syncing, setSyncing] = useState(false);
 
+  // GA4
+  const [ga4Properties, setGa4Properties] = useState<{ name: string; displayName: string }[]>([]);
+  const [ga4Loading, setGa4Loading] = useState(false);
+  const [selectedGa4Property, setSelectedGa4Property] = useState('');
+  const [syncingGa4, setSyncingGa4] = useState(false);
+
+  // Google Ads
+  const [gadsAccounts, setGadsAccounts] = useState<{ customerId: string; name: string }[]>([]);
+  const [gadsLoading, setGadsLoading] = useState(false);
+  const [selectedGadsAccount, setSelectedGadsAccount] = useState('');
+  const [syncingGads, setSyncingGads] = useState(false);
+
   // Conversion goals (multi)
   const [conversionGoals, setConversionGoals] = useState<ConversionGoal[]>([]);
   const [newGoalUrl, setNewGoalUrl] = useState('');
@@ -407,6 +419,46 @@ export default function SettingsPage() {
           }
         })
         .catch(() => flash('Failed to load properties', true));
+    }
+  }, [searchParams, siteId]);
+
+  // Auto-load GA4 properties after OAuth return
+  useEffect(() => {
+    if (searchParams.get('ga4') === 'connected') {
+      setGa4Loading(true);
+      flash('Google Analytics connected — loading your properties...');
+      fetch(`/api/ga4/properties?siteId=${siteId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.properties?.length) {
+            setGa4Properties(data.properties);
+            flash(`Found ${data.properties.length} GA4 propert${data.properties.length === 1 ? 'y' : 'ies'} — select one below`);
+          } else {
+            flash('No GA4 properties found. Make sure your Google account has Analytics access.', true);
+          }
+        })
+        .catch(() => flash('Failed to load GA4 properties', true))
+        .finally(() => setGa4Loading(false));
+    }
+  }, [searchParams, siteId]);
+
+  // Auto-load Google Ads accounts after OAuth return
+  useEffect(() => {
+    if (searchParams.get('gads') === 'connected') {
+      setGadsLoading(true);
+      flash('Google Ads connected — loading your accounts...');
+      fetch(`/api/gads/accounts?siteId=${siteId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.accounts?.length) {
+            setGadsAccounts(data.accounts);
+            flash(`Found ${data.accounts.length} Google Ads account${data.accounts.length === 1 ? '' : 's'} — select one below`);
+          } else {
+            flash('No Google Ads accounts found. Make sure your Google account has Ads access.', true);
+          }
+        })
+        .catch(() => flash('Failed to load Google Ads accounts', true))
+        .finally(() => setGadsLoading(false));
     }
   }, [searchParams, siteId]);
 
@@ -635,6 +687,141 @@ export default function SettingsPage() {
       flash('Sync failed', true);
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleConnectGa4() {
+    if (!selectedGa4Property) return;
+    setSyncingGa4(true);
+    try {
+      const res = await fetch('/api/ga4/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, propertyId: selectedGa4Property }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGa4Properties([]);
+        flash(`GA4 connected — ${data.metricsImported} baseline metrics imported`);
+        loadProfile();
+      } else {
+        flash(data.error || 'Failed to connect GA4', true);
+      }
+    } catch {
+      flash('Failed to connect GA4', true);
+    } finally {
+      setSyncingGa4(false);
+    }
+  }
+
+  async function handleConnectGads() {
+    if (!selectedGadsAccount) return;
+    setSyncingGads(true);
+    try {
+      const res = await fetch('/api/gads/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, customerId: selectedGadsAccount }),
+      });
+      if (res.ok) {
+        setGadsAccounts([]);
+        flash('Google Ads account connected');
+        loadProfile();
+      } else {
+        const data = await res.json();
+        flash(data.error || 'Failed to connect Google Ads account', true);
+      }
+    } catch {
+      flash('Failed to connect Google Ads account', true);
+    } finally {
+      setSyncingGads(false);
+    }
+  }
+
+  async function handleSyncGa4() {
+    if (!profile?.ga4PropertyId) return;
+    setSyncingGa4(true);
+    try {
+      const res = await fetch('/api/ga4/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, propertyId: profile.ga4PropertyId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flash(`GA4 synced — ${data.metricsImported} metrics imported`);
+        loadProfile();
+      } else {
+        flash(data.error || 'GA4 sync failed', true);
+      }
+    } catch {
+      flash('GA4 sync failed', true);
+    } finally {
+      setSyncingGa4(false);
+    }
+  }
+
+  async function handleDisconnectGa4() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, disconnectGa4: true }),
+      });
+      if (res.ok) {
+        flash('Google Analytics disconnected');
+        loadProfile();
+      } else {
+        flash('Failed to disconnect', true);
+      }
+    } catch {
+      flash('Failed to disconnect', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnectGads() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, disconnectGads: true }),
+      });
+      if (res.ok) {
+        flash('Google Ads disconnected');
+        loadProfile();
+      } else {
+        flash('Failed to disconnect', true);
+      }
+    } catch {
+      flash('Failed to disconnect', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSyncGads() {
+    setSyncingGads(true);
+    try {
+      const res = await fetch('/api/gads/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, daysBack: 30 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flash(`Google Ads synced — ${data.campaignsImported ?? 0} campaigns imported`);
+        loadProfile();
+      } else {
+        flash(data.error || 'Google Ads sync failed', true);
+      }
+    } catch {
+      flash('Google Ads sync failed', true);
+    } finally {
+      setSyncingGads(false);
     }
   }
 
@@ -993,13 +1180,11 @@ export default function SettingsPage() {
                 <StatusBadge connected={!!profile?.ga4Connected} />
               </div>
 
-              {profile?.ga4Connected ? (
+              {profile?.ga4Connected && profile?.ga4PropertyId && ga4Properties.length === 0 ? (
                 <div className="ml-[52px] space-y-2">
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-[#64748b]">Property ID:</span>
-                    <span className="font-mono text-[#0f172a]">
-                      {reauthed ? profile.ga4PropertyId : (profile.ga4PropertyId ?? '----')}
-                    </span>
+                    <span className="font-mono text-[#0f172a]">{profile.ga4PropertyId}</span>
                   </div>
                   {profile.ga4LastSyncAt && (
                     <p className="text-xs text-[#94a3b8]">
@@ -1007,22 +1192,88 @@ export default function SettingsPage() {
                     </p>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <button className="px-3 py-1.5 bg-[#0c4a6e] text-white text-xs font-medium rounded-lg hover:bg-[#075985] transition-colors">
-                      Sync Now
+                    <button
+                      onClick={handleSyncGa4}
+                      disabled={syncingGa4}
+                      className="px-3 py-1.5 bg-[#0c4a6e] text-white text-xs font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
+                    >
+                      {syncingGa4 ? 'Syncing...' : 'Sync Now'}
                     </button>
-                    <button className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                    <button onClick={handleDisconnectGa4} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
                       Disconnect
                     </button>
                   </div>
                 </div>
+              ) : ga4Properties.length > 0 ? (
+                <div className="ml-[52px] space-y-2">
+                  <label className="block text-xs font-semibold text-[#64748b]">Select a GA4 property</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedGa4Property}
+                      onChange={e => setSelectedGa4Property(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    >
+                      <option value="">Choose a property...</option>
+                      {ga4Properties.map(p => (
+                        <option key={p.name} value={p.name}>{p.displayName} ({p.name})</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleConnectGa4}
+                      disabled={syncingGa4 || !selectedGa4Property}
+                      className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
+                    >
+                      {syncingGa4 ? 'Connecting...' : 'Connect'}
+                    </button>
+                    <button onClick={handleDisconnectGa4} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+              ) : profile?.ga4Connected && !profile?.ga4PropertyId ? (
+                <div className="ml-[52px] space-y-2">
+                  <div className="flex items-center gap-2">
+                    {ga4Loading ? (
+                      <p className="text-xs text-[#94a3b8]">Loading properties...</p>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setGa4Loading(true);
+                          fetch(`/api/ga4/properties?siteId=${siteId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                              if (data.properties?.length) {
+                                setGa4Properties(data.properties);
+                              } else {
+                                flash('No GA4 properties found.', true);
+                              }
+                            })
+                            .catch(() => flash('Failed to load GA4 properties', true))
+                            .finally(() => setGa4Loading(false));
+                        }}
+                        className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] transition-colors"
+                      >
+                        Select Property
+                      </button>
+                    )}
+                    <button onClick={handleDisconnectGa4} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                      Disconnect
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#94a3b8]">Google Analytics connected — select which property to sync.</p>
+                </div>
               ) : (
                 <div className="ml-[52px]">
-                  <a
-                    href={`/api/ga4/authorize?siteId=${siteId}`}
-                    className="inline-flex px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] transition-colors"
-                  >
-                    Connect Google Analytics
-                  </a>
+                  {ga4Loading ? (
+                    <p className="text-xs text-[#94a3b8]">Loading properties...</p>
+                  ) : (
+                    <a
+                      href={`/api/ga4/authorize?siteId=${siteId}`}
+                      className="inline-flex px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] transition-colors"
+                    >
+                      Connect Google Analytics
+                    </a>
+                  )}
                 </div>
               )}
             </div>
@@ -1147,12 +1398,12 @@ export default function SettingsPage() {
               </div>
 
               <div className="ml-[52px]">
-                {profile?.gadsConnected ? (
+                {profile?.gadsConnected && profile.gadsCustomerId && gadsAccounts.length === 0 ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-3 text-sm">
                       <span className="text-[#64748b]">Customer ID:</span>
                       <span className="font-mono text-[#0f172a]">
-                        {reauthed ? profile.gadsCustomerId : (profile.gadsCustomerId ?? '----')}
+                        {reauthed ? profile.gadsCustomerId : profile.gadsCustomerId}
                       </span>
                     </div>
                     {profile.gadsLastSyncAt && (
@@ -1161,13 +1412,75 @@ export default function SettingsPage() {
                       </p>
                     )}
                     <div className="flex gap-2 pt-1">
-                      <button className="px-3 py-1.5 bg-[#0c4a6e] text-white text-xs font-medium rounded-lg hover:bg-[#075985] transition-colors">
-                        Sync Now
+                      <button
+                        onClick={handleSyncGads}
+                        disabled={syncingGads}
+                        className="px-3 py-1.5 bg-[#0c4a6e] text-white text-xs font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
+                      >
+                        {syncingGads ? 'Syncing...' : 'Sync Now'}
                       </button>
-                      <button className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                      <button onClick={handleDisconnectGads} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
                         Disconnect
                       </button>
                     </div>
+                  </div>
+                ) : gadsAccounts.length > 0 ? (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[#64748b]">Select a Google Ads account</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedGadsAccount}
+                        onChange={e => setSelectedGadsAccount(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      >
+                        <option value="">Choose an account...</option>
+                        {gadsAccounts.map(a => (
+                          <option key={a.customerId} value={a.customerId}>{a.name} ({a.customerId})</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleConnectGads}
+                        disabled={syncingGads || !selectedGadsAccount}
+                        className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors"
+                      >
+                        {syncingGads ? 'Connecting...' : 'Connect'}
+                      </button>
+                      <button onClick={handleDisconnectGads} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                ) : profile?.gadsConnected && !profile.gadsCustomerId ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {gadsLoading ? (
+                        <p className="text-xs text-[#94a3b8]">Loading accounts...</p>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setGadsLoading(true);
+                            fetch(`/api/gads/accounts?siteId=${siteId}`)
+                              .then(r => r.json())
+                              .then(data => {
+                                if (data.accounts?.length) {
+                                  setGadsAccounts(data.accounts);
+                                } else {
+                                  flash('No Google Ads accounts found.', true);
+                                }
+                              })
+                              .catch(() => flash('Failed to load Google Ads accounts', true))
+                              .finally(() => setGadsLoading(false));
+                          }}
+                          className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#075985] transition-colors"
+                        >
+                          Select Account
+                        </button>
+                      )}
+                      <button onClick={handleDisconnectGads} disabled={saving} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+                        Disconnect
+                      </button>
+                    </div>
+                    <p className="text-xs text-[#94a3b8]">Google Ads connected — select which account to sync.</p>
                   </div>
                 ) : (
                   <a

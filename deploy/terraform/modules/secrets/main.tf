@@ -44,3 +44,8 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   name = "webgrade/${var.environment}/db-credentials"
   tags = var.tags
 }
+
+resource "aws_secretsmanager_secret" "google_ads_developer_token" {
+  name = "webgrade/${var.environment}/google-ads-developer-token"
+  tags = var.tags
+}

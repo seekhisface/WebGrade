@@ -11,19 +11,23 @@ import { prisma } from '@/lib/db/client';
 // OAuth2 client for GA4 API calls (same pattern as GSC)
 // ---------------------------------------------------------------------------
 
-async function getGa4Auth(userId: string) {
-  const account = await prisma.account.findFirst({
-    where: { userId, provider: 'google' },
-    select: {
-      access_token: true,
-      refresh_token: true,
-      expires_at: true,
-      id: true,
-    },
+async function getGa4Auth(siteId: string) {
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { ga4ConnectedByUserId: true },
   });
 
-  if (!account?.access_token) {
-    throw new Error('No Google account linked for this user');
+  if (!site?.ga4ConnectedByUserId) {
+    throw new Error('No GA4 connection found for this site');
+  }
+
+  const account = await prisma.account.findFirst({
+    where: { userId: site.ga4ConnectedByUserId, provider: 'google' },
+    select: { access_token: true, refresh_token: true, expires_at: true, id: true },
+  });
+
+  if (!account?.access_token && !account?.refresh_token) {
+    throw new Error('No Google account tokens found — please reconnect Google Analytics');
   }
 
   const oauth2 = new google.auth.OAuth2(
@@ -42,15 +46,11 @@ async function getGa4Auth(userId: string) {
   if (account.expires_at && account.expires_at < now && account.refresh_token) {
     const { credentials } = await oauth2.refreshAccessToken();
     oauth2.setCredentials(credentials);
-
-    // Persist new tokens
     await prisma.account.update({
       where: { id: account.id },
       data: {
         access_token: credentials.access_token,
-        expires_at: credentials.expiry_date
-          ? Math.floor(credentials.expiry_date / 1000)
-          : undefined,
+        expires_at: credentials.expiry_date ? Math.floor(credentials.expiry_date / 1000) : undefined,
       },
     });
   }
@@ -63,13 +63,13 @@ async function getGa4Auth(userId: string) {
 // ---------------------------------------------------------------------------
 
 export interface Ga4Property {
-  propertyId: string;
+  name: string;       // resource name, e.g. "properties/123456"
   displayName: string;
   account: string;
 }
 
-export async function listGa4Properties(userId: string): Promise<Ga4Property[]> {
-  const auth = await getGa4Auth(userId);
+export async function listGa4Properties(siteId: string): Promise<Ga4Property[]> {
+  const auth = await getGa4Auth(siteId);
   const analyticsAdmin = google.analyticsadmin({ version: 'v1beta', auth });
 
   const res = await analyticsAdmin.accountSummaries.list({ pageSize: 200 });
@@ -79,7 +79,7 @@ export async function listGa4Properties(userId: string): Promise<Ga4Property[]> 
     const accountName = accountSummary.displayName ?? accountSummary.account ?? 'Unknown';
     for (const prop of accountSummary.propertySummaries ?? []) {
       properties.push({
-        propertyId: prop.property ?? '',
+        name: prop.property ?? '',
         displayName: prop.displayName ?? 'Unnamed Property',
         account: accountName,
       });
@@ -95,10 +95,9 @@ export async function listGa4Properties(userId: string): Promise<Ga4Property[]> 
 
 export async function importGa4Baseline(
   siteId: string,
-  userId: string,
   propertyId: string,
 ): Promise<{ metricsImported: number }> {
-  const auth = await getGa4Auth(userId);
+  const auth = await getGa4Auth(siteId);
   const analyticsData = google.analyticsdata({ version: 'v1beta', auth });
 
   // Calculate 90-day date range
@@ -195,7 +194,7 @@ export async function syncGa4Data(siteId: string): Promise<{ metricsUpdated: num
     return { metricsUpdated: 0 };
   }
 
-  const auth = await getGa4Auth(site.ga4ConnectedByUserId);
+  const auth = await getGa4Auth(siteId);
   const analyticsData = google.analyticsdata({ version: 'v1beta', auth });
 
   // Sync last 7 days of data

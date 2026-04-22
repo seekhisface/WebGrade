@@ -116,7 +116,8 @@ module "ecs" {
   fingerprint_secret_arn      = module.secrets.fingerprint_secret_arn
   dataforseo_secret_arn       = module.secrets.dataforseo_arn
   inngest_secret_arn          = module.secrets.inngest_arn
-  posthog_secret_arn          = module.secrets.posthog_arn
+  posthog_secret_arn                    = module.secrets.posthog_arn
+  google_ads_developer_token_secret_arn = module.secrets.google_ads_developer_token_arn
 
   tags = local.tags
 }

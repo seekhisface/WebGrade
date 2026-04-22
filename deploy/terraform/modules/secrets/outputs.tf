@@ -34,6 +34,10 @@ output "db_credentials_arn" {
   value = aws_secretsmanager_secret.db_credentials.arn
 }
 
+output "google_ads_developer_token_arn" {
+  value = aws_secretsmanager_secret.google_ads_developer_token.arn
+}
+
 output "all_secret_arns" {
   description = "All secret ARNs for IAM policy"
   value = [
@@ -46,5 +50,6 @@ output "all_secret_arns" {
     aws_secretsmanager_secret.inngest.arn,
     aws_secretsmanager_secret.posthog.arn,
     aws_secretsmanager_secret.db_credentials.arn,
+    aws_secretsmanager_secret.google_ads_developer_token.arn,
   ]
 }

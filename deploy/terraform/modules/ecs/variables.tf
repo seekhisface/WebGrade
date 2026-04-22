@@ -156,6 +156,12 @@ variable "posthog_secret_arn" {
   type        = string
 }
 
+variable "google_ads_developer_token_secret_arn" {
+  description = "GOOGLE_ADS_DEVELOPER_TOKEN secret ARN"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)
