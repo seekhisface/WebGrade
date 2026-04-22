@@ -101,7 +101,7 @@ module "ecs" {
   asg_desired_capacity = 1
 
   # App config
-  nextauth_url    = "http://staging-webgrade-alb-1713850749.us-east-1.elb.amazonaws.com"
+  nextauth_url    = "https://staging.webgrade.io"
   email_from      = "noreply@webgrade.io"
   ingest_rate_limit   = 100
   data_retention_days = 90

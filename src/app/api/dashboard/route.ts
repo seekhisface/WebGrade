@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
+import { verifySiteAccess } from '@/lib/auth/session';
 import { computeDropOffAnalysis } from '@/lib/analytics/dropoff';
 import { getBaselineComparison } from '@/lib/baseline/engine';
 
@@ -27,14 +28,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'siteId required' }, { status: 400 });
     }
 
-    // Verify user has access to this site
-    const site = await prisma.site.findFirst({
-      where: {
-        id: siteId,
-        org: {
-          members: { some: { user: { email: session.user.email } } },
-        },
-      },
+    // Verify user has access to this site (super admins bypass org membership)
+    const siteAccess = await verifySiteAccess(session.user.email, siteId);
+    if (!siteAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+    const site = await prisma.site.findUnique({
+      where: { id: siteId },
       include: {
         onboarding: {
           select: { averageOrderValue: true, leadToWinRate: true },

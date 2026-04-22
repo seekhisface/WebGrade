@@ -3,7 +3,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/client';
 import bcrypt from 'bcryptjs';
-import { syncSuperAdminFlag } from '@/lib/auth/super-admin';
+
 
 export const authOptions: NextAuthOptions = {
   // NOTE: PrismaAdapter removed — it throws OAuthAccountNotLinked before callbacks
@@ -112,17 +112,10 @@ export const authOptions: NextAuthOptions = {
           // Attach the DB user id so the jwt callback picks it up
           (user as unknown as Record<string, unknown>).id = dbUser.id;
 
-          // Keep super-admin flag in sync with env list
-          await syncSuperAdminFlag(profile.email).catch(() => {});
         } catch (err) {
           console.error('[auth] Google signIn callback error:', err);
           return true;
         }
-      }
-
-      // Sync super-admin flag for credentials sign-in too
-      if (account?.provider === 'credentials' && user?.email) {
-        await syncSuperAdminFlag(user.email).catch(() => {});
       }
 
       return true;

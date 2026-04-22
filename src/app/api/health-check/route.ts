@@ -33,24 +33,16 @@ export async function POST(req: NextRequest) {
 
   const { siteId } = parsed.data;
 
-  // Verify the user has access to this site
-  const site = await prisma.site.findFirst({
-    where: {
-      id: siteId,
-      org: {
-        members: {
-          some: { user: { email: session.user.email } }
-        }
-      }
-    },
-    include: {
-      onboarding: true,
-    }
+  // Verify the user has access to this site (super admins bypass org membership)
+  const siteAccess = await verifySiteAccess(session.user.email, siteId);
+  if (!siteAccess) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    include: { onboarding: true },
   });
 
-  if (!site) {
-    return NextResponse.json({ error: 'Site not found' }, { status: 404 });
-  }
+  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   // Run all checks
   const results = await runHealthChecks(site);

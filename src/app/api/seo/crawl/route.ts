@@ -22,15 +22,8 @@ export async function POST(req: NextRequest) {
     const { siteId } = await req.json();
     if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
-    // Verify access
-    const site = await prisma.site.findFirst({
-      where: {
-        id: siteId,
-        org: { members: { some: { user: { email: session.user.email } } } },
-      },
-      select: { id: true, url: true },
-    });
-
+    // Verify access (super admins bypass org membership)
+    const site = await verifySiteAccess(session.user.email, siteId);
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
     // Check for recent crawl (throttle to 1 per hour)

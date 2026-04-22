@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from './options';
 import { prisma } from '@/lib/db/client';
 import { redirect } from 'next/navigation';
-import { isSuperAdminEmail } from '@/lib/auth/super-admin';
+import { checkSuperAdmin } from '@/lib/auth/super-admin';
 
 export async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -30,8 +30,7 @@ export async function getUserOrgs(userId: string) {
 }
 
 export async function getUserSites(userId: string, userEmail?: string) {
-  // Super admins see all active sites across every org
-  if (userEmail && isSuperAdminEmail(userEmail)) {
+  if (userEmail && await checkSuperAdmin(userEmail)) {
     return prisma.site.findMany({
       where: { isActive: true },
       orderBy: { createdAt: 'desc' },
@@ -70,7 +69,7 @@ export async function requireSiteAccess(userId: string, siteId: string) {
  * Super admins bypass org membership and can access any site.
  */
 export async function verifySiteAccess(email: string, siteId: string) {
-  if (isSuperAdminEmail(email)) {
+  if (await checkSuperAdmin(email)) {
     return prisma.site.findUnique({ where: { id: siteId } });
   }
   return prisma.site.findFirst({
