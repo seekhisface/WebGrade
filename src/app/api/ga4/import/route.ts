@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { importGa4Baseline } from '@/lib/ga4/client';
 import { verifySiteAccess } from '@/lib/auth/session';
+import { prisma } from '@/lib/db/client';
 
 // GET /api/ga4/import?siteId=xxx — check import status
 export async function GET(req: NextRequest) {
@@ -42,15 +43,23 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { siteId, propertyId } = body as { siteId?: string; propertyId?: string };
+  const { siteId, propertyId: clientPropertyId } = body as { siteId?: string; propertyId?: string };
 
-  if (!siteId || !propertyId) {
-    return NextResponse.json({ error: 'siteId and propertyId are required' }, { status: 400 });
+  if (!siteId) {
+    return NextResponse.json({ error: 'siteId is required' }, { status: 400 });
   }
 
   // Verify site access
   const site = await verifySiteAccess(session.user.email, siteId);
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Use client-supplied propertyId only for initial connection; for sync, always read from DB
+  const dbSite = await prisma.site.findUnique({ where: { id: siteId }, select: { ga4PropertyId: true } });
+  const propertyId = clientPropertyId?.startsWith('properties/') ? clientPropertyId : dbSite?.ga4PropertyId;
+
+  if (!propertyId) {
+    return NextResponse.json({ error: 'No GA4 property connected' }, { status: 400 });
+  }
 
   try {
     const result = await importGa4Baseline(siteId, propertyId);

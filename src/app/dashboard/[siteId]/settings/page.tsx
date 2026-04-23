@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -301,8 +301,6 @@ export default function SettingsPage() {
 
   // Editable fields
   const [siteName, setSiteName] = useState('');
-  const [convGoalUrl, setConvGoalUrl] = useState('');
-  const [convGoalName, setConvGoalName] = useState('');
   const [bizDescription, setBizDescription] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [primaryValueProp, setPrimaryValueProp] = useState('');
@@ -367,8 +365,6 @@ export default function SettingsPage() {
       setProfile(data);
 
       setSiteName(data.siteName);
-      setConvGoalUrl(data.conversionGoalUrl);
-      setConvGoalName(data.conversionGoalName);
       setBizDescription(data.businessDescription);
       setTargetAudience(data.targetAudience);
       setPrimaryValueProp(data.primaryValueProp);
@@ -507,9 +503,6 @@ export default function SettingsPage() {
     await patchProfile({ siteName });
   }
 
-  async function handleSaveConversionGoals() {
-    await patchProfile({ conversionGoalUrl: convGoalUrl, conversionGoalName: convGoalName });
-  }
 
   async function handleSaveBusinessContext() {
     await patchProfile({
@@ -678,7 +671,9 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        flash(`Synced ${data.daysImported} days, ${data.keywordsImported} keyword records`);
+        flash(data.daysImported > 0
+          ? `Synced ${data.daysImported} days, ${data.keywordsImported} keyword records`
+          : 'Search Console is up to date');
         loadProfile();
       } else {
         flash(data.error || 'Sync failed', true);

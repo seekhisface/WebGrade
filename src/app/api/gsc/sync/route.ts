@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
   const endStr = endDate.toISOString().split('T')[0];
 
   if (startStr >= endStr) {
-    return NextResponse.json({ message: 'Already up to date', daysImported: 0, keywordsImported: 0 });
+    await prisma.site.update({ where: { id: siteId }, data: { gscLastSyncAt: new Date() } });
+    return NextResponse.json({ success: true, message: 'Already up to date', daysImported: 0, keywordsImported: 0 });
   }
 
   try {

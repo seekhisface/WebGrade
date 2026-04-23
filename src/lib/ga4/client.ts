@@ -160,7 +160,7 @@ export async function importGa4Baseline(
   // Update site and onboarding records
   await prisma.site.update({
     where: { id: siteId },
-    data: { ga4PropertyId: propertyId },
+    data: { ga4PropertyId: propertyId, ga4LastSyncAt: new Date() },
   });
 
   await prisma.siteOnboarding.updateMany({
