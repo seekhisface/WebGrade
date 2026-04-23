@@ -667,13 +667,13 @@ export default function SettingsPage() {
       const res = await fetch('/api/gsc/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId }),
+        body: JSON.stringify({ siteId, force: true }),
       });
       const data = await res.json();
       if (res.ok) {
         flash(data.daysImported > 0
           ? `Synced ${data.daysImported} days, ${data.keywordsImported} keyword records`
-          : 'Search Console is up to date');
+          : 'Search Console is up to date — no new data from Google (check property URL in console.search.google.com)');
         loadProfile();
       } else {
         flash(data.error || 'Sync failed', true);

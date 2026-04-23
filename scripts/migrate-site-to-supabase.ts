@@ -66,6 +66,19 @@ function log(msg: string) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (attempt === retries) throw err;
+      log(`  Retrying after error: ${err?.message ?? err} (attempt ${attempt}/${retries})`);
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  throw new Error('unreachable');
+}
+
 async function upsertBatch<T extends Record<string, any>>(
   label: string,
   records: T[],
@@ -76,11 +89,10 @@ async function upsertBatch<T extends Record<string, any>>(
     return;
   }
   let count = 0;
-  for (let i = 0; i < records.length; i += BATCH) {
-    const chunk = records.slice(i, i + BATCH);
-    await Promise.all(chunk.map(upsertFn));
-    count += chunk.length;
-    if (records.length > BATCH) log(`  ${label}: ${count}/${records.length}…`);
+  for (const record of records) {
+    await withRetry(() => upsertFn(record));
+    count++;
+    if (records.length > BATCH && count % BATCH === 0) log(`  ${label}: ${count}/${records.length}…`);
   }
   log(`  ${label}: ${records.length} records done`);
 }
@@ -109,24 +121,39 @@ async function main() {
   log(`Migrating site: ${site.domain} (org: ${org.name})`);
 
   // Upsert org — shell record only, no users or memberships
-  await target.organization.upsert({
-    where: { id: org.id },
-    create: { id: org.id, name: org.name, plan: org.plan, createdAt: org.createdAt, updatedAt: org.updatedAt },
-    update: { name: org.name, plan: org.plan },
+  // Try by id first; if slug conflicts, upsert by slug instead
+  const existingOrg = await target.organization.findFirst({
+    where: { OR: [{ id: org.id }, { slug: org.slug }] },
   });
+  let targetOrgId: string;
+  if (existingOrg) {
+    await target.organization.update({
+      where: { id: existingOrg.id },
+      data: { name: org.name, slug: org.slug, plan: org.plan },
+    });
+    targetOrgId = existingOrg.id;
+  } else {
+    await target.organization.create({
+      data: { id: org.id, name: org.name, slug: org.slug, plan: org.plan, createdAt: org.createdAt, updatedAt: org.updatedAt },
+    });
+    targetOrgId = org.id;
+  }
   log('  Organization: done');
 
   // Upsert site — null out Google user references (user IDs won't match in dev)
+  // Use the target org's actual ID (may differ from source if org was found by slug)
   await target.site.upsert({
     where: { id: site.id },
     create: {
       ...site,
+      orgId: targetOrgId,
       gscConnectedByUserId: null,
       gadsConnectedByUserId: null,
       ga4ConnectedByUserId: null,
     },
     update: {
       ...site,
+      orgId: targetOrgId,
       gscConnectedByUserId: null,
       gadsConnectedByUserId: null,
       ga4ConnectedByUserId: null,
@@ -157,7 +184,7 @@ async function main() {
     log('  SiteInstallation: done');
   }
 
-  const healthCheck = await source.siteHealthCheck.findFirst({ where: { siteId: siteId! }, orderBy: { createdAt: 'desc' } });
+  const healthCheck = await source.siteHealthCheck.findFirst({ where: { siteId: siteId! }, orderBy: { checkedAt: 'desc' } });
   if (healthCheck) {
     await target.siteHealthCheck.upsert({
       where: { id: healthCheck.id },
@@ -172,17 +199,12 @@ async function main() {
     target.siteBaseline.upsert({ where: { id: r.id }, create: r, update: r })
   );
 
-  const goals = await source.conversionGoal.findMany({ where: { siteId: siteId! } });
-  await upsertBatch('ConversionGoal', goals, r =>
-    target.conversionGoal.upsert({ where: { id: r.id }, create: r, update: r })
-  );
-
   // --- Behavioral data (date-limited) ---------------------------------------
 
   log(`Fetching behavioral data since ${since.toISOString().split('T')[0]}…`);
 
   const sessions = await source.visitorSession.findMany({
-    where: { siteId: siteId!, createdAt: { gte: since } },
+    where: { siteId: siteId!, startedAt: { gte: since } },
   });
   await upsertBatch('VisitorSession', sessions, r =>
     target.visitorSession.upsert({
@@ -352,6 +374,27 @@ async function main() {
   await upsertBatch('ReportDistribution', distributions, r =>
     target.reportDistribution.upsert({ where: { id: r.id }, create: r, update: r })
   );
+
+  // --- Org membership — give all target users access to the migrated site ----
+
+  const targetUsers = await target.user.findMany({ select: { id: true, email: true } });
+
+  let membersAdded = 0;
+  for (const user of targetUsers) {
+    const existing = await target.orgMember.findUnique({
+      where: { orgId_userId: { userId: user.id, orgId: targetOrgId } },
+    });
+    if (!existing) {
+      await target.orgMember.create({
+        data: { userId: user.id, orgId: targetOrgId, role: 'OWNER' },
+      });
+      log(`  OrgMember: added ${user.email} as OWNER`);
+      membersAdded++;
+    } else {
+      log(`  OrgMember: ${user.email} already a member — skipping`);
+    }
+  }
+  log(`  OrgMember: ${membersAdded} members added`);
 
   log('Migration complete!');
 }

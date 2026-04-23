@@ -21,8 +21,13 @@ async function getGa4Auth(siteId: string) {
     throw new Error('No GA4 connection found for this site');
   }
 
+  // Prefer the GA4-specific account record; fall back to any google account
+  const userId = site.ga4ConnectedByUserId!;
   const account = await prisma.account.findFirst({
-    where: { userId: site.ga4ConnectedByUserId, provider: 'google' },
+    where: { userId, provider: 'google', providerAccountId: `ga4-${userId}` },
+    select: { access_token: true, refresh_token: true, expires_at: true, id: true },
+  }) ?? await prisma.account.findFirst({
+    where: { userId, provider: 'google' },
     select: { access_token: true, refresh_token: true, expires_at: true, id: true },
   });
 

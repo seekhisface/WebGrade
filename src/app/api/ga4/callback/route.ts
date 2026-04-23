@@ -48,13 +48,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/dashboard?ga4_error=user_not_found`);
     }
 
-    // Upsert the Google account record with GA4 tokens
+    // Upsert a GA4-specific Account record (keyed by ga4-{userId}) so it
+    // doesn't overwrite GSC or NextAuth tokens on the shared google account.
+    const ga4AccountId = `ga4-${user.id}`;
     const existingAccount = await prisma.account.findFirst({
-      where: { userId: user.id, provider: 'google' },
+      where: { userId: user.id, provider: 'google', providerAccountId: ga4AccountId },
     });
 
     if (existingAccount) {
-      // Update existing Google account with new tokens/scope
       await prisma.account.update({
         where: { id: existingAccount.id },
         data: {
@@ -65,13 +66,12 @@ export async function GET(req: NextRequest) {
         },
       });
     } else {
-      // Create a new Google account record for this user
       await prisma.account.create({
         data: {
           userId: user.id,
           type: 'oauth',
           provider: 'google',
-          providerAccountId: `ga4-${user.id}`,
+          providerAccountId: ga4AccountId,
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
           expires_at: tokens.expiry_date ? Math.floor(tokens.expiry_date / 1000) : undefined,

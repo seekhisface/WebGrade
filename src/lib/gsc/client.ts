@@ -12,14 +12,13 @@ import { prisma } from '@/lib/db/client';
 // ---------------------------------------------------------------------------
 
 async function getOAuth2Client(userId: string) {
+  // Prefer the GSC-specific account record; fall back to any google account
   const account = await prisma.account.findFirst({
+    where: { userId, provider: 'google', providerAccountId: `gsc-${userId}` },
+    select: { access_token: true, refresh_token: true, expires_at: true, id: true },
+  }) ?? await prisma.account.findFirst({
     where: { userId, provider: 'google' },
-    select: {
-      access_token: true,
-      refresh_token: true,
-      expires_at: true,
-      id: true,
-    },
+    select: { access_token: true, refresh_token: true, expires_at: true, id: true },
   });
 
   if (!account?.access_token) {

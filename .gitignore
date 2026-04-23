@@ -5,6 +5,9 @@ node_modules/
 
 .env
 
+# Local scripts with credentials
+scripts/pull-staging-data.sh
+
 # Terraform
 deploy/terraform/environments/*/.terraform/
 deploy/terraform/environments/*/.terraform.lock.hcl

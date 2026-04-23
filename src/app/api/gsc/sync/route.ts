@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { siteId } = await req.json();
+  const body = await req.json();
+  const { siteId, force } = body as { siteId?: string; force?: boolean };
   if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 });
 
   const access = await verifySiteAccess(session.user.email, siteId);
@@ -35,9 +36,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Sync window: last sync (or 90 days ago) to 3 days ago (GSC data delay)
+  // force=true ignores gscLastSyncAt and re-imports from 90 days ago
   const endDate = new Date();
   endDate.setDate(endDate.getDate() - 3);
-  const startDate = site.gscLastSyncAt
+  const startDate = (!force && site.gscLastSyncAt)
     ? new Date(site.gscLastSyncAt)
     : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
@@ -49,12 +51,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Already up to date', daysImported: 0, keywordsImported: 0 });
   }
 
+  console.log(`[gsc/sync] siteId=${siteId} force=${force} range=${startStr}→${endStr} property=${site.gscPropertyUrl}`);
+
   try {
     // Fetch data from GSC API
     const [dailyTraffic, keywordRows] = await Promise.all([
       fetchDailyTraffic(site.gscConnectedByUserId, site.gscPropertyUrl, startStr, endStr),
       fetchKeywordData(site.gscConnectedByUserId, site.gscPropertyUrl, startStr, endStr),
     ]);
+
+    console.log(`[gsc/sync] GSC returned ${dailyTraffic.length} days, ${keywordRows.length} keyword rows`);
 
     // Write traffic snapshots — upsert by (siteId, date)
     if (dailyTraffic.length > 0) {

@@ -48,15 +48,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/dashboard?gsc_error=user_not_found`);
     }
 
-    // Upsert the Google account record for GSC access
-    // Uses provider + providerAccountId as the unique key
-    // We use a special providerAccountId for GSC-only connections
+    // Upsert a GSC-specific Account record (keyed by gsc-{userId}) so it
+    // doesn't overwrite GA4 or NextAuth tokens on the shared google account.
+    const gscAccountId = `gsc-${user.id}`;
     const existingAccount = await prisma.account.findFirst({
-      where: { userId: user.id, provider: 'google' },
+      where: { userId: user.id, provider: 'google', providerAccountId: gscAccountId },
     });
 
     if (existingAccount) {
-      // Update existing Google account with new tokens/scope
       await prisma.account.update({
         where: { id: existingAccount.id },
         data: {
@@ -67,13 +66,12 @@ export async function GET(req: NextRequest) {
         },
       });
     } else {
-      // Create a new Google account record for this user (they logged in via password)
       await prisma.account.create({
         data: {
           userId: user.id,
           type: 'oauth',
           provider: 'google',
-          providerAccountId: `gsc-${user.id}`,
+          providerAccountId: gscAccountId,
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
           expires_at: tokens.expiry_date ? Math.floor(tokens.expiry_date / 1000) : undefined,
