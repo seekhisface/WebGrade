@@ -259,6 +259,7 @@ export async function GET(req: NextRequest) {
         trafficSource: true,
         isBotSuspect: true,
         botSuspectReason: true,
+        referrer: true,
       },
     });
 
@@ -395,6 +396,26 @@ export async function GET(req: NextRequest) {
       exitCounts.set(path, (exitCounts.get(path) ?? 0) + 1);
     }
     const exitTop10 = topTenWithOther(exitCounts, totalSessions);
+
+    // Referrers — normalize to hostname only (strip path/query for grouping)
+    const referrerCounts = new Map<string, number>();
+    let sessionsWithReferrer = 0;
+    for (const s of sessions) {
+      const ref = (s as typeof s & { referrer: string | null }).referrer;
+      if (!ref) continue;
+      let label: string;
+      try {
+        const u = new URL(ref);
+        label = u.hostname.replace(/^www\./, '');
+      } catch {
+        label = ref.slice(0, 60);
+      }
+      referrerCounts.set(label, (referrerCounts.get(label) ?? 0) + 1);
+      sessionsWithReferrer++;
+    }
+    const referrerTop10 = sessionsWithReferrer > 0
+      ? topTenWithOther(referrerCounts, sessionsWithReferrer)
+      : [];
 
     // -----------------------------------------------------------------
     // Build PDF
@@ -549,6 +570,14 @@ export async function GET(req: NextRequest) {
     y = drawSectionTitle(doc, 'Top Exit Pages (where visitors leave)', y);
     const exitRows = exitTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
     y = drawTable(doc, ['#', 'Exit Page', 'Sessions', '%'], exitRows, [30, 280, 100, 105], y, [2, 3]);
+
+    // Top Referrers
+    if (referrerTop10.length > 0) {
+      ensureSpace(200);
+      y = drawSectionTitle(doc, `Top Referral Sources (${sessionsWithReferrer.toLocaleString()} sessions with referrer)`, y);
+      const refRows = referrerTop10.map(r => [`#${r.rank}`, r.label, r.count.toLocaleString(), r.pct]);
+      y = drawTable(doc, ['#', 'Referrer', 'Sessions', '%'], refRows, [30, 280, 100, 105], y, [2, 3]);
+    }
 
     // Footer
     y += 20;

@@ -63,6 +63,23 @@ export async function GET(req: NextRequest) {
       return m > 0 ? `${m}m ${s}s` : `${s}s`;
     }
 
+    /** Truncate a session ID for display: first 12 chars + ellipsis */
+    function truncateSessionId(id: string): string {
+      return id.length > 12 ? id.slice(0, 12) + '...' : id;
+    }
+
+    /** Return URL path only, stripping domain, query string, and hash */
+    function toPathOnly(url: string | null): string {
+      if (!url) return '';
+      try {
+        const u = new URL(url);
+        return u.pathname || '/';
+      } catch {
+        // Not a full URL — strip hash and query from relative path
+        return url.split('#')[0].split('?')[0] || '/';
+      }
+    }
+
     /** Strip hash fragments from URLs so tab/filter clicks don't inflate page counts */
     function stripHash(url: string | null): string {
       if (!url) return '';
@@ -108,7 +125,7 @@ export async function GET(req: NextRequest) {
 
       // Session-level fields (same on every row for this session)
       const sessionFields = [
-        s.sessionId,
+        truncateSessionId(s.sessionId),
         s.startedAt.toISOString(),
         fmtDuration(durationSec),
         s.country ?? '',
@@ -116,8 +133,8 @@ export async function GET(req: NextRequest) {
         s.deviceType ?? '',
         s.browser ?? '',
         s.os ?? '',
-        s.entryPage ?? '',
-        stripHash(s.exitPage),
+        toPathOnly(s.entryPage),
+        toPathOnly(s.exitPage),
         s.pageCount,
         s.events.length,
         s.intentScore ?? '',
@@ -131,7 +148,7 @@ export async function GET(req: NextRequest) {
         s.utmSource ?? '',
         s.utmMedium ?? '',
         s.utmCampaign ?? '',
-        s.referrer ?? '',
+        s.referrer ? (() => { try { const u = new URL(s.referrer!); return u.hostname + u.pathname; } catch { return s.referrer!; } })() : '',
       ];
 
       if (s.events.length === 0) {

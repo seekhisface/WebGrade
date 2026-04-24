@@ -55,10 +55,28 @@ export function extractGeoFromHeaders(headers: Headers): {
   country: string | null;
   region: string | null;
 } {
-  return {
-    country: headers.get('x-vercel-ip-country'),
-    region: headers.get('x-vercel-ip-country-region'),
-  };
+  // Vercel edge: primary source
+  const vercelCountry = headers.get('x-vercel-ip-country');
+  if (vercelCountry) {
+    return {
+      country: vercelCountry,
+      region: headers.get('x-vercel-ip-country-region'),
+    };
+  }
+
+  // Cloudflare CDN: fallback when CF sits in front of Vercel
+  const cfCountry = headers.get('cf-ipcountry');
+  if (cfCountry && cfCountry !== 'XX') {
+    return { country: cfCountry, region: null };
+  }
+
+  // AWS CloudFront / generic CDN headers
+  const cfCloudFront = headers.get('cloudfront-viewer-country');
+  if (cfCloudFront) {
+    return { country: cfCloudFront, region: headers.get('cloudfront-viewer-country-region') };
+  }
+
+  return { country: null, region: null };
 }
 
 /**

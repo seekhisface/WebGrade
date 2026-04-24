@@ -416,9 +416,25 @@ function SessionRow({ session: s, expanded, onToggle }: {
         <td className="px-4 py-3 text-right text-slate-700 whitespace-nowrap">{formatDuration(duration)}</td>
         <td className="px-4 py-3 text-center">
           {s.intentClass ? (
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${INTENT_COLORS[s.intentClass] ?? 'bg-slate-100 text-slate-600'}`}>
-              {s.intentClass}
-            </span>
+            <div className="relative inline-block group">
+              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${INTENT_COLORS[s.intentClass] ?? 'bg-slate-100 text-slate-600'}`}>
+                {s.intentClass}
+                {s.intentScore != null && <span className="ml-1 opacity-60">{s.intentScore}</span>}
+              </span>
+              <div className="absolute z-50 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-slate-900 text-white text-xs p-3 shadow-xl text-left pointer-events-none">
+                <p className="font-semibold text-slate-200 mb-1.5">Intent Score Methodology</p>
+                <div className="space-y-1 text-slate-300">
+                  <p><span className="font-medium text-emerald-400">HIGH (70–100)</span> — Deep engagement: multiple pages, scrolling, clicks, long session.</p>
+                  <p><span className="font-medium text-blue-400">MEDIUM (40–69)</span> — Moderate interest: explored content but limited interaction.</p>
+                  <p><span className="font-medium text-slate-400">LOW (0–39)</span> — Minimal engagement: short visit, little or no interaction.</p>
+                  <p><span className="font-medium text-purple-400">RESEARCHER</span> — Long time on site, many pages, no conversion signal.</p>
+                  <p><span className="font-medium text-orange-400">COMPETITOR</span> — Systematic crawl pattern: rapid multi-page with no engagement.</p>
+                  <p><span className="font-medium text-red-400">BOT</span> — Identified by user-agent or behavioral pattern.</p>
+                </div>
+                <p className="mt-2 text-slate-500 text-[10px]">Score shown next to label. Factors: pages, duration, scroll depth, clicks, conversions.</p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+              </div>
+            </div>
           ) : (
             <span className="text-slate-300">-</span>
           )}

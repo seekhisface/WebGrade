@@ -196,28 +196,28 @@ export async function POST(req: NextRequest) {
     if (botCheck.isBot) return session.id;
 
     // Batch write all events
-    await tx.sessionEvent.createMany({
-      data: events.map(event => ({
-        sessionId: session.id,
-        siteId: site.id,
-        eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
-        pageUrl: stripUrlHash(event.u),
-        timestamp: new Date(event.ts),
-        scrollDepthPct: event.pct,
-        elementTag: event.tag,
-        elementText: event.txt,
-        elementClass: event.cls,
-        isCtaClick: event.cta ?? false,
-        rageClickCount: event.rage ? 1 : 0,
-        hesitationMs: event.hms,
-        timeOnPageMs: event.ms,
-        metadata: ({
-          ...event.metadata,
-          ...(event.section ? { section: event.section } : {}),
-          ...(event.href ? { href: event.href } : {}),
-        }) as Prisma.InputJsonValue | undefined,
-      })),
-    });
+    const eventData = events.map(event => ({
+      sessionId: session.id,
+      siteId: site.id,
+      eventType: event.t === 'click' && event.rage ? 'RAGE_CLICK' : mapEventType(event.t),
+      pageUrl: stripUrlHash(event.u),
+      timestamp: new Date(event.ts),
+      scrollDepthPct: event.pct,
+      elementTag: event.tag,
+      elementText: event.txt,
+      elementClass: event.cls,
+      isCtaClick: event.cta ?? false,
+      rageClickCount: event.rage ? 1 : 0,
+      hesitationMs: event.hms,
+      timeOnPageMs: event.ms,
+      metadata: ({
+        ...event.metadata,
+        ...(event.section ? { section: event.section } : {}),
+        ...(event.href ? { href: event.href } : {}),
+      }) as Prisma.InputJsonValue | undefined,
+    }));
+    const result = await tx.sessionEvent.createMany({ data: eventData });
+    console.log(`[ingest] session=${session.id} created ${result.count}/${eventData.length} events types=[${events.map(e => e.t).join(',')}]`);
 
     // Aggregate PageView records for drop-off analysis
     // Group events by page URL to build per-page engagement metrics
