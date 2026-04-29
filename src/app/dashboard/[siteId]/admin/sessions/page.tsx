@@ -35,6 +35,8 @@ interface VisitorSession {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  utmCampaignIsStale: boolean;
+  resolvedCampaignName: string | null;
   referrer: string | null;
   startedAt: string;
   endedAt: string | null;
@@ -220,7 +222,7 @@ export default function SessionExplorerPage() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.csv';
+                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.xlsx';
                   a.click();
                   URL.revokeObjectURL(url);
                 }
@@ -410,6 +412,14 @@ function SessionRow({ session: s, expanded, onToggle }: {
         </td>
         <td className="px-4 py-3 text-slate-600 font-mono text-xs" title={s.entryPage ?? ''}>
           {s.entryPage ? truncateUrl(s.entryPage, 40) : '-'}
+          {s.utmCampaignIsStale && (
+            <span
+              className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-medium align-middle"
+              title={`utm_campaign "${s.utmCampaign ?? ''}" not seen in any recent Google Ads campaign — stale link.`}
+            >
+              ⚠
+            </span>
+          )}
         </td>
         <td className="px-4 py-3 text-center text-slate-700">{s.pageCount}</td>
         <td className="px-4 py-3 text-center text-slate-700">{s.events.length}</td>
@@ -458,7 +468,30 @@ function SessionRow({ session: s, expanded, onToggle }: {
                 <span><strong className="text-slate-600">Session ID:</strong> {s.sessionId}</span>
                 <span><strong className="text-slate-600">IP Hash:</strong> {s.ipHash.slice(0, 12)}...</span>
                 {s.referrer && <span><strong className="text-slate-600">Referrer:</strong> {s.referrer}</span>}
-                {s.utmSource && <span><strong className="text-slate-600">UTM:</strong> {s.utmSource}/{s.utmMedium}/{s.utmCampaign}</span>}
+                {s.utmSource && (
+                  <span>
+                    <strong className="text-slate-600">UTM:</strong> {s.utmSource}/{s.utmMedium}/{s.utmCampaign}
+                    {s.utmCampaignIsStale && (
+                      <span
+                        className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-medium"
+                        title="utm_campaign value not seen in any active or recent Google Ads campaign — likely a stale link still in circulation."
+                      >
+                        ⚠ stale
+                      </span>
+                    )}
+                  </span>
+                )}
+                {s.resolvedCampaignName && s.resolvedCampaignName !== s.utmCampaign && (
+                  <span>
+                    <strong className="text-slate-600">Resolved:</strong> {s.resolvedCampaignName}
+                    <span
+                      className="ml-1.5 px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-medium"
+                      title="Resolved from gclid via Google Ads click_view — this is the campaign Ads currently has the click attributed to."
+                    >
+                      via gclid
+                    </span>
+                  </span>
+                )}
                 {s.isBotFiltered && <span className="text-red-600"><strong>Bot:</strong> {s.botReason}</span>}
                 {s.exitPage && <span><strong className="text-slate-600">Exit:</strong> {truncateUrl(s.exitPage, 50)}</span>}
               </div>

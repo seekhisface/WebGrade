@@ -295,3 +295,66 @@ export async function syncCampaignData(
 
   return { synced: metrics.length, totalSpend: Math.round(totalSpend * 100) / 100 };
 }
+
+// ---------------------------------------------------------------------------
+// Resolve gclids → campaign for a single date
+//
+// Google Ads click_view is only queryable for ONE specific date at a time and
+// only retains data for ~90 days. The Ads API also has a typical lag of several
+// hours before a freshly issued gclid becomes queryable, which is why this runs
+// as a daily backfill rather than at ingest time.
+// ---------------------------------------------------------------------------
+
+export interface GclidResolution {
+  campaignId: string;
+  campaignName: string;
+  adGroupId: string | null;
+}
+
+export async function resolveGclids(
+  userId: string,
+  customerId: string,
+  gclids: string[],
+  date: string, // YYYY-MM-DD
+): Promise<Map<string, GclidResolution>> {
+  const resolved = new Map<string, GclidResolution>();
+  if (gclids.length === 0) return resolved;
+
+  const { refreshToken } = await getOAuthTokens(userId);
+  const client = createClient(refreshToken);
+  const customer = getCustomer(client, customerId.replace(/-/g, ''), refreshToken);
+
+  // GAQL only allows IN-list values up to 10,000 entries; chunk to be safe.
+  const chunkSize = 500;
+  for (let i = 0; i < gclids.length; i += chunkSize) {
+    const chunk = gclids.slice(i, i + chunkSize);
+    const inList = chunk.map(g => `'${g.replace(/'/g, "\\'")}'`).join(',');
+
+    const results = await customer.query(`
+      SELECT
+        click_view.gclid,
+        campaign.id,
+        campaign.name,
+        ad_group.id
+      FROM click_view
+      WHERE segments.date = '${date}'
+        AND click_view.gclid IN (${inList})
+    `);
+
+    for (const row of results) {
+      const gclid = (row.click_view as { gclid?: string } | undefined)?.gclid;
+      const campaignId = row.campaign?.id;
+      const campaignName = row.campaign?.name;
+      if (!gclid || !campaignId || !campaignName) continue;
+      // First match wins if duplicates somehow appear.
+      if (resolved.has(gclid)) continue;
+      resolved.set(gclid, {
+        campaignId: String(campaignId),
+        campaignName,
+        adGroupId: row.ad_group?.id ? String(row.ad_group.id) : null,
+      });
+    }
+  }
+
+  return resolved;
+}

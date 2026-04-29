@@ -211,6 +211,7 @@ model Site {
   seoTrafficSnapshots      SeoTrafficSnapshot[]
   adSources                AdSource[]
   gadsCampaignMetrics      GadsCampaignMetric[]
+  staleUtmCampaigns        StaleUtmCampaign[]
   reports                  Report[]
   alerts                   Alert[]
   alertSettings            AlertSetting[]
@@ -547,6 +548,19 @@ model VisitorSession {
   clickId     String? // gclid, fbclid, msclkid, etc. — identifies paid click source
   clickIdType String? // "gclid", "fbclid", "msclkid", etc.
 
+  // Resolved campaign attribution (gclid → Google Ads campaign lookup)
+  // Populated by the daily resolveGclidsDaily Inngest job using the Ads API click_view resource.
+  // Kept separate from utmCampaign so the raw URL value is preserved for forensics.
+  resolvedCampaignId     String?
+  resolvedCampaignName   String?
+  resolvedAdGroupId      String?
+  gclidResolvedAt        DateTime?
+  gclidResolutionStatus  String?   // "resolved", "not_found", "error"
+
+  // Set by the daily flagStaleUtmsDaily job when utmCampaign is not seen in any
+  // recent Google Ads campaign — i.e. stale link still circulating.
+  utmCampaignIsStale Boolean @default(false)
+
   // Timing
   startedAt  DateTime  @default(now())
   endedAt    DateTime?
@@ -586,6 +600,7 @@ model VisitorSession {
   @@index([siteId, startedAt])
   @@index([siteId, intentClass])
   @@index([siteId, isBotFiltered])
+  @@index([siteId, clickIdType, gclidResolvedAt]) // for resolveGclidsDaily backfill
   @@map("visitor_sessions")
 }
 
@@ -956,6 +971,28 @@ model GadsCampaignMetric {
   @@unique([siteId, campaignId, date])
   @@index([siteId, date])
   @@map("gads_campaign_metrics")
+}
+
+// utm_campaign values seen in sessions but not present in any active or
+// recently-active Google Ads campaign. Populated by flagStaleUtmsDaily.
+// Used to catch the case where marketing renamed a campaign in Ads but old
+// URLs with the previous tag are still circulating (email signatures,
+// retargeting pixels, partner sites, etc.).
+model StaleUtmCampaign {
+  id     String @id @default(cuid())
+  siteId String
+
+  utmCampaign       String
+  sessionsAffected  Int      @default(0)
+  firstDetectedAt   DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  topLandingPage    String?  // most-common entry page for sessions hitting this stale tag
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, utmCampaign])
+  @@index([siteId, lastSeenAt])
+  @@map("stale_utm_campaigns")
 }
 
 // =============================================================================

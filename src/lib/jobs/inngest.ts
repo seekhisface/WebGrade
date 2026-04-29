@@ -508,6 +508,238 @@ export const syncGadsDaily = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// GADS: Daily gclid → campaign resolution — every day at 8am UTC (after Ads sync)
+// Resolves auto-tagged Google Ads visits (gclid present, utm_campaign null) by
+// querying the Ads API click_view resource. Updates VisitorSession.resolvedCampaign*
+// so dashboards can attribute auto-tagged paid traffic to the correct campaign.
+//
+// click_view only retains 90 days, so unresolved sessions older than that are
+// marked "not_found" and skipped on future runs.
+// ---------------------------------------------------------------------------
+export const resolveGclidsDaily = inngest.createFunction(
+  { id: 'resolve-gclids-daily', retries: 2, concurrency: { limit: 3 } },
+  { cron: '0 8 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-gads-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true, gadsConnected: true, gadsCustomerId: { not: null } },
+        select: { id: true, gadsCustomerId: true, gadsConnectedByUserId: true },
+      });
+    });
+
+    const cutoff = new Date(Date.now() - 90 * 86400000);
+    let totalResolved = 0;
+    let totalAttempted = 0;
+
+    for (const site of sites) {
+      if (!site.gadsConnectedByUserId || !site.gadsCustomerId) continue;
+
+      await step.run(`resolve-gclids-${site.id}`, async () => {
+        const { resolveGclids } = await import('@/lib/gads/client');
+
+        // Find sessions with a gclid we haven't tried to resolve yet.
+        const unresolved = await prisma.visitorSession.findMany({
+          where: {
+            siteId: site.id,
+            clickIdType: 'gclid',
+            clickId: { not: null },
+            gclidResolvedAt: null,
+            startedAt: { gte: cutoff },
+          },
+          select: { id: true, clickId: true, startedAt: true },
+        });
+
+        if (unresolved.length === 0) return;
+
+        // Group by date (Ads click_view requires segments.date = single day).
+        const byDate = new Map<string, { id: string; gclid: string }[]>();
+        for (const s of unresolved) {
+          if (!s.clickId) continue;
+          const date = s.startedAt.toISOString().split('T')[0];
+          const bucket = byDate.get(date) ?? [];
+          bucket.push({ id: s.id, gclid: s.clickId });
+          byDate.set(date, bucket);
+        }
+
+        const now = new Date();
+        for (const [date, rows] of byDate) {
+          totalAttempted += rows.length;
+          let resolutions: Map<string, { campaignId: string; campaignName: string; adGroupId: string | null }>;
+          try {
+            const gclids = Array.from(new Set(rows.map(r => r.gclid)));
+            resolutions = await resolveGclids(
+              site.gadsConnectedByUserId!,
+              site.gadsCustomerId!,
+              gclids,
+              date,
+            );
+          } catch (err) {
+            console.error(`[gclid-resolve] site=${site.id} date=${date}:`, (err as Error).message);
+            // Mark this batch as errored so we retry on the next run only if the
+            // status is still "error" (not "resolved" / "not_found").
+            await prisma.visitorSession.updateMany({
+              where: { id: { in: rows.map(r => r.id) } },
+              data: { gclidResolvedAt: now, gclidResolutionStatus: 'error' },
+            });
+            continue;
+          }
+
+          for (const row of rows) {
+            const hit = resolutions.get(row.gclid);
+            if (hit) {
+              await prisma.visitorSession.update({
+                where: { id: row.id },
+                data: {
+                  resolvedCampaignId: hit.campaignId,
+                  resolvedCampaignName: hit.campaignName,
+                  resolvedAdGroupId: hit.adGroupId,
+                  gclidResolvedAt: now,
+                  gclidResolutionStatus: 'resolved',
+                },
+              });
+              totalResolved++;
+            } else {
+              await prisma.visitorSession.update({
+                where: { id: row.id },
+                data: { gclidResolvedAt: now, gclidResolutionStatus: 'not_found' },
+              });
+            }
+          }
+        }
+      }).catch(err => {
+        console.error(`[gclid-resolve] Failed for site ${site.id}:`, err);
+      });
+    }
+
+    return { sitesProcessed: sites.length, attempted: totalAttempted, resolved: totalResolved };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// GADS: Daily stale-UTM detection — every day at 9am UTC
+// Compares distinct utm_campaign values seen on paid sessions against the
+// list of campaign names from GadsCampaignMetric. Anything not present in
+// recent Ads data is flagged as stale (a likely-renamed-or-killed campaign
+// whose old URL is still circulating in email/social/partner links).
+// Writes to StaleUtmCampaign + sets VisitorSession.utmCampaignIsStale.
+// ---------------------------------------------------------------------------
+export const flagStaleUtmsDaily = inngest.createFunction(
+  { id: 'flag-stale-utms-daily', retries: 2, concurrency: { limit: 5 } },
+  { cron: '0 9 * * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+
+    const sites = await step.run('load-gads-sites', async () => {
+      return prisma.site.findMany({
+        where: { isActive: true, gadsConnected: true },
+        select: { id: true },
+      });
+    });
+
+    const now = new Date();
+    const sessionLookback = new Date(now.getTime() - 90 * 86400000);
+    const adsLookback = new Date(now.getTime() - 180 * 86400000);
+    let totalStale = 0;
+
+    for (const site of sites) {
+      await step.run(`flag-stale-utms-${site.id}`, async () => {
+        // Distinct utm_campaign values seen on paid Google traffic in the lookback window.
+        const sessionsByCampaign = await prisma.visitorSession.groupBy({
+          by: ['utmCampaign'],
+          where: {
+            siteId: site.id,
+            startedAt: { gte: sessionLookback },
+            utmSource: 'google',
+            utmMedium: 'cpc',
+            utmCampaign: { not: null },
+            isBotFiltered: false,
+          },
+          _count: { _all: true },
+          _max: { startedAt: true },
+        });
+
+        if (sessionsByCampaign.length === 0) return;
+
+        // Campaign names known to Ads in the last 180 days.
+        const knownCampaigns = await prisma.gadsCampaignMetric.findMany({
+          where: { siteId: site.id, date: { gte: adsLookback } },
+          select: { campaignName: true },
+          distinct: ['campaignName'],
+        });
+        const knownSet = new Set(knownCampaigns.map(c => c.campaignName.toLowerCase()));
+
+        const staleCampaigns = sessionsByCampaign.filter(
+          row => row.utmCampaign && !knownSet.has(row.utmCampaign.toLowerCase()),
+        );
+
+        // Reset stale flags for this site (in case a previously-stale tag came back).
+        await prisma.visitorSession.updateMany({
+          where: { siteId: site.id, utmCampaignIsStale: true },
+          data: { utmCampaignIsStale: false },
+        });
+
+        // Drop StaleUtmCampaign rows that no longer apply.
+        const staleNames = staleCampaigns.map(s => s.utmCampaign!).filter(Boolean);
+        await prisma.staleUtmCampaign.deleteMany({
+          where: { siteId: site.id, utmCampaign: { notIn: staleNames.length ? staleNames : ['__none__'] } },
+        });
+
+        // Upsert each stale tag and re-flag its sessions.
+        for (const row of staleCampaigns) {
+          if (!row.utmCampaign) continue;
+          const sessionsAffected = row._count._all;
+          const lastSeenAt = row._max.startedAt ?? now;
+
+          // Top landing page for this stale tag.
+          const topLanding = await prisma.visitorSession.groupBy({
+            by: ['entryPage'],
+            where: {
+              siteId: site.id,
+              utmCampaign: row.utmCampaign,
+              startedAt: { gte: sessionLookback },
+              entryPage: { not: null },
+            },
+            _count: { _all: true },
+            orderBy: { _count: { entryPage: 'desc' } },
+            take: 1,
+          });
+
+          await prisma.staleUtmCampaign.upsert({
+            where: { siteId_utmCampaign: { siteId: site.id, utmCampaign: row.utmCampaign } },
+            create: {
+              siteId: site.id,
+              utmCampaign: row.utmCampaign,
+              sessionsAffected,
+              firstDetectedAt: now,
+              lastSeenAt,
+              topLandingPage: topLanding[0]?.entryPage ?? null,
+            },
+            update: {
+              sessionsAffected,
+              lastSeenAt,
+              topLandingPage: topLanding[0]?.entryPage ?? null,
+            },
+          });
+
+          await prisma.visitorSession.updateMany({
+            where: { siteId: site.id, utmCampaign: row.utmCampaign },
+            data: { utmCampaignIsStale: true },
+          });
+
+          totalStale += sessionsAffected;
+        }
+      }).catch(err => {
+        console.error(`[stale-utms] Failed for site ${site.id}:`, err);
+      });
+    }
+
+    return { sitesProcessed: sites.length, sessionsFlaggedStale: totalStale };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // GA4-01: Daily Google Analytics 4 sync — 8am UTC
 // Syncs daily metrics for GA4-connected sites
 // ---------------------------------------------------------------------------
@@ -605,6 +837,8 @@ export const inngestFunctions = [
   archiveMonthlyReport,
   syncGscDaily,
   syncGadsDaily,
+  resolveGclidsDaily,
+  flagStaleUtmsDaily,
   syncGa4Daily,
   runWeeklySeoCrawl,
   runDailyVerification,

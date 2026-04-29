@@ -25,6 +25,7 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.0",
+    "exceljs": "^4.4.0",
     "google-ads-api": "^23.0.0",
     "googleapis": "^171.4.0",
     "inngest": "^3.0.0",
