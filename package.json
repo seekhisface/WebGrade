@@ -28,7 +28,7 @@
     "exceljs": "^4.4.0",
     "google-ads-api": "^23.0.0",
     "googleapis": "^171.4.0",
-    "inngest": "^3.0.0",
+    "inngest": "^4.2.6",
     "next": "^14.2.35",
     "next-auth": "^4.24.0",
     "pdfkit": "^0.18.0",
