@@ -18,6 +18,7 @@ interface DashboardData {
   totalSessions: number; totalSessionsChange: number;
   avgIntentScore: number; avgIntentScoreChange: number;
   revenueAtRisk: number;
+  disengagedVisitors?: number;
   hasRevenueData?: boolean;
   intentDistribution: Record<string, number>;
   intentCounts?: Record<string, number>;
@@ -260,6 +261,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
   const sessions = useCountUp(dashData?.totalSessions ?? 0, 1600, triggered);
   const intentScore = useCountUp(dashData?.avgIntentScore ?? 0, 1400, triggered);
   const revenueRisk = useCountUp(dashData?.revenueAtRisk ?? 0, 1800, triggered);
+  const disengagedVisitors = useCountUp(dashData?.disengagedVisitors ?? 0, 1800, triggered);
 
   function applyPreset(p: typeof PRESETS[number]) {
     // Clamp to audit window
@@ -427,7 +429,7 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             onReportClick={() => setShowReport(true)} />
           <KpiCard
             label={D?.hasRevenueData ? 'Revenue at Risk' : 'Disengaged Leads'}
-            value={D?.hasRevenueData ? `$${revenueRisk.toLocaleString()}` : revenueRisk.toLocaleString()}
+            value={D?.hasRevenueData ? `$${revenueRisk.toLocaleString()}` : disengagedVisitors.toLocaleString()}
             suffix={D?.hasRevenueData ? '/mo' : 'visitors'}
             change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.hasRevenueData ? (revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e') : '#b45309'}

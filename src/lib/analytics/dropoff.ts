@@ -66,6 +66,10 @@ export interface DropOffAnalysis {
   periodEnd: Date;
   totalSessions: number;
   totalRevenueAtRisk: number;
+  // Raw count of distinct visitors who exited above benchmark across all pages.
+  // Use this for the "Disengaged Leads" KPI when hasRevenueData=false; otherwise
+  // the revenue dollar figure gets shown mislabeled as a visitor count.
+  totalDisengagedVisitors: number;
   pages: PageDropOffResult[];
   topBreakpoint: PageDropOffResult | null;
   topPageSessions: { url: string; sessions: number } | null; // Most visited page (even if below threshold)
@@ -207,6 +211,7 @@ export async function computeDropOffAnalysis(params: {
       periodEnd,
       totalSessions: 0,
       totalRevenueAtRisk: 0,
+      totalDisengagedVisitors: 0,
       pages: [],
       topBreakpoint: null,
       topPageSessions: null,
@@ -289,6 +294,7 @@ export async function computeDropOffAnalysis(params: {
 
   // ── 4. Build results ─────────────────────────────────────────────────────
   const rawResults: Omit<PageDropOffResult, 'revenueImpactRank'>[] = [];
+  let totalDisengagedVisitors = 0; // raw count of lost visitors above benchmark, summed across pages
 
   // Find the most visited page (even if below threshold)
   let topPageSessions: { url: string; sessions: number } | null = null;
@@ -303,6 +309,8 @@ export async function computeDropOffAnalysis(params: {
     if (sessions < 10) continue; // skip low-traffic pages — not statistically meaningful
 
     const exitRate = Math.min(100, Math.round((agg.exitSessions.size / sessions) * 100));
+    const lostVisitorsOnPage = Math.max(0, Math.round(sessions * ((exitRate - PAGE_BENCHMARKS[classifyPageUrl(url)].exitRate) / 100)));
+    totalDisengagedVisitors += lostVisitorsOnPage;
     const avgScrollDepth = agg.scrollDepths.length > 0
       ? Math.min(100, Math.round(agg.scrollDepths.reduce((a, b) => a + b, 0) / agg.scrollDepths.length))
       : 0;
@@ -378,6 +386,7 @@ export async function computeDropOffAnalysis(params: {
     periodEnd,
     totalSessions,
     totalRevenueAtRisk,
+    totalDisengagedVisitors,
     pages: results,
     topBreakpoint,
     topPageSessions,
@@ -491,6 +500,7 @@ export function buildDemoAnalysis(
     periodEnd,
     totalSessions: 4821,
     totalRevenueAtRisk: 41200,
+    totalDisengagedVisitors: 1030,
     pages,
     topBreakpoint: pages[0],
     topPageSessions: { url: '/features', sessions: 1820 },
