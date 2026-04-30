@@ -23,24 +23,67 @@ function ReportShell({ onClose, title, subtitle, color, children }: {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="printable-root-wrapper fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(8, 47, 73, 0.85)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
+      {/* Print styles: when the user prints, hide everything outside the printable
+          report and reset the modal frame so the report flows top-to-bottom on paper. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body { background: white !important; }
+          body > *:not(.printable-root-wrapper) { display: none !important; }
+          .printable-root-wrapper {
+            position: static !important;
+            background: white !important;
+            backdrop-filter: none !important;
+            padding: 0 !important;
+          }
+          .printable-root-wrapper [data-print-hide] { display: none !important; }
+          .print-shell {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            max-width: 100% !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          .print-body {
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          .print-shell h2, .print-shell h3 { break-after: avoid; }
+          .print-shell table, .print-shell .avoid-break { break-inside: avoid; }
+        }
+      `}} />
+
       <div
-        className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl"
+        data-printable-root
+        className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl print-shell"
         style={{ maxHeight: '92vh' }}
         onClick={e => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-          aria-label="Close"
-        >
-          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div data-print-hide className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            className="px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-xs font-medium text-white flex items-center gap-1.5 transition-colors"
+            aria-label="Save as PDF"
+            title="Opens your browser's print dialog — choose 'Save as PDF' as the destination."
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Save as PDF
+          </button>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+            aria-label="Close"
+          >
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
         <div className={`bg-gradient-to-r ${color} px-8 py-6`}>
           <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Sample Report — NovaPulse HR</p>
@@ -48,8 +91,8 @@ function ReportShell({ onClose, title, subtitle, color, children }: {
           <p className="text-sm text-white/70 mt-1">{subtitle}</p>
         </div>
 
-        <div className="overflow-y-auto px-8 py-6" style={{ maxHeight: 'calc(92vh - 110px)' }}>
-          <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-lg px-4 py-2 mb-5 flex items-center gap-2">
+        <div className="overflow-y-auto px-8 py-6 print-body" style={{ maxHeight: 'calc(92vh - 110px)' }}>
+          <div data-print-hide className="bg-[#f0f9ff] border border-[#bae6fd] rounded-lg px-4 py-2 mb-5 flex items-center gap-2">
             <svg className="w-3.5 h-3.5 text-[#0891b2] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <p className="text-[10px] text-[#64748b]">Sample report with illustrative data from NovaPulse HR (60 days of behavioral + SEO + ad spend analysis). Your report will reflect your actual site data.</p>
           </div>
