@@ -31,21 +31,31 @@ function ReportShell({ onClose, title, subtitle, color, children }: {
           report and reset the modal frame so the report flows top-to-bottom on paper. */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          body { background: white !important; }
-          body > *:not(.printable-root-wrapper) { display: none !important; }
+          html, body { background: white !important; height: auto !important; }
+          /* Hide everything by default, then re-show only the report card */
+          body * { visibility: hidden !important; }
+          .print-shell, .print-shell * { visibility: visible !important; }
+          /* Buttons and the info banner inside the report card should still hide */
+          [data-print-hide], [data-print-hide] * { visibility: hidden !important; display: none !important; }
+          /* Lift the modal backdrop out of the way and put the report at top-left */
           .printable-root-wrapper {
             position: static !important;
+            inset: auto !important;
             background: white !important;
             backdrop-filter: none !important;
             padding: 0 !important;
+            display: block !important;
           }
-          .printable-root-wrapper [data-print-hide] { display: none !important; }
           .print-shell {
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            max-width: 100% !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
             max-height: none !important;
             overflow: visible !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
           }
           .print-body {
             max-height: none !important;
