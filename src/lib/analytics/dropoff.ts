@@ -219,7 +219,7 @@ export async function computeDropOffAnalysis(params: {
   const urlMap = new Map<string, {
     title: string;
     sessions: Set<string>;
-    exits: number;
+    exitSessions: Set<string>; // distinct sessions that exited on this page (NOT a row counter)
     scrollDepths: number[];
     timesOnPage: number[];
     rageClicks: number;
@@ -232,7 +232,7 @@ export async function computeDropOffAnalysis(params: {
       urlMap.set(key, {
         title: pv.title ?? key,
         sessions: new Set(),
-        exits: 0,
+        exitSessions: new Set(),
         scrollDepths: [],
         timesOnPage: [],
         rageClicks: 0,
@@ -241,7 +241,7 @@ export async function computeDropOffAnalysis(params: {
     }
     const entry = urlMap.get(key)!;
     entry.sessions.add(pv.sessionId);
-    if (pv.isExit) entry.exits++;
+    if (pv.isExit) entry.exitSessions.add(pv.sessionId);
     if (pv.maxScrollDepthPct !== null) entry.scrollDepths.push(pv.maxScrollDepthPct);
     if (pv.timeOnPageMs !== null) entry.timesOnPage.push(pv.timeOnPageMs / 1000);
     if (pv.rageClickCount) entry.rageClicks += pv.rageClickCount;
@@ -267,7 +267,7 @@ export async function computeDropOffAnalysis(params: {
       urlMap.set(key, {
         title: `#${section}`,
         sessions: new Set(),
-        exits: 0,
+        exitSessions: new Set(),
         scrollDepths: [],
         timesOnPage: [],
         rageClicks: 0,
@@ -283,7 +283,7 @@ export async function computeDropOffAnalysis(params: {
     if (!pv.isExit) continue;
     const lastSection = sessionLastSection.get(pv.sessionId);
     if (lastSection && urlMap.has(lastSection)) {
-      urlMap.get(lastSection)!.exits++;
+      urlMap.get(lastSection)!.exitSessions.add(pv.sessionId);
     }
   }
 
@@ -302,7 +302,7 @@ export async function computeDropOffAnalysis(params: {
     const sessions = agg.sessions.size;
     if (sessions < 10) continue; // skip low-traffic pages — not statistically meaningful
 
-    const exitRate = Math.min(100, Math.round((agg.exits / sessions) * 100));
+    const exitRate = Math.min(100, Math.round((agg.exitSessions.size / sessions) * 100));
     const avgScrollDepth = agg.scrollDepths.length > 0
       ? Math.min(100, Math.round(agg.scrollDepths.reduce((a, b) => a + b, 0) / agg.scrollDepths.length))
       : 0;

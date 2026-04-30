@@ -13,6 +13,9 @@ import { verifySiteAccess } from '@/lib/auth/session';
 import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
+// Vercel Hobby plan caps maxDuration at 60s. Big months can take a while since
+// we fetch up to 5000 sessions with their events and build an xlsx workbook.
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {
@@ -233,6 +236,17 @@ export async function GET(req: NextRequest) {
       { header: 'Exit Page', key: 'exitPage', width: 36 },
       { header: 'Page Count', key: 'pageCount', width: 11 },
       { header: 'Event Count', key: 'eventCount', width: 11 },
+      // Event-type pivot — quick engagement signal per session without needing the Events tab
+      { header: 'Clicks', key: 'clickCount', width: 8 },
+      { header: 'CTA Clicks', key: 'ctaClickCount', width: 11 },
+      { header: 'Rage Clicks', key: 'rageClickCount', width: 11 },
+      { header: 'Hesitations', key: 'hesitationCount', width: 11 },
+      { header: 'Scrolls', key: 'scrollCount', width: 9 },
+      { header: 'Section Views', key: 'sectionViewCount', width: 13 },
+      { header: 'Form Focuses', key: 'formFocusCount', width: 12 },
+      { header: 'Form Submits', key: 'formSubmitCount', width: 12 },
+      { header: 'Exit Intents', key: 'exitIntentCount', width: 12 },
+      { header: 'Conversions', key: 'conversionCount', width: 11 },
       { header: 'Intent Score', key: 'intentScore', width: 12 },
       { header: 'Intent Class', key: 'intentClass', width: 12 },
       { header: 'Converted', key: 'converted', width: 11 },
@@ -256,10 +270,33 @@ export async function GET(req: NextRequest) {
     sessionsSheet.getRow(1).eachCell(c => Object.assign(c, headerStyle));
     sessionsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
+    function countEventsByType(events: { eventType: string; isCtaClick: boolean }[]) {
+      const c = {
+        click: 0, ctaClick: 0, rageClick: 0, hesitation: 0, scroll: 0,
+        sectionView: 0, formFocus: 0, formSubmit: 0, exitIntent: 0, conversion: 0,
+      };
+      for (const ev of events) {
+        switch (ev.eventType) {
+          case 'CLICK': c.click++; if (ev.isCtaClick) c.ctaClick++; break;
+          case 'CTA_CLICK': c.ctaClick++; c.click++; break;
+          case 'RAGE_CLICK': c.rageClick++; break;
+          case 'HESITATION': c.hesitation++; break;
+          case 'SCROLL': c.scroll++; break;
+          case 'SECTION_VIEW': c.sectionView++; break;
+          case 'FORM_FOCUS': c.formFocus++; break;
+          case 'FORM_SUBMIT': c.formSubmit++; break;
+          case 'EXIT_INTENT': c.exitIntent++; break;
+          case 'CONVERSION': c.conversion++; break;
+        }
+      }
+      return c;
+    }
+
     for (const s of sessions) {
       const durationSec = s.endedAt && s.startedAt
         ? Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000)
         : 0;
+      const counts = countEventsByType(s.events);
       sessionsSheet.addRow({
         sessionId: truncateSessionId(s.sessionId),
         startedAt: s.startedAt.toISOString(),
@@ -273,6 +310,16 @@ export async function GET(req: NextRequest) {
         exitPage: toPathOnly(s.exitPage),
         pageCount: s.pageCount,
         eventCount: s.events.length,
+        clickCount: counts.click,
+        ctaClickCount: counts.ctaClick,
+        rageClickCount: counts.rageClick,
+        hesitationCount: counts.hesitation,
+        scrollCount: counts.scroll,
+        sectionViewCount: counts.sectionView,
+        formFocusCount: counts.formFocus,
+        formSubmitCount: counts.formSubmit,
+        exitIntentCount: counts.exitIntent,
+        conversionCount: counts.conversion,
         intentScore: s.intentScore ?? '',
         intentClass: s.intentClass ?? '',
         converted: s.conversionGoalHit ? 'Yes' : 'No',
@@ -309,35 +356,12 @@ export async function GET(req: NextRequest) {
     // Sheet 3: Events (one row per event with session context)
     // -----------------------------------------------------------------------
 
+    // Slim — only fields needed for forensic flow analysis. Use Session ID as
+    // the join key back to the Sessions tab via VLOOKUP for everything else.
     const eventsSheet = wb.addWorksheet('Events');
     eventsSheet.columns = [
       { header: 'Session ID', key: 'sessionId', width: 18 },
       { header: 'Session Start', key: 'sessionStart', width: 22 },
-      { header: 'Session Duration', key: 'sessionDuration', width: 14 },
-      { header: 'Country', key: 'country', width: 10 },
-      { header: 'Region', key: 'region', width: 12 },
-      { header: 'Device', key: 'device', width: 10 },
-      { header: 'Browser', key: 'browser', width: 12 },
-      { header: 'OS', key: 'os', width: 12 },
-      { header: 'Entry Page', key: 'entryPage', width: 28 },
-      { header: 'Exit Page', key: 'exitPage', width: 28 },
-      { header: 'Total Pages', key: 'totalPages', width: 11 },
-      { header: 'Total Events', key: 'totalEvents', width: 11 },
-      { header: 'Intent Score', key: 'intentScore', width: 11 },
-      { header: 'Intent Class', key: 'intentClass', width: 12 },
-      { header: 'Converted', key: 'converted', width: 11 },
-      { header: 'Traffic Source', key: 'trafficSource', width: 14 },
-      { header: 'Returning', key: 'isReturning', width: 11 },
-      { header: 'Bounce', key: 'isBounce', width: 9 },
-      { header: 'Bot Suspect', key: 'isBotSuspect', width: 12 },
-      { header: 'Bot Suspect Reason', key: 'botSuspectReason', width: 22 },
-      { header: 'UTM Source', key: 'utmSource', width: 14 },
-      { header: 'UTM Medium', key: 'utmMedium', width: 12 },
-      { header: 'UTM Campaign', key: 'utmCampaign', width: 22 },
-      { header: 'UTM Stale', key: 'utmStale', width: 11 },
-      { header: 'Resolved Campaign', key: 'resolvedCampaignName', width: 22 },
-      { header: 'Referrer', key: 'referrer', width: 28 },
-      // Event detail
       { header: 'Step', key: 'step', width: 7 },
       { header: 'Time in Session', key: 'timeInSession', width: 14 },
       { header: 'Event Type', key: 'eventType', width: 16 },
@@ -356,42 +380,13 @@ export async function GET(req: NextRequest) {
     eventsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     for (const s of sessions) {
-      const durationSec = s.endedAt && s.startedAt
-        ? Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000)
-        : 0;
-
-      const sessionContext = {
-        sessionId: truncateSessionId(s.sessionId),
-        sessionStart: s.startedAt.toISOString(),
-        sessionDuration: fmtDuration(durationSec),
-        country: s.country ?? '',
-        region: s.region ?? '',
-        device: s.deviceType ?? '',
-        browser: s.browser ?? '',
-        os: s.os ?? '',
-        entryPage: toPathOnly(s.entryPage),
-        exitPage: toPathOnly(s.exitPage),
-        totalPages: s.pageCount,
-        totalEvents: s.events.length,
-        intentScore: s.intentScore ?? '',
-        intentClass: s.intentClass ?? '',
-        converted: s.conversionGoalHit ? 'Yes' : 'No',
-        trafficSource: s.trafficSource ?? '',
-        isReturning: s.isReturning ? 'Yes' : 'No',
-        isBounce: s.isBounce ? 'Yes' : 'No',
-        isBotSuspect: s.isBotSuspect ? 'Yes' : '',
-        botSuspectReason: s.botSuspectReason ?? '',
-        utmSource: s.utmSource ?? '',
-        utmMedium: s.utmMedium ?? '',
-        utmCampaign: s.utmCampaign ?? '',
-        utmStale: s.utmCampaignIsStale ? 'STALE' : '',
-        resolvedCampaignName: s.resolvedCampaignName ?? '',
-        referrer: fmtReferrer(s.referrer),
-      };
+      const sessionId = truncateSessionId(s.sessionId);
+      const sessionStart = s.startedAt.toISOString();
 
       if (s.events.length === 0) {
         eventsSheet.addRow({
-          ...sessionContext,
+          sessionId,
+          sessionStart,
           step: 1,
           timeInSession: '0s',
           eventType: '(no events)',
@@ -422,7 +417,8 @@ export async function GET(req: NextRequest) {
         }
 
         eventsSheet.addRow({
-          ...sessionContext,
+          sessionId,
+          sessionStart,
           step: i + 1,
           timeInSession: fmtRelative(evTs, s.startedAt),
           eventType: ev.eventType,
