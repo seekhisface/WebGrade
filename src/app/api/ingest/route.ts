@@ -189,7 +189,8 @@ export async function POST(req: NextRequest) {
         isReturning: priorVisit !== null,
       },
       update: {},
-      select: { id: true },
+      // entryPage needed below to avoid overwriting it on subsequent page_views
+      select: { id: true, entryPage: true },
     });
 
     // If bot, skip event writes
@@ -302,9 +303,11 @@ export async function POST(req: NextRequest) {
     if (pageViewEvents.length > 0) {
       sessionUpdates.exitPage = stripUrlHash(pageViewEvents[pageViewEvents.length - 1].u);
 
-      // Set entry page from first page_view (only if not already set)
+      // Set entry page from first page_view ONLY if the session doesn't have one yet.
+      // The snippet sends `entry` on every page load, so without this guard subsequent
+      // page_views would overwrite the original entry page (causing entry == exit).
       const firstPv = pageViewEvents[0];
-      if (firstPv.entry) {
+      if (firstPv.entry && !session.entryPage) {
         sessionUpdates.entryPage = firstPv.entry;
       }
 
