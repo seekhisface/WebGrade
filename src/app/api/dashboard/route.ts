@@ -188,6 +188,11 @@ export async function GET(req: NextRequest) {
         webwatchStartDate: site.webwatchStartDate?.toISOString() ?? null,
         hasWebOpp: site.hasWebOpp ?? false,
       },
+      reportSchedule: computeReportSchedule({
+        tier: site.subscriptionTier ?? 'WEBAUDIT',
+        webauditStartDate: site.webauditStartDate ?? null,
+        webwatchStartDate: site.webwatchStartDate ?? null,
+      }),
       baselineComparison,
     };
     return NextResponse.json(response);
@@ -195,4 +200,47 @@ export async function GET(req: NextRequest) {
     console.error('[dashboard] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Compute when the next scheduled report fires for a given site.
+// Used by the report modal header so users know when fresh numbers arrive.
+// ---------------------------------------------------------------------------
+
+function computeReportSchedule(input: {
+  tier: string;
+  webauditStartDate: Date | null;
+  webwatchStartDate: Date | null;
+}): {
+  nextReportDate: string | null;
+  nextReportLabel: string | null;
+  auditComplete: boolean;
+} {
+  const { tier, webauditStartDate, webwatchStartDate } = input;
+  const now = new Date();
+
+  if (tier === 'WEBAUDIT_EXPIRED') {
+    return { nextReportDate: null, nextReportLabel: null, auditComplete: true };
+  }
+
+  if (tier === 'WEBAUDIT' && webauditStartDate) {
+    const day30 = new Date(webauditStartDate.getTime() + 30 * 86400000);
+    const day60 = new Date(webauditStartDate.getTime() + 60 * 86400000);
+    if (now < day30) return { nextReportDate: day30.toISOString(), nextReportLabel: 'Day 30 audit', auditComplete: false };
+    if (now < day60) return { nextReportDate: day60.toISOString(), nextReportLabel: 'Day 60 final audit', auditComplete: false };
+    // Past Day 60 but tier hasn't been flipped yet (cron runs at 4am UTC)
+    return { nextReportDate: null, nextReportLabel: null, auditComplete: true };
+  }
+
+  if (tier === 'WEBWATCH' || tier === 'WEBWATCH_WEBOPP') {
+    // First of next calendar month at 4am UTC
+    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 4, 0, 0, 0));
+    const monthLabel = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1)
+      .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return { nextReportDate: nextMonth.toISOString(), nextReportLabel: monthLabel, auditComplete: false };
+  }
+
+  // Don't reference webwatchStartDate — silence unused-var linting on this branch
+  void webwatchStartDate;
+  return { nextReportDate: null, nextReportLabel: null, auditComplete: false };
 }

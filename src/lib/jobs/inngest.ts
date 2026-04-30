@@ -330,13 +330,33 @@ export const webauditSnapshot = inngest.createFunction(
         await step.run(`snapshot-30d-${site.id}`, async () => {
           return captureBaseline(site.id, 'webaudit_30d', 'webgrade_calculated', 30);
         }).catch(() => null);
+        await step.run(`generate-30d-report-${site.id}`, async () => {
+          const { generateReport } = await import('@/lib/report/generator');
+          return generateReport({
+            siteId: site.id,
+            periodDays: 30,
+            reportLabel: 'Day 30 audit',
+          });
+        }).catch(err => console.error(`[webaudit Day 30 report] site ${site.id}:`, err));
         snapshots++;
       }
 
       if (daysSinceStart === 60) {
         await step.run(`snapshot-60d-${site.id}`, async () => {
           await captureBaseline(site.id, 'webaudit_baseline', 'webgrade_calculated', 60);
-          // Expire the WebAudit subscription
+        }).catch(() => null);
+        await step.run(`generate-60d-report-${site.id}`, async () => {
+          const { generateReport } = await import('@/lib/report/generator');
+          return generateReport({
+            siteId: site.id,
+            periodDays: 60,
+            reportLabel: 'Day 60 final audit',
+          });
+        }).catch(err => console.error(`[webaudit Day 60 report] site ${site.id}:`, err));
+        // Expire the WebAudit subscription AFTER report generation, regardless
+        // of generation success/failure — we don't want a Claude error to leave
+        // the site stuck in WEBAUDIT tier indefinitely.
+        await step.run(`expire-${site.id}`, async () => {
           await prisma.site.update({
             where: { id: site.id },
             data: {
@@ -350,6 +370,79 @@ export const webauditSnapshot = inngest.createFunction(
     }
 
     return { snapshotsTaken: snapshots };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// WebWatch monthly report — 1st of every month at 4am UTC
+//
+// Generates a fresh LLM report for every WEBWATCH / WEBWATCH_WEBOPP site for
+// the previous full calendar month. Sites that started mid-month get a single
+// "Partial 1st month" report covering webwatchStartDate → end-of-prev-month;
+// after that they fall into the normal monthly cadence.
+//
+// Runs BEFORE the 5am-on-the-2nd archive job (RA-01) so the archive picks up
+// fresh content rather than last month's stale snapshot.
+// ---------------------------------------------------------------------------
+export const webwatchMonthlyReport = inngest.createFunction(
+  { id: 'webwatch-monthly-report', retries: 2, concurrency: { limit: 3 } },
+  { cron: '0 4 1 * *' },
+  async ({ step }) => {
+    const { prisma } = await import('@/lib/db/client');
+    const { generateReport } = await import('@/lib/report/generator');
+
+    const sites = await step.run('load-webwatch-sites', async () => {
+      return prisma.site.findMany({
+        where: {
+          isActive: true,
+          subscriptionTier: { in: ['WEBWATCH', 'WEBWATCH_WEBOPP'] },
+        },
+        select: { id: true, webwatchStartDate: true },
+      });
+    });
+
+    const now = new Date();
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    const monthLabel = prevMonthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    let generated = 0;
+    for (const site of sites) {
+      // Inngest serializes step return values through JSON, so dates come back
+      // as strings — coerce explicitly before any Date comparison.
+      const webwatchStart = site.webwatchStartDate ? new Date(site.webwatchStartDate) : null;
+
+      // First-time sites whose webwatchStartDate falls inside the previous
+      // month get a "Partial 1st month" report covering only the days they've
+      // been on WebWatch. Detect by checking for any prior INTERIM report.
+      const hasPriorReport = await prisma.report.findFirst({
+        where: { siteId: site.id, type: 'INTERIM', status: 'COMPLETE' },
+        select: { id: true },
+      });
+
+      const isPartialFirstMonth = !hasPriorReport
+        && webwatchStart
+        && webwatchStart >= prevMonthStart
+        && webwatchStart <= prevMonthEnd;
+
+      const periodStart: Date = isPartialFirstMonth && webwatchStart ? webwatchStart : prevMonthStart;
+      const periodEnd: Date = prevMonthEnd;
+      const periodDays = Math.max(1, Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000));
+      const reportLabel = isPartialFirstMonth ? 'Partial 1st month' : monthLabel;
+
+      await step.run(`webwatch-report-${site.id}`, async () => {
+        return generateReport({
+          siteId: site.id,
+          periodDays,
+          periodStart,
+          periodEnd,
+          reportLabel,
+        });
+      }).catch(err => console.error(`[webwatch monthly report] site ${site.id}:`, err));
+      generated++;
+    }
+
+    return { sitesGenerated: generated, period: monthLabel };
   }
 );
 
@@ -834,6 +927,7 @@ export const inngestFunctions = [
   captureMonthlyBaseline,
   annualBaselineReset,
   webauditSnapshot,
+  webwatchMonthlyReport,
   archiveMonthlyReport,
   syncGscDaily,
   syncGadsDaily,

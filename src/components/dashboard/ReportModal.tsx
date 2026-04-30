@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import SampleReportModal from '@/components/marketing/SampleReportModal';
 
 // =============================================================================
 // Types (duplicated from report page for self-containment)
@@ -59,17 +60,24 @@ function severityFromIndex(i: number): 'HIGH' | 'MEDIUM' | 'LOW' { return i < 2 
 // Main Modal
 // =============================================================================
 
+interface ReportSchedule {
+  nextReportDate: string | null;
+  nextReportLabel: string | null;
+  auditComplete: boolean;
+}
+
 interface ReportModalProps {
   siteId: string;
   days: number;
+  schedule: ReportSchedule | null;
   onClose: () => void;
 }
 
-export default function ReportModal({ siteId, days, onClose }: ReportModalProps) {
+export default function ReportModal({ siteId, days, schedule, onClose }: ReportModalProps) {
   const [report, setReport] = useState<ReportPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [expandedAction, setExpandedAction] = useState<number | null>(null);
+  const [showSamplePreview, setShowSamplePreview] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -94,17 +102,24 @@ export default function ReportModal({ siteId, days, onClose }: ReportModalProps)
     setLoading(false);
   }
 
-  async function generateReport() {
-    setGenerating(true);
-    try {
-      const res = await fetch('/api/ai/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteId }) });
-      if (res.ok) await loadReport();
-    } catch { /* ignore */ }
-    setGenerating(false);
-  }
-
   function handleSavePDF() {
     window.print();
+  }
+
+  function fmtDate(iso: string): string {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function fmtRelativeAge(iso: string): string {
+    const hrs = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+    if (hrs < 1) return 'just now';
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
+
+  function daysUntil(iso: string): number {
+    return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
   }
 
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -140,7 +155,30 @@ export default function ReportModal({ siteId, days, onClose }: ReportModalProps)
             <div>
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">WebGrade Intelligence Report</p>
               <h2 className="text-xl font-black text-white">WebAudit™ Report</h2>
-              <p className="text-sm text-white/70 mt-0.5">{fmtShort(startDate)} – {fmtShort(endDate)}</p>
+              {report && (
+                <p className="text-[11px] text-white/60 mt-1.5 leading-relaxed">
+                  <span className="text-white/80">Generated</span> {fmtDate(report.createdAt)} ·{' '}
+                  <span className="text-white/50">{fmtRelativeAge(report.createdAt)}</span>
+                  <span className="block">
+                    <span className="text-white/80">Covers</span> {fmtShort(new Date(report.periodStart))} – {fmtShort(new Date(report.periodEnd))}
+                    {' · '}
+                    {schedule?.auditComplete ? (
+                      <span>
+                        <span className="text-white/80">Audit complete</span>{' — '}
+                        <a href="/marketing#pricing" className="underline text-white/80 hover:text-white">upgrade to WebWatch for monthly reports</a>
+                      </span>
+                    ) : schedule?.nextReportDate ? (
+                      <span>
+                        <span className="text-white/80">Next report:</span> {fmtDate(schedule.nextReportDate)}
+                        {schedule.nextReportLabel ? <span className="text-white/50"> ({schedule.nextReportLabel})</span> : null}
+                      </span>
+                    ) : null}
+                  </span>
+                </p>
+              )}
+              {!report && (
+                <p className="text-sm text-white/70 mt-0.5">{fmtShort(startDate)} – {fmtShort(endDate)}</p>
+              )}
             </div>
             <button onClick={handleSavePDF}
               className="text-xs font-semibold px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors print:hidden flex items-center gap-1.5">
@@ -161,19 +199,44 @@ export default function ReportModal({ siteId, days, onClose }: ReportModalProps)
             </div>
           )}
 
-          {/* No report — generate CTA */}
+          {/* No report — explain the schedule + offer a sample preview */}
           {!loading && !report && (
-            <div className="py-12 text-center">
+            <div className="py-12 text-center max-w-md mx-auto">
               <div className="w-14 h-14 bg-[#e0f2fe] rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg className="w-7 h-7 text-[#0c4a6e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-[#1e293b] mb-2">Generate Your Report</h3>
-              <p className="text-sm text-[#64748b] mb-5 max-w-sm mx-auto">AI-powered analysis of your behavioral data, drop-off patterns, and baseline metrics.</p>
-              <button onClick={generateReport} disabled={generating}
-                className="px-6 py-2.5 bg-[#0c4a6e] hover:bg-[#075985] disabled:opacity-60 text-white font-semibold rounded-xl transition-colors">
-                {generating ? 'Generating… (~30s)' : 'Generate WebAudit™'}
+              <h3 className="text-lg font-bold text-[#1e293b] mb-2">
+                {schedule?.auditComplete
+                  ? 'Audit complete'
+                  : schedule?.nextReportDate
+                    ? `Your first report fires ${fmtDate(schedule.nextReportDate)}`
+                    : 'Your first report is on the way'}
+              </h3>
+              <p className="text-sm text-[#64748b] mb-5">
+                {schedule?.auditComplete ? (
+                  <>
+                    Your WebAudit window is closed.{' '}
+                    <a href="/marketing#pricing" className="text-[#0891b2] hover:text-[#0e7490] underline font-medium">
+                      Upgrade to WebWatch
+                    </a>{' '}
+                    to keep getting monthly reports as your site evolves.
+                  </>
+                ) : schedule?.nextReportDate ? (
+                  <>
+                    Reports generate on a fixed schedule so the numbers you see are always reproducible.
+                    Your <strong>{schedule.nextReportLabel ?? 'next'}</strong> report fires in{' '}
+                    <strong>{daysUntil(schedule.nextReportDate)} days</strong>. Use the dashboard for live data in the meantime.
+                  </>
+                ) : (
+                  <>Reports fire on a fixed schedule. Use the dashboard for live data in the meantime.</>
+                )}
+              </p>
+              <button
+                onClick={() => setShowSamplePreview(true)}
+                className="px-6 py-2.5 bg-[#0c4a6e] hover:bg-[#075985] text-white font-semibold rounded-xl transition-colors">
+                Preview a sample report
               </button>
             </div>
           )}
@@ -302,6 +365,11 @@ export default function ReportModal({ siteId, days, onClose }: ReportModalProps)
           )}
         </div>
       </div>
+
+      {/* Sample report preview — shown when user clicks "Preview a sample report" */}
+      {showSamplePreview && (
+        <SampleReportModal type="webaudit" onClose={() => setShowSamplePreview(false)} />
+      )}
     </div>
   );
 }

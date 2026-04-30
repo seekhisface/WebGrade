@@ -110,19 +110,21 @@ export interface ReportData {
 
 export async function aggregateReportData(
   siteId: string,
-  userEmail: string,
+  userEmail: string | null,
+  periodDays: number = 45,
 ): Promise<ReportData | null> {
-  // Load site context
+  // Load site context. userEmail=null is fine — cron jobs hit this code path
+  // and loadSiteContext's last-resort branch loads the site without auth.
   const ctx = await loadSiteContext(siteId, userEmail);
   if (!ctx) return null;
 
   const now = new Date();
-  const periodStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+  const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
   // Run drop-off analysis
   const dropoff = await computeDropOffAnalysis({
     siteId,
-    periodDays: 45,
+    periodDays,
   });
 
   // Load GA4 baseline metrics
@@ -189,7 +191,7 @@ export async function aggregateReportData(
     rageClickEvents: dropoff.pages.reduce((sum, p) => sum + p.rageClickCount, 0),
     hesitationEvents: dropoff.pages.reduce((sum, p) => sum + p.hesitationCount, 0),
     dataSource: dropoff.dataSource,
-    periodDays: 45,
+    periodDays,
   };
 
   // Try to get intent score averages from visitor sessions

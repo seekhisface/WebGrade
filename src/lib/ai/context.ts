@@ -54,19 +54,21 @@ export interface SiteContext {
 
 export async function loadSiteContext(
   siteId: string,
-  userEmail: string
+  userEmail: string | null
 ): Promise<SiteContext | null> {
-  // Primary: org-member lookup
-  let site = await prisma.site.findFirst({
-    where: {
-      id: siteId,
-      org: { members: { some: { user: { email: userEmail } } } },
-    },
-    include: { onboarding: true },
-  });
+  // Primary: org-member lookup (skipped when called from cron without a user)
+  let site = userEmail
+    ? await prisma.site.findFirst({
+        where: {
+          id: siteId,
+          org: { members: { some: { user: { email: userEmail } } } },
+        },
+        include: { onboarding: true },
+      })
+    : null;
 
   // Fallback: user's org owns the site (covers seed/demo data email mismatches)
-  if (!site) {
+  if (!site && userEmail) {
     const user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: { orgMemberships: { select: { orgId: true } } },

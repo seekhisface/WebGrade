@@ -34,6 +34,11 @@ interface DashboardData {
     hasWebOpp: boolean;
   };
   baselineComparison?: Record<string, { current: number; baseline: number; change: number; changePercent: number }>;
+  reportSchedule?: {
+    nextReportDate: string | null;
+    nextReportLabel: string | null;
+    auditComplete: boolean;
+  };
 }
 
 interface DropOffPage {
@@ -850,7 +855,12 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
 
       {/* Report Modal */}
       {showReport && (
-        <ReportModal siteId={params.siteId} days={days} onClose={() => setShowReport(false)} />
+        <ReportModal
+          siteId={params.siteId}
+          days={days}
+          schedule={D?.reportSchedule ?? null}
+          onClose={() => setShowReport(false)}
+        />
       )}
     </div>
   );
