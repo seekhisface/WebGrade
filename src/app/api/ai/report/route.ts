@@ -48,6 +48,11 @@ export async function GET(req: NextRequest) {
   let trackingHealth = null;
   let conversionGoalConfigured = false;
   let topLeaks: unknown[] = [];
+  let findings: unknown[] = [];
+  let intentDistribution: unknown = null;
+  let paidCampaigns: unknown[] = [];
+  let seoSnapshot: unknown = null;
+  let allPages: unknown[] = [];
 
   try {
     const behavioral = JSON.parse(report.behavioralSummary ?? '{}');
@@ -60,6 +65,11 @@ export async function GET(req: NextRequest) {
     trackingHealth = behavioral.trackingHealth ?? null;
     conversionGoalConfigured = !!behavioral.conversionGoalConfigured;
     topLeaks = behavioral.topLeaks ?? [];
+    findings = behavioral.findings ?? [];
+    intentDistribution = behavioral.intentDistribution ?? null;
+    paidCampaigns = behavioral.paidCampaigns ?? [];
+    seoSnapshot = behavioral.seoSnapshot ?? null;
+    allPages = behavioral.allPages ?? [];
   } catch { /* ignore parse errors */ }
 
   return NextResponse.json({
@@ -81,6 +91,11 @@ export async function GET(req: NextRequest) {
       trackingHealth,
       conversionGoalConfigured,
       topLeaks,
+      findings,
+      intentDistribution,
+      paidCampaigns,
+      seoSnapshot,
+      allPages,
       createdAt: report.createdAt,
     },
   });

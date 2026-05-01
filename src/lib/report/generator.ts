@@ -56,6 +56,7 @@ export async function generateReport(input: GenerateReportInput) {
     let topFindings: unknown[] = [];
     let topRecommendations: unknown[] = [];
     let growthPlays: unknown[] = [];
+    let findings: unknown[] = [];
 
     executiveSummary = await callClaude(systemPrompt, sections[0].prompt, sections[0].maxTokens);
 
@@ -77,6 +78,18 @@ export async function generateReport(input: GenerateReportInput) {
       growthPlays = parsed.plays ?? [];
     } catch (e) {
       console.error('[generateReport] Growth plays JSON parse failed:', e);
+    }
+
+    // Section 4: Findings & Insights. Skip the call if there are no leaks above
+    // threshold (saves ~10s of latency + a Sonnet call).
+    if (sections[3] && (reportData.topLeaks?.length ?? 0) > 0) {
+      const findingsRes = await callClaude(systemPrompt, sections[3].prompt, sections[3].maxTokens);
+      try {
+        const parsed = JSON.parse(cleanJson(findingsRes));
+        findings = parsed.findings ?? [];
+      } catch (e) {
+        console.error('[generateReport] Findings JSON parse failed:', e);
+      }
     }
 
     const estimatedImpact = reportData.estimatedMonthlyImpact
@@ -101,6 +114,16 @@ export async function generateReport(input: GenerateReportInput) {
           conversionGoalConfigured: !!reportData.context.conversionGoalUrl,
           // Section 3: ranked top 3 leaks table.
           topLeaks: reportData.topLeaks,
+          // Section 4: long-form findings (LLM output)
+          findings,
+          // Section 5: behavioral intent distribution
+          intentDistribution: reportData.intentDistribution,
+          // Section 7: paid traffic campaigns + verdicts
+          paidCampaigns: reportData.paidCampaigns,
+          // Section 8: SEO snapshot
+          seoSnapshot: reportData.seoSnapshot,
+          // Full critical pages list (Section 6 will display top 5 from this)
+          allPages: reportData.allPages,
           reportLabel,
         }),
         estimatedImpact,

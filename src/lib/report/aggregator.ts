@@ -91,6 +91,64 @@ export interface TopLeak {
   evidence: string;                // programmatically generated one-sentence summary
 }
 
+// Per-leak page-level signals fed into the Findings & Insights LLM prompt
+// (Phase 3 Section 4). The model receives these as structured input so behavioral
+// claims are anchored in real data rather than hallucinated.
+export interface LeakPageSignals {
+  url: string;
+  sessions: number;
+  exitRate: number;
+  scrollDepth: number;
+  rageClicks: number;
+  hesitations: number;
+  intentBreakdown: { HIGH: number; MEDIUM: number; LOW: number; RESEARCHER: number; COMPETITOR: number; BOT: number };
+}
+
+// Section 5: Behavioral intent distribution
+export interface IntentDistribution {
+  HIGH: number;
+  MEDIUM: number;
+  LOW: number;
+  RESEARCHER: number;
+  COMPETITOR: number;
+  BOT: number;
+  totalClassified: number;
+  topPageForCompetitor: string | null;  // most-visited URL by COMPETITOR-classified sessions
+}
+
+// Section 7: Paid traffic efficiency
+export interface PaidCampaignRow {
+  campaign: string;
+  source: string;
+  utmMedium: string;          // renamed to avoid collision with mediumIntent below
+  sessions: number;
+  botFlagged: number;
+  highIntent: number;
+  mediumIntent: number;
+  lowIntent: number;
+  verdict: 'Pure waste' | 'Mediocre' | 'Performing';
+}
+
+// Section 8: SEO snapshot — mirrors what the dashboard SEO Performance section shows
+export interface SeoSnapshot {
+  organicSessions: number;
+  totalClicks: number;
+  impressions: number;
+  avgCtr: number;
+  avgPosition: number;
+  keywordsTracked: number;
+  topKeywords: Array<{ keyword: string; position: number; clicks: number; ctr: number }>;
+  cwv: { lcp: number | null; cls: number | null; fid: number | null; allPassing: boolean };
+}
+
+// Section 11: Projected outcome
+export interface ProjectedOutcome {
+  metric: string;
+  current: string;
+  afterFixes: string;
+  delta: string;
+}
+
 export interface ReportData {
   siteId: string;
   siteName: string;
@@ -134,6 +192,18 @@ export interface ReportData {
 
   // Top 3 leaks — Phase 3 Section 3 ranked table
   topLeaks: TopLeak[];
+
+  // Per-leak structured signals fed into the Findings & insights LLM prompt (Section 4)
+  leakSignals: LeakPageSignals[];
+
+  // Section 5: behavioral intent distribution
+  intentDistribution: IntentDistribution;
+
+  // Section 7: paid traffic campaigns + verdicts
+  paidCampaigns: PaidCampaignRow[];
+
+  // Section 8: SEO snapshot from GSC (null if not connected)
+  seoSnapshot: SeoSnapshot | null;
 
   // Competitors
   competitors: string[];
@@ -277,6 +347,18 @@ export async function aggregateReportData(
   // ── Top 3 leaks (Phase 3 Section 3) ───────────────────────────────────────
   const topLeaks = await computeTopLeaks(siteId, periodStart, dropoff.pages, trackingHealth.conversionEventsFiring);
 
+  // ── Per-leak page signals for Findings & Insights (Phase 3 Section 4) ─────
+  const leakSignals = await computeLeakSignals(siteId, periodStart, topLeaks, dropoff.pages);
+
+  // ── Intent distribution (Phase 3 Section 5) ───────────────────────────────
+  const intentDistribution = await computeIntentDistribution(siteId, periodStart);
+
+  // ── Paid campaigns (Phase 3 Section 7) ────────────────────────────────────
+  const paidCampaigns = await computePaidCampaigns(siteId, periodStart);
+
+  // ── SEO snapshot (Phase 3 Section 8) ──────────────────────────────────────
+  const seoSnapshot = await computeSeoSnapshot(siteId);
+
   return {
     siteId,
     siteName: ctx.siteName,
@@ -308,6 +390,10 @@ export async function aggregateReportData(
     alerts: alertSummary,
     trackingHealth,
     topLeaks,
+    leakSignals,
+    intentDistribution,
+    paidCampaigns,
+    seoSnapshot,
     competitors,
   };
 }
@@ -428,5 +514,212 @@ function parseBaseline(
     newUsers90d: get('new_users_90d'),
     conversions90d: get('conversions_90d'),
     conversionRate: get('conversion_rate'),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Section 4: Per-leak page signals for the Findings LLM prompt
+// ---------------------------------------------------------------------------
+
+async function computeLeakSignals(
+  siteId: string,
+  periodStart: Date,
+  topLeaks: TopLeak[],
+  pages: Array<{ url: string; sessions: number; exitRate: number; avgScrollDepth: number; rageClickCount: number; hesitationCount: number }>,
+): Promise<LeakPageSignals[]> {
+  if (topLeaks.length === 0) return [];
+
+  const result: LeakPageSignals[] = [];
+  for (const leak of topLeaks) {
+    const pageRow = pages.find(p => p.url === leak.url);
+
+    // Intent breakdown for sessions that VISITED this page (entered or exited it)
+    const sessionsOnPage = await prisma.pageView.findMany({
+      where: { siteId, enteredAt: { gte: periodStart }, url: leak.url, session: { isBotFiltered: false } },
+      select: { session: { select: { intentClass: true } } },
+    });
+    const intentBreakdown = { HIGH: 0, MEDIUM: 0, LOW: 0, RESEARCHER: 0, COMPETITOR: 0, BOT: 0 };
+    for (const pv of sessionsOnPage) {
+      const c = pv.session.intentClass;
+      if (c && c in intentBreakdown) intentBreakdown[c as keyof typeof intentBreakdown]++;
+    }
+
+    result.push({
+      url: leak.url,
+      sessions: leak.sessions,
+      exitRate: leak.exitRate,
+      scrollDepth: pageRow?.avgScrollDepth ?? 0,
+      rageClicks: pageRow?.rageClickCount ?? 0,
+      hesitations: pageRow?.hesitationCount ?? 0,
+      intentBreakdown,
+    });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Section 5: Intent distribution
+// ---------------------------------------------------------------------------
+
+async function computeIntentDistribution(siteId: string, periodStart: Date): Promise<IntentDistribution> {
+  const [byClass, competitorPages] = await Promise.all([
+    prisma.visitorSession.groupBy({
+      by: ['intentClass'],
+      where: { siteId, startedAt: { gte: periodStart }, isBotFiltered: false, intentClass: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.pageView.groupBy({
+      by: ['url'],
+      where: {
+        siteId,
+        enteredAt: { gte: periodStart },
+        session: { isBotFiltered: false, intentClass: 'COMPETITOR' },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { url: 'desc' } },
+      take: 1,
+    }),
+  ]);
+
+  const dist: IntentDistribution = {
+    HIGH: 0, MEDIUM: 0, LOW: 0, RESEARCHER: 0, COMPETITOR: 0, BOT: 0,
+    totalClassified: 0,
+    topPageForCompetitor: competitorPages[0]?.url ?? null,
+  };
+  for (const row of byClass) {
+    const c = row.intentClass;
+    if (c && c in dist) {
+      (dist as unknown as Record<string, number>)[c] = row._count._all;
+      dist.totalClassified += row._count._all;
+    }
+  }
+  return dist;
+}
+
+// ---------------------------------------------------------------------------
+// Section 7: Paid campaigns + verdict logic
+// ---------------------------------------------------------------------------
+
+async function computePaidCampaigns(siteId: string, periodStart: Date): Promise<PaidCampaignRow[]> {
+  // Group paid traffic sessions by campaign + source + medium and break down
+  // into HIGH/MEDIUM/LOW intent + bot-flagged.
+  const sessions = await prisma.visitorSession.findMany({
+    where: {
+      siteId,
+      startedAt: { gte: periodStart },
+      trafficSource: 'paid',
+    },
+    select: { utmCampaign: true, utmSource: true, utmMedium: true, intentClass: true, isBotFiltered: true, isBotSuspect: true },
+  });
+
+  const map = new Map<string, PaidCampaignRow>();
+  for (const s of sessions) {
+    const key = `${s.utmSource ?? '?'}::${s.utmMedium ?? '?'}::${s.utmCampaign ?? '(none)'}`;
+    let row = map.get(key);
+    if (!row) {
+      row = {
+        campaign: s.utmCampaign ?? '(none)',
+        source: s.utmSource ?? '?',
+        utmMedium: s.utmMedium ?? '?',
+        sessions: 0,
+        botFlagged: 0,
+        highIntent: 0,
+        mediumIntent: 0,
+        lowIntent: 0,
+        verdict: 'Mediocre',
+      };
+      map.set(key, row);
+    }
+    row.sessions++;
+    if (s.isBotFiltered || s.isBotSuspect) row.botFlagged++;
+    if (s.intentClass === 'HIGH') row.highIntent++;
+    else if (s.intentClass === 'MEDIUM') row.mediumIntent++;
+    else if (s.intentClass === 'LOW') row.lowIntent++;
+  }
+
+  // Compute verdicts per spec rules
+  const rows = Array.from(map.values());
+  for (const r of rows) {
+    const total = r.sessions || 1;
+    const highMedPct = ((r.highIntent + r.mediumIntent) / total) * 100;
+    const botPct = (r.botFlagged / total) * 100;
+    if (highMedPct < 2 && botPct > 40) r.verdict = 'Pure waste';
+    else if (highMedPct < 5) r.verdict = 'Mediocre';
+    else r.verdict = 'Performing';
+  }
+  rows.sort((a, b) => b.sessions - a.sessions);
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Section 8: SEO snapshot
+// ---------------------------------------------------------------------------
+
+async function computeSeoSnapshot(siteId: string): Promise<SeoSnapshot | null> {
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { gscConnected: true },
+  });
+  if (!site?.gscConnected) return null;
+
+  // Pull last 28 days of GSC data
+  const lookback = new Date(Date.now() - 28 * 86400000);
+
+  const [keywords, traffic, latestPageResult] = await Promise.all([
+    prisma.seoKeywordRanking.findMany({
+      where: { siteId, date: { gte: lookback } },
+      orderBy: [{ date: 'desc' }, { clicks: 'desc' }],
+    }),
+    prisma.seoTrafficSnapshot.findMany({
+      where: { siteId, date: { gte: lookback } },
+      orderBy: { date: 'desc' },
+    }),
+    // CWV lives on per-page crawl results — grab the most recent for any page
+    // as a representative measurement for the site overall.
+    prisma.seoPageResult.findFirst({
+      where: { crawl: { siteId }, lcp: { not: null } },
+      orderBy: { id: 'desc' },
+      select: { lcp: true, cls: true, fid: true },
+    }),
+  ]);
+
+  // Aggregate keyword stats
+  const distinctKeywords = new Map<string, { keyword: string; position: number; clicks: number; ctr: number }>();
+  for (const k of keywords) {
+    if (!distinctKeywords.has(k.keyword)) {
+      distinctKeywords.set(k.keyword, {
+        keyword: k.keyword,
+        position: k.position ?? 0,
+        clicks: k.clicks ?? 0,
+        ctr: k.ctr ?? 0,
+      });
+    }
+  }
+  const topKeywords = Array.from(distinctKeywords.values())
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, 5);
+
+  const totalClicks = traffic.reduce((sum: number, t) => sum + (t.clicks ?? 0), 0);
+  const totalImpressions = traffic.reduce((sum: number, t) => sum + (t.impressions ?? 0), 0);
+  const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const positions = keywords.map(k => k.position).filter((p): p is number => p !== null);
+  const avgPosition = positions.length > 0 ? positions.reduce((a: number, b: number) => a + b, 0) / positions.length : 0;
+  const organicSessions = traffic.reduce((sum: number, t) => sum + (t.organicSessions ?? 0), 0);
+
+  const lcp = latestPageResult?.lcp ?? null;
+  const cls = latestPageResult?.cls ?? null;
+  const fid = latestPageResult?.fid ?? null;
+  // CWV thresholds: LCP <2.5s, CLS <0.1, FID <100ms (stored values are seconds for lcp, count for cls, ms for fid per schema)
+  const allPassing = lcp !== null && cls !== null && fid !== null && lcp < 2.5 && cls < 0.1 && fid < 100;
+
+  return {
+    organicSessions,
+    totalClicks,
+    impressions: totalImpressions,
+    avgCtr: Math.round(avgCtr * 100) / 100,
+    avgPosition: Math.round(avgPosition * 10) / 10,
+    keywordsTracked: distinctKeywords.size,
+    topKeywords,
+    cwv: { lcp, cls, fid, allPassing },
   };
 }

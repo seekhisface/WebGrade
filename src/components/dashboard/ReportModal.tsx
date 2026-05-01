@@ -24,6 +24,41 @@ interface TopLeak {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
   evidence: string;
 }
+interface Finding {
+  rank: number;
+  url: string;
+  title: string;
+  findingStatement: string;
+  why: string;
+  qualifier: string;
+}
+interface IntentDistribution {
+  HIGH: number; MEDIUM: number; LOW: number; RESEARCHER: number; COMPETITOR: number; BOT: number;
+  totalClassified: number;
+  topPageForCompetitor: string | null;
+}
+interface PaidCampaignRow {
+  campaign: string; source: string; utmMedium: string;
+  sessions: number; botFlagged: number;
+  highIntent: number; mediumIntent: number; lowIntent: number;
+  verdict: 'Pure waste' | 'Mediocre' | 'Performing';
+}
+interface SeoSnapshot {
+  organicSessions: number; totalClicks: number; impressions: number;
+  avgCtr: number; avgPosition: number; keywordsTracked: number;
+  topKeywords: Array<{ keyword: string; position: number; clicks: number; ctr: number }>;
+  cwv: { lcp: number | null; cls: number | null; fid: number | null; allPassing: boolean };
+}
+interface PageRow {
+  url: string; title: string; sessions: number;
+  exitRate: number; avgScrollDepth: number;
+  estimatedMonthlyRevenueAtRisk: number;
+  rageClickCount: number; hesitationCount: number;
+}
+interface DataQualityCheck {
+  id: string; label: string; severity: 'pass' | 'warn' | 'fail';
+  message: string;
+}
 interface ReportPayload {
   id: string; status: string; periodStart: string; periodEnd: string;
   executiveSummary: string | null; actionItems: ActionItem[] | null; topFindings: TopFinding[] | null;
@@ -34,6 +69,11 @@ interface ReportPayload {
   trackingHealth?: TrackingHealth | null;
   conversionGoalConfigured?: boolean;
   topLeaks?: TopLeak[];
+  findings?: Finding[];
+  intentDistribution?: IntentDistribution | null;
+  paidCampaigns?: PaidCampaignRow[];
+  seoSnapshot?: SeoSnapshot | null;
+  allPages?: PageRow[];
 }
 
 // =============================================================================
@@ -101,6 +141,8 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
   const [loading, setLoading] = useState(true);
   const [expandedAction, setExpandedAction] = useState<number | null>(null);
   const [showSamplePreview, setShowSamplePreview] = useState(false);
+  // Section 12: Data Gaps — fetched separately, runs the rule-based check engine.
+  const [dataGaps, setDataGaps] = useState<{ checks: DataQualityCheck[]; overall: 'green' | 'yellow' | 'red' } | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -124,6 +166,17 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
     } catch { /* no report yet */ }
     setLoading(false);
   }
+
+  // Fetch the live data-quality report for Section 12 (Data Gaps). Runs rule-based
+  // checks against current DB state — separate from the LLM report so this section
+  // stays accurate even as data flows in.
+  useEffect(() => {
+    if (!report || !siteId) return;
+    fetch(`/api/checkins/data-quality?siteId=${siteId}&mode=report`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setDataGaps({ checks: d.checks, overall: d.overall }))
+      .catch(() => null);
+  }, [report, siteId]);
 
   function handleSavePDF() {
     window.print();
@@ -381,75 +434,214 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
                 </div>
               )}
 
-              {/* Drop-Off Pages */}
-              {report.criticalPages && report.criticalPages.length > 0 && (
+              {/* ── Section 4: Findings & Insights ──────────────────────────────── */}
+              {report.findings && report.findings.length > 0 && (
                 <>
-                  <SectionHeader title="Top Drop-Off Pages" icon="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                  <div className="bg-[#f8fafc] rounded-xl border border-[#e2e8f0] overflow-hidden mb-6">
-                    <div className="grid grid-cols-4 gap-2 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
-                      <span>Page</span><span>Scroll Depth</span><span>Exit Rate</span><span>Revenue at Risk</span>
-                    </div>
-                    {report.criticalPages.slice(0, 6).map((p, i) => (
-                      <div key={i} className="grid grid-cols-4 gap-2 px-4 py-2.5 text-sm border-t border-[#f1f5f9]">
-                        <span className="font-mono text-xs text-[#0891b2] truncate">{p.url}</span>
-                        <span className="text-[#334155] text-xs">{p.scrollDepth ? `${p.scrollDepth.toFixed(0)}%` : '—'}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full inline-block w-fit ${exitRateColor(p.exitRate)}`}>{p.exitRate.toFixed(0)}%</span>
-                        <span className="text-xs font-semibold text-red-600">${p.revenueAtRisk.toLocaleString()}/mo</span>
+                  <SectionHeader title="Findings & Insights" icon="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <div className="space-y-4 mb-6">
+                    {report.findings.map(f => (
+                      <div key={f.rank} className="bg-white border border-[#e2e8f0] rounded-xl p-5">
+                        <div className="flex items-start gap-3 mb-3">
+                          <span className="w-7 h-7 bg-[#0c4a6e] text-white rounded-lg flex items-center justify-center font-black text-sm flex-shrink-0">{f.rank}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-[#1e293b]">{f.title}</p>
+                            <p className="font-mono text-[11px] text-[#0891b2] mt-0.5">{f.url}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3 text-sm text-[#334155] leading-relaxed pl-10">
+                          <p>{f.findingStatement}</p>
+                          <p>{f.why}</p>
+                          <p className="text-[#64748b] italic text-xs">{f.qualifier}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </>
               )}
 
-              {/* Priority Findings */}
-              {report.topFindings && report.topFindings.length > 0 && (
-                <>
-                  <SectionHeader title="Priority Findings" icon="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  <div className="bg-white rounded-xl border border-[#e2e8f0] divide-y divide-[#f1f5f9] mb-6">
-                    {report.topFindings.map((f, i) => {
-                      const sev = severityFromIndex(i);
-                      return (
-                        <div key={i} className="flex items-start gap-3 px-5 py-3.5">
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${severityColors[sev]}`}>{sev}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-[#1e293b]">{f.title}</p>
-                            <p className="text-xs text-[#64748b] mt-0.5">{f.problem}</p>
+              {/* ── Section 5: Behavioral Intent Distribution ──────────────────── */}
+              {report.intentDistribution && report.intentDistribution.totalClassified > 0 && (() => {
+                const d = report.intentDistribution;
+                const total = d.totalClassified || 1;
+                const pct = (n: number) => Math.round((n / total) * 100);
+                const segs = [
+                  { label: 'HIGH',       count: d.HIGH,       color: 'bg-emerald-500' },
+                  { label: 'MEDIUM',     count: d.MEDIUM,     color: 'bg-blue-500' },
+                  { label: 'LOW',        count: d.LOW,        color: 'bg-slate-400' },
+                  { label: 'RESEARCHER', count: d.RESEARCHER, color: 'bg-purple-500' },
+                  { label: 'COMPETITOR', count: d.COMPETITOR, color: 'bg-orange-500' },
+                  { label: 'BOT',        count: d.BOT,        color: 'bg-red-500' },
+                ];
+                let interp: string;
+                if (pct(d.BOT) > 30) interp = `${pct(d.BOT)}% of traffic is bot-suspected — paid traffic skews higher. See ad spend section.`;
+                else if (pct(d.COMPETITOR) > 15) interp = `${pct(d.COMPETITOR)}% of visitors classified as COMPETITOR price-shopping${d.topPageForCompetitor ? `, concentrated on ${d.topPageForCompetitor}` : ''}.`;
+                else if (pct(d.LOW) > 70) interp = `${pct(d.LOW)}% of traffic is LOW intent — content traffic without a path to conversion.`;
+                else interp = 'Distribution within healthy range.';
+                return (
+                  <>
+                    <SectionHeader title="Behavioral Intent Distribution" icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <div className="bg-white border border-[#e2e8f0] rounded-xl p-5 mb-6">
+                      <div className="flex h-8 rounded-lg overflow-hidden mb-3">
+                        {segs.map(s => s.count > 0 && (
+                          <div key={s.label} className={`${s.color} flex items-center justify-center`} style={{ width: `${pct(s.count)}%` }}>
+                            <span className="text-[10px] text-white font-semibold px-1">{pct(s.count) >= 8 ? `${pct(s.count)}%` : ''}</span>
                           </div>
-                          {f.impact && <span className="text-xs font-semibold text-red-600 flex-shrink-0">{f.impact}</span>}
-                        </div>
-                      );
-                    })}
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+                        {segs.map(s => (
+                          <div key={s.label} className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${s.color}`} />
+                            <span className="text-[10px] text-[#64748b] uppercase tracking-wider">{s.label}</span>
+                            <span className="text-xs font-semibold text-[#1e293b] ml-auto">{s.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-[#475569] leading-relaxed border-t border-[#f1f5f9] pt-3">{interp}</p>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* ── Section 6: Drop-off pages — top 5 by qualified-visitor loss ─── */}
+              {report.allPages && report.allPages.length > 0 && (() => {
+                const showRevenue = (report.trackingHealth?.conversionEventsCount ?? 0) >= 1;
+                // Spec: sort by qualified-visitor loss when conv tracking dark, else by revenue
+                const sorted = [...report.allPages].sort((a, b) => b.estimatedMonthlyRevenueAtRisk - a.estimatedMonthlyRevenueAtRisk).slice(0, 5);
+                const cols = showRevenue ? 6 : 5;
+                return (
+                  <>
+                    <SectionHeader title="Drop-off Pages" icon="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                    <div className="bg-[#f8fafc] rounded-xl border border-[#e2e8f0] overflow-hidden mb-6">
+                      <div className={`grid gap-2 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider`} style={{ gridTemplateColumns: `2fr 1fr 1fr 1fr 1.2fr ${showRevenue ? '1fr' : ''}` }}>
+                        <span>Page</span><span>Sessions</span><span>Scroll</span><span>Exit Rate</span><span>Qualified Lost</span>{showRevenue && <span>Revenue at Risk</span>}
+                      </div>
+                      {sorted.map((p, i) => {
+                        const qualified = report.topLeaks?.find(l => l.url === p.url)?.qualifiedVisitorsLost ?? 0;
+                        return (
+                          <div key={i} className={`grid gap-2 px-4 py-2.5 text-sm border-t border-[#f1f5f9]`} style={{ gridTemplateColumns: `2fr 1fr 1fr 1fr 1.2fr ${showRevenue ? '1fr' : ''}` }}>
+                            <span className="font-mono text-xs text-[#0891b2] truncate">{p.url}</span>
+                            <span className="text-[#334155] text-xs">{p.sessions}</span>
+                            <span className="text-[#334155] text-xs">{p.avgScrollDepth ? `${p.avgScrollDepth.toFixed(0)}%` : '—'}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full inline-block w-fit ${exitRateColor(p.exitRate)}`}>{p.exitRate.toFixed(0)}%</span>
+                            <span className="text-[#334155] text-xs font-semibold">{qualified}</span>
+                            {showRevenue && <span className="text-xs font-semibold text-red-600">${p.estimatedMonthlyRevenueAtRisk.toLocaleString()}/mo</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {!showRevenue && (
+                      <p className="text-[11px] text-[#94a3b8] -mt-4 mb-6 italic">Revenue at Risk column hidden — conversion tracking not firing in this period.</p>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* ── Section 7: Paid Traffic Efficiency ────────────────────────────── */}
+              <SectionHeader title="Paid Traffic Efficiency" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              {report.paidCampaigns && report.paidCampaigns.length > 0 ? (
+                <div className="bg-[#f8fafc] rounded-xl border border-[#e2e8f0] overflow-hidden mb-6">
+                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-2 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
+                    <span>Campaign</span><span>Sessions</span><span>Bot</span><span>HIGH</span><span>MED</span><span>LOW</span><span>Verdict</span>
                   </div>
-                </>
+                  {report.paidCampaigns.slice(0, 8).map((c, i) => {
+                    const verdictColor = c.verdict === 'Pure waste' ? 'text-red-700 bg-red-50' : c.verdict === 'Performing' ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50';
+                    return (
+                      <div key={i} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-2 px-4 py-2.5 text-sm border-t border-[#f1f5f9]">
+                        <span className="text-xs text-[#334155] truncate" title={c.campaign}>{c.campaign}</span>
+                        <span className="text-xs text-[#334155]">{c.sessions}</span>
+                        <span className="text-xs text-[#334155]">{c.botFlagged}</span>
+                        <span className="text-xs text-emerald-700 font-semibold">{c.highIntent}</span>
+                        <span className="text-xs text-blue-700">{c.mediumIntent}</span>
+                        <span className="text-xs text-[#94a3b8]">{c.lowIntent}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block w-fit ${verdictColor}`}>{c.verdict}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-4 py-3 mb-6 text-sm text-[#64748b]">
+                  No paid campaigns detected. Connect Google Ads / Meta in Settings to populate.
+                </div>
               )}
 
-              {/* Action Items */}
+              {/* ── Section 8: SEO Snapshot ──────────────────────────────────────── */}
+              <SectionHeader title="SEO Snapshot" icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              {report.seoSnapshot ? (
+                <div className="space-y-3 mb-6">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    {[
+                      { label: 'Organic Sessions', value: report.seoSnapshot.organicSessions.toLocaleString() },
+                      { label: 'Total Clicks', value: report.seoSnapshot.totalClicks.toLocaleString() },
+                      { label: 'Impressions', value: report.seoSnapshot.impressions.toLocaleString() },
+                      { label: 'Avg CTR', value: `${report.seoSnapshot.avgCtr}%` },
+                      { label: 'Avg Position', value: report.seoSnapshot.avgPosition.toFixed(1) },
+                      { label: 'Keywords', value: String(report.seoSnapshot.keywordsTracked) },
+                    ].map(t => (
+                      <div key={t.label} className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3">
+                        <p className="text-[9px] text-[#64748b] uppercase tracking-wider mb-1 truncate">{t.label}</p>
+                        <p className="text-base font-black text-[#0c4a6e]">{t.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {report.seoSnapshot.topKeywords.length > 0 && (
+                    <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
+                        <span>Top Keywords</span><span>Position</span><span>Clicks</span><span>CTR</span>
+                      </div>
+                      {report.seoSnapshot.topKeywords.map((k, i) => (
+                        <div key={i} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 px-4 py-2 text-sm border-t border-[#f1f5f9]">
+                          <span className="text-xs text-[#334155] truncate">{k.keyword}</span>
+                          <span className="text-xs text-[#334155]">{k.position.toFixed(1)}</span>
+                          <span className="text-xs text-[#334155]">{k.clicks}</span>
+                          <span className="text-xs text-[#334155]">{(k.ctr * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(report.seoSnapshot.cwv.lcp || report.seoSnapshot.cwv.cls || report.seoSnapshot.cwv.fid) && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className={`px-3 py-1 rounded-full ${(report.seoSnapshot.cwv.lcp ?? 999) < 2500 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>LCP {report.seoSnapshot.cwv.lcp ? `${(report.seoSnapshot.cwv.lcp / 1000).toFixed(2)}s` : '—'}</span>
+                      <span className={`px-3 py-1 rounded-full ${(report.seoSnapshot.cwv.cls ?? 1) < 0.1 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>CLS {report.seoSnapshot.cwv.cls ?? '—'}</span>
+                      <span className={`px-3 py-1 rounded-full ${(report.seoSnapshot.cwv.fid ?? 999) < 100 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>FID {report.seoSnapshot.cwv.fid ? `${report.seoSnapshot.cwv.fid}ms` : '—'}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-4 py-3 mb-6 text-sm text-[#64748b]">
+                  Connect Google Search Console in Settings to see SEO performance.
+                </div>
+              )}
+
+              {/* ── Section 9: Recommendations (table format) ────────────────────── */}
               {report.actionItems && report.actionItems.length > 0 && (
                 <>
-                  <SectionHeader title="Action Items" icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  <div className="space-y-2 mb-6">
-                    {(report.actionItems as ActionItem[]).map((r, i) => {
-                      const c = recColors[i] ?? recColors[recColors.length - 1];
+                  <SectionHeader title={`Recommendations (${report.actionItems.length})`} icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden mb-6">
+                    <div className="grid grid-cols-[40px_2fr_1fr_1.2fr] gap-3 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
+                      <span>#</span><span>Action</span><span>Effort</span><span>Estimated Impact</span>
+                    </div>
+                    {(report.actionItems as ActionItem[]).slice(0, 8).map(r => {
                       const isExpanded = expandedAction === r.rank;
                       return (
-                        <div key={r.rank} className={`${c.bg} border ${c.border} rounded-xl overflow-hidden cursor-pointer`}
-                          onClick={() => setExpandedAction(isExpanded ? null : r.rank)}>
-                          <div className="flex items-center gap-3 px-4 py-3">
-                            <span className={`w-6 h-6 ${c.badge} text-white rounded-lg flex items-center justify-center font-black text-xs flex-shrink-0`}>{r.rank}</span>
-                            <p className="text-sm font-semibold text-[#1e293b] flex-1">{r.title}</p>
-                            <span className="text-xs font-semibold text-green-600 flex-shrink-0">{r.impact}</span>
-                            <span className="text-[10px] font-semibold text-[#64748b] bg-white px-2 py-0.5 rounded-full flex-shrink-0">{r.effort} effort</span>
+                        <div key={r.rank} className="border-t border-[#f1f5f9]">
+                          <div onClick={() => setExpandedAction(isExpanded ? null : r.rank)}
+                               className="grid grid-cols-[40px_2fr_1fr_1.2fr] gap-3 px-4 py-3 text-sm cursor-pointer hover:bg-slate-50">
+                            <span className="font-black text-[#0c4a6e]">{r.rank}</span>
+                            <span className="text-[#1e293b] font-semibold">{r.title}</span>
+                            <span className="text-xs text-[#64748b] capitalize">{r.effort}</span>
+                            <span className="text-xs font-semibold text-emerald-700">{r.impact}</span>
                           </div>
                           {isExpanded && (
-                            <div className="px-4 pb-4 border-t border-white/50" onClick={e => e.stopPropagation()}>
-                              <div className="grid grid-cols-2 gap-4 mt-3">
+                            <div className="px-4 pb-4 pt-1 bg-slate-50 border-t border-[#f1f5f9]">
+                              <div className="grid md:grid-cols-2 gap-4 text-xs">
                                 <div>
                                   <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-1">Problem</p>
-                                  <p className="text-sm text-[#334155] leading-relaxed">{r.problem}</p>
+                                  <p className="text-[#334155] leading-relaxed">{r.problem}</p>
                                 </div>
                                 <div>
                                   <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-1">Fix</p>
-                                  <p className="text-sm text-[#334155] leading-relaxed">{r.fix}</p>
+                                  <p className="text-[#334155] leading-relaxed">{r.fix}</p>
                                 </div>
                               </div>
                             </div>
@@ -459,6 +651,56 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
                     })}
                   </div>
                 </>
+              )}
+
+              {/* ── Section 10: Projected Outcome (conditional) ──────────────────── */}
+              {(report.trackingHealth?.conversionEventsCount ?? 0) >= 1 && (report.actionItems?.length ?? 0) >= 3 && (
+                <>
+                  <SectionHeader title="Projected Monthly Outcome" icon="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden mb-6">
+                    <div className="grid grid-cols-4 gap-2 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
+                      <span>Metric</span><span>Current Run Rate</span><span>After Fixes</span><span>Delta</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 px-4 py-2.5 text-sm border-t border-[#f1f5f9]">
+                      <span className="text-xs text-[#334155]">Revenue at Risk</span>
+                      <span className="text-xs text-red-600 font-semibold">${report.totalRevenueAtRisk.toLocaleString()}/mo</span>
+                      <span className="text-xs text-emerald-600 font-semibold">~${Math.round(report.totalRevenueAtRisk * 0.4).toLocaleString()}/mo recoverable</span>
+                      <span className="text-xs text-[#0c4a6e] font-semibold">{report.estimatedImpact ?? '—'}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── Section 11: Data Gaps ────────────────────────────────────────── */}
+              <span id="data-gaps" />
+              <SectionHeader title="Data Gaps" icon="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              {dataGaps ? (
+                <div className="space-y-2 mb-6">
+                  <p className="text-xs text-[#64748b] mb-2">
+                    Programmatic checklist of what we know is missing or unreliable. Existing tools never tell you what they don&apos;t know — we do.
+                  </p>
+                  {dataGaps.checks.filter(c => c.severity !== 'pass').map(c => {
+                    const colors = c.severity === 'fail'
+                      ? { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', label: 'GAP' }
+                      : { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', label: 'WARN' };
+                    return (
+                      <div key={c.id} className={`flex items-start gap-3 p-3 rounded-xl border ${colors.bg} ${colors.border}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${colors.text} flex-shrink-0 mt-0.5`}>{colors.label}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#1e293b]">{c.label}</p>
+                          <p className="text-xs text-[#475569] mt-0.5">{c.message}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {dataGaps.checks.filter(c => c.severity !== 'pass').length === 0 && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-700">
+                      No data gaps detected — tracking is healthy.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-[#94a3b8] mb-6 italic">Loading data quality checks…</div>
               )}
 
               {/* Bottom Save as PDF */}

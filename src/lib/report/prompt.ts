@@ -66,6 +66,7 @@ export function buildReportPrompts(data: ReportData): ReportPromptSet {
       buildExecutiveSummaryPrompt(data, dataBlock),
       buildActionItemsPrompt(data, dataBlock),
       buildGrowthPlaysPrompt(data, dataBlock),
+      buildFindingsPrompt(data, dataBlock),
     ],
   };
 }
@@ -201,6 +202,78 @@ Rules:
 - Each play should be testable within 30 days
 - Use knowledge of the business description, target audience, and competitors
 - Respond ONLY with the JSON object, no preamble or explanation`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Section 4: Findings & insights (long-form)
+//
+// One 2-3 paragraph deep-dive per top-3 leak. Receives structured page-level
+// signals (scroll, intent breakdown, hesitations, rage clicks) so claims are
+// anchored in real data rather than hallucinated. Returns JSON.
+// ---------------------------------------------------------------------------
+
+function buildFindingsPrompt(data: ReportData, dataBlock: string): ReportSection {
+  const leaks = data.topLeaks ?? [];
+  const signals = data.leakSignals ?? [];
+
+  // Attach signals to each leak by URL for the prompt
+  const leakBlocks = leaks.map((leak, idx) => {
+    const sig = signals.find(s => s.url === leak.url) ?? signals[idx];
+    return `## Leak #${leak.rank}: ${leak.url}
+Severity: ${leak.severity} (${leak.attributablePct.toFixed(1)}% of qualified-visitor loss)
+Sessions: ${leak.sessions} | Exit rate: ${leak.exitRate.toFixed(0)}% | HIGH/MED exits: ${leak.qualifiedVisitorsLost}
+Avg scroll depth: ${sig?.scrollDepth.toFixed(0) ?? 'unknown'}%
+Rage clicks: ${sig?.rageClicks ?? 0} | Hesitation events: ${sig?.hesitations ?? 0}
+Intent breakdown: HIGH=${sig?.intentBreakdown.HIGH ?? 0}, MEDIUM=${sig?.intentBreakdown.MEDIUM ?? 0}, LOW=${sig?.intentBreakdown.LOW ?? 0}, RESEARCHER=${sig?.intentBreakdown.RESEARCHER ?? 0}, COMPETITOR=${sig?.intentBreakdown.COMPETITOR ?? 0}, BOT=${sig?.intentBreakdown.BOT ?? 0}`;
+  }).join('\n\n');
+
+  return {
+    title: 'Findings & Insights',
+    maxTokens: 1500,
+    prompt: `${dataBlock}
+
+# TOP LEAKS WITH PAGE-LEVEL SIGNALS
+
+${leakBlocks || '(no leaks above the 5% qualified-loss threshold — return empty findings array)'}
+
+# YOUR JOB
+
+For each leak above, write a 2-3 paragraph "finding" with the structure below. Output JSON.
+
+# STRUCTURE (per finding)
+
+Paragraph 1 — Finding statement: Restate the leak with concrete numbers. Lead with traffic + exit + qualified-visitor counts.
+
+Paragraph 2 — The "why": Use the page-level signals (scroll depth, intent breakdown, hesitation, rage clicks, form events). Every behavioral claim MUST trace to a passed-in number. If scroll depth is 30%, say so. If rage clicks are 0, do not mention them. Cite intent class with counts: "27 of 116 (23%) classified as COMPETITOR" — not "many competitors visited".
+
+Paragraph 3 — The qualifier: What this finding does NOT yet tell us. Examples: "We can see they exited but not whether they were comparing pricing or got blocked by a form field." Or: "Conversion tracking is not firing, so we cannot confirm whether any of these visitors completed elsewhere on the site."
+
+# VOICE RULES
+
+- Numbers BEFORE claims.
+- BANNED unless paired with a quantitative anchor: catastrophic, hemorrhaging, concerning, alarming, devastating, dangerous, urgent, critical.
+- Hedge honestly: "appears to be", "we cannot confirm from this dataset because [reason]".
+- Sentence length cap ~25 words. Paragraph cap 4 sentences.
+
+# OUTPUT FORMAT
+
+\`\`\`json
+{
+  "findings": [
+    {
+      "rank": 1,
+      "url": "/example",
+      "title": "Short title (max 10 words)",
+      "findingStatement": "Paragraph 1 prose...",
+      "why": "Paragraph 2 prose...",
+      "qualifier": "Paragraph 3 prose..."
+    }
+  ]
+}
+\`\`\`
+
+Output ONLY the JSON object. No preamble. No markdown code fences in the actual output. If there are 0 leaks above threshold, return {"findings": []}.`,
   };
 }
 
