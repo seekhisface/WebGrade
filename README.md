@@ -118,7 +118,7 @@ webgrade/
 │   └── schema.prisma          # Complete database schema (all 108 task models)
 ├── public/
 │   └── snippet/
-│       └── webgrade.js        # Client-side tracking snippet (<5KB)
+│       └── webgrade.js        # Client-side tracking snippet (~7KB gzipped over the wire)
 ├── src/
 │   ├── app/
 │   │   ├── api/

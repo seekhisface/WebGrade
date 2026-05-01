@@ -15,7 +15,7 @@
  *   - Form focus tracking
  *   - Bot detection (pre-filter before sending)
  *   - Consent-aware: respects consent mode if present
- *   - <5KB minified, async, non-blocking
+ *   - ~7 KB gzipped over the wire (~25 KB raw), async, non-blocking
  *
  * Privacy:
  *   - No cookies in anonymous mode
