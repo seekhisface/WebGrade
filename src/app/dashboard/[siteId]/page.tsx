@@ -39,6 +39,14 @@ interface DashboardData {
     nextReportLabel: string | null;
     auditComplete: boolean;
   };
+  integrations?: {
+    gscConnected: boolean;
+    gscLastSyncAt: string | null;
+    ga4Connected: boolean;
+    ga4LastSyncAt: string | null;
+    gadsConnected: boolean;
+    gadsLastSyncAt: string | null;
+  };
 }
 
 interface DropOffPage {
@@ -126,15 +134,28 @@ function HealthBadge({ status, onShowReport }: { status: 'GREEN' | 'YELLOW' | 'R
   );
 }
 
-function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, onReportClick, bottomCta }: {
+function KpiCard({ label, value, suffix, change, changeLabel, baseline, valueColor, onReportClick, bottomCta, tooltip }: {
   label: string; value: string; suffix?: string; change?: number; changeLabel?: string; baseline?: string; valueColor?: string; onReportClick?: () => void;
   bottomCta?: { text: string; tooltip: string; href: string };
+  tooltip?: string;
 }) {
   const positive = (change ?? 0) >= 0;
   const changeColor = change === undefined ? '' : positive ? 'text-[#0d9488]' : Math.abs(change) > 15 ? 'text-[#b91c1c]' : 'text-[#b45309]';
   return (
     <div className="bg-[#f0fdfa]/60 border border-[#99f6e4] rounded-2xl p-5 shadow-sm">
-      <p className="text-xs font-bold text-[#64748b] uppercase tracking-wider mb-3">{label}</p>
+      <div className="flex items-center gap-1.5 mb-3">
+        <p className="text-xs font-bold text-[#64748b] uppercase tracking-wider">{label}</p>
+        {tooltip && (
+          <span className="relative inline-block group">
+            <svg className="w-3.5 h-3.5 text-[#94a3b8] hover:text-[#0c4a6e] cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="absolute z-50 hidden group-hover:block top-full left-0 mt-1 w-72 px-3 py-2 bg-[#0c4a6e] text-white text-[11px] leading-relaxed rounded-lg shadow-xl pointer-events-none">
+              {tooltip}
+            </span>
+          </span>
+        )}
+      </div>
       <p className="text-3xl font-black mb-1" style={{ color: valueColor ?? '#0c4a6e' }}>
         {value}{suffix && <span className="text-base font-normal text-[#94a3b8] ml-1">{suffix}</span>}
       </p>
@@ -428,10 +449,12 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
         {/* ── SECTION 1: Hero KPI Cards ── */}
         <div ref={kpiRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard label="Total Sessions" value={sessions.toLocaleString()} change={D?.totalSessionsChange} baseline=""
-            valueColor="#0c4a6e" onReportClick={() => setShowReport(true)} />
+            valueColor="#0c4a6e" onReportClick={() => setShowReport(true)}
+            tooltip="Distinct visitor sessions in this date range. Excludes confirmed bots (UA-matched). Behavioral bot suspects are still counted but flagged on the session detail page." />
           <KpiCard label="Avg Intent Score" value={String(intentScore)} suffix="/100" change={D?.avgIntentScoreChange} baseline=""
             valueColor={intentScore >= 70 ? '#0d9488' : intentScore >= 40 ? '#b45309' : '#dc2626'}
-            onReportClick={() => setShowReport(true)} />
+            onReportClick={() => setShowReport(true)}
+            tooltip="0–100 score from a 5-factor algorithm: pages viewed, session duration, scroll depth, click activity, conversion signals. ≥70 = HIGH intent (deep engagement), 40–69 = MEDIUM, <40 = LOW. Researchers and competitors get classified separately." />
           <KpiCard
             label={D?.hasRevenueData ? 'Revenue at Risk' : 'Disengaged Leads'}
             value={D?.hasRevenueData ? `$${revenueRisk.toLocaleString()}` : disengagedVisitors.toLocaleString()}
@@ -439,22 +462,48 @@ export default function UnifiedDashboard({ params }: { params: { siteId: string 
             change={D?.baselineComparison?.revenue_at_risk?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.hasRevenueData ? (revenueRisk > 30000 ? '#dc2626' : revenueRisk > 10000 ? '#b45309' : '#0c4a6e') : '#b45309'}
             onReportClick={() => setShowReport(true)}
+            tooltip={D?.hasRevenueData
+              ? "Modeled monthly revenue lost to above-benchmark exits. Formula: lost visitors × your AOV × lead-to-win rate × industry impact multiplier. Driven by your onboarding revenue questionnaire."
+              : "Unique visitors who exited above industry benchmark exit rates, summed across pages. Once you complete the revenue questionnaire (Settings → Revenue), this card switches to dollars/month."}
             bottomCta={!D?.hasRevenueData ? { text: 'Revenue questionnaire?', tooltip: 'Answer a few questions so we can translate to lost revenue for you', href: `/dashboard/${params.siteId}/revenue` } : undefined} />
           <KpiCard label="Bounce Rate" value={D?.bounceRate != null ? `${D.bounceRate.toFixed(1)}%` : '—'} change={D?.baselineComparison?.bounce_rate?.changePercent} changeLabel="vs baseline" baseline=""
             valueColor={D?.bounceRate != null && D.bounceRate > 65 ? '#dc2626' : D?.bounceRate != null && D.bounceRate > 45 ? '#b45309' : '#0d9488'}
-            onReportClick={() => setShowReport(true)} />
+            onReportClick={() => setShowReport(true)}
+            tooltip="% of sessions that viewed only one page AND lasted under 10 seconds. Industry-typical range is 40–60%. Above 70% usually points to a targeting mismatch (wrong audience) or a slow / broken landing page." />
         </div>
 
         {/* ── SECTION 2: Live SEO KPIs ── */}
         {S && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-lg font-black text-[#0c4a6e]">SEO Performance</h2>
                 <div className="flex items-center gap-1.5">
                   <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
                   <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Live</span>
                 </div>
+                {/* Surface the GSC sync recency so users can tell whether the cron is firing.
+                    "(never)" or "stale" here = the daily Inngest job isn't running on this env. */}
+                {D?.integrations && (() => {
+                  const lastSync = D.integrations.gscLastSyncAt;
+                  if (!D.integrations.gscConnected) {
+                    return <span className="text-[10px] text-[#94a3b8]">GSC not connected</span>;
+                  }
+                  if (!lastSync) {
+                    return <span className="text-[10px] text-[#b45309] font-medium" title="GSC is connected but the daily sync has never run on this environment. Check Inngest configuration.">⚠ GSC never synced</span>;
+                  }
+                  const hrs = Math.floor((Date.now() - new Date(lastSync).getTime()) / 3600000);
+                  const rel = hrs < 1 ? 'just now' : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`;
+                  const isStale = hrs >= 48;
+                  return (
+                    <span
+                      className={`text-[10px] ${isStale ? 'text-[#b45309] font-medium' : 'text-[#94a3b8]'}`}
+                      title={isStale ? 'GSC sync is stale (>48h). The daily Inngest cron may not be firing — check Inngest dashboard.' : 'GSC sync timestamp from the daily Inngest cron'}
+                    >
+                      {isStale ? '⚠ ' : ''}GSC synced {rel}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="flex items-center bg-[#f0f9ff] border border-[#bae6fd] rounded-lg p-1 gap-1">
                 {(['overview', 'keywords', 'cwv', 'indexing'] as const).map(t => (

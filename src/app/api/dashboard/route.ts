@@ -188,6 +188,16 @@ export async function GET(req: NextRequest) {
         webwatchStartDate: site.webwatchStartDate?.toISOString() ?? null,
         hasWebOpp: site.hasWebOpp ?? false,
       },
+      // Integration freshness — lets the dashboard show "GSC last synced X ago"
+      // so users can tell at a glance whether the daily Inngest sync is firing.
+      integrations: {
+        gscConnected: site.gscConnected,
+        gscLastSyncAt: site.gscLastSyncAt?.toISOString() ?? null,
+        ga4Connected: site.ga4Connected,
+        ga4LastSyncAt: site.ga4LastSyncAt?.toISOString() ?? null,
+        gadsConnected: site.gadsConnected,
+        gadsLastSyncAt: site.gadsLastSyncAt?.toISOString() ?? null,
+      },
       reportSchedule: computeReportSchedule({
         tier: site.subscriptionTier ?? 'WEBAUDIT',
         webauditStartDate: site.webauditStartDate ?? null,

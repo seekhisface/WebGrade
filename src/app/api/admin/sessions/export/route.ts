@@ -225,8 +225,13 @@ export async function GET(req: NextRequest) {
     const sessionsSheet = wb.addWorksheet('Sessions');
     sessionsSheet.columns = [
       { header: 'Session ID', key: 'sessionId', width: 18 },
-      { header: 'Started At', key: 'startedAt', width: 22 },
-      { header: 'Duration', key: 'duration', width: 12 },
+      // Sortable date/time columns. Pivot/filter on Start Date for daily rollups,
+      // sort by Duration (sec) numerically, etc.
+      { header: 'Start Date', key: 'startDate', width: 12 },
+      { header: 'Start Time', key: 'startTime', width: 11 },
+      { header: 'End Date', key: 'endDate', width: 12 },
+      { header: 'End Time', key: 'endTime', width: 11 },
+      { header: 'Duration (sec)', key: 'durationSec', width: 13 },
       { header: 'Country', key: 'country', width: 10 },
       { header: 'Region', key: 'region', width: 12 },
       { header: 'Device', key: 'device', width: 10 },
@@ -292,6 +297,10 @@ export async function GET(req: NextRequest) {
       return c;
     }
 
+    function pad(n: number) { return n < 10 ? `0${n}` : String(n); }
+    function dateOnly(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+    function timeOnly(d: Date) { return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+
     for (const s of sessions) {
       const durationSec = s.endedAt && s.startedAt
         ? Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000)
@@ -299,8 +308,11 @@ export async function GET(req: NextRequest) {
       const counts = countEventsByType(s.events);
       sessionsSheet.addRow({
         sessionId: truncateSessionId(s.sessionId),
-        startedAt: s.startedAt.toISOString(),
-        duration: fmtDuration(durationSec),
+        startDate: dateOnly(s.startedAt),
+        startTime: timeOnly(s.startedAt),
+        endDate: s.endedAt ? dateOnly(s.endedAt) : '',
+        endTime: s.endedAt ? timeOnly(s.endedAt) : '',
+        durationSec: durationSec,
         country: s.country ?? '',
         region: s.region ?? '',
         device: s.deviceType ?? '',
