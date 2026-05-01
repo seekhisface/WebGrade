@@ -294,6 +294,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // After upserting, ensure isExit=true is set on ONLY the latest PageView for
+    // this session. The snippet fires page_exit on every navigation (so it can
+    // measure time-on-page), which would otherwise leave isExit=true on every
+    // page the visitor navigated through — inflating per-page exit rates in the
+    // drop-off analysis. Only the page they were last on counts as the exit.
+    if (pageViewEvents.length > 0) {
+      const latestPv = await tx.pageView.findFirst({
+        where: { sessionId: session.id },
+        orderBy: { enteredAt: 'desc' },
+        select: { id: true },
+      });
+      if (latestPv) {
+        await tx.pageView.updateMany({
+          where: { sessionId: session.id, id: { not: latestPv.id }, isExit: true },
+          data: { isExit: false, exitedAt: null },
+        });
+      }
+    }
+
     // Update session stats
     const sessionUpdates: Record<string, unknown> = {
       pageCount: { increment: pageViewEvents.length },
