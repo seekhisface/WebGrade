@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
   let reportLabel: string | null = null;
   let trackingHealth = null;
   let conversionGoalConfigured = false;
+  let topLeaks: unknown[] = [];
 
   try {
     const behavioral = JSON.parse(report.behavioralSummary ?? '{}');
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
     reportLabel = behavioral.reportLabel ?? null;
     trackingHealth = behavioral.trackingHealth ?? null;
     conversionGoalConfigured = !!behavioral.conversionGoalConfigured;
+    topLeaks = behavioral.topLeaks ?? [];
   } catch { /* ignore parse errors */ }
 
   return NextResponse.json({
@@ -78,6 +80,7 @@ export async function GET(req: NextRequest) {
       reportLabel,
       trackingHealth,
       conversionGoalConfigured,
+      topLeaks,
       createdAt: report.createdAt,
     },
   });

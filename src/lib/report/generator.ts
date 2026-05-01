@@ -99,6 +99,8 @@ export async function generateReport(input: GenerateReportInput) {
           // Section 2 conditional KPI logic — drives the Revenue at Risk card states.
           trackingHealth: reportData.trackingHealth,
           conversionGoalConfigured: !!reportData.context.conversionGoalUrl,
+          // Section 3: ranked top 3 leaks table.
+          topLeaks: reportData.topLeaks,
           reportLabel,
         }),
         estimatedImpact,

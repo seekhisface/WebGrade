@@ -12,6 +12,18 @@ interface GrowthPlay { rank: number; title: string; opportunity: string; hypothe
 interface CriticalPage { url: string; exitRate: number; scrollDepth: number; revenueAtRisk: number; severity: string; }
 interface TopFinding { title: string; problem: string; impact: string; category: string; }
 interface TrackingHealth { conversionEventsFiring: boolean; conversionEventsCount: number; botPct: number; eventDataCompleteness: number; }
+interface TopLeak {
+  rank: number;
+  url: string;
+  title: string | null;
+  sessions: number;
+  exitRate: number;
+  qualifiedVisitorsLost: number;
+  revenueAtRisk: number;
+  attributablePct: number;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  evidence: string;
+}
 interface ReportPayload {
   id: string; status: string; periodStart: string; periodEnd: string;
   executiveSummary: string | null; actionItems: ActionItem[] | null; topFindings: TopFinding[] | null;
@@ -21,6 +33,7 @@ interface ReportPayload {
   criticalPages: CriticalPage[] | null; totalRevenueAtRisk: number; createdAt: string;
   trackingHealth?: TrackingHealth | null;
   conversionGoalConfigured?: boolean;
+  topLeaks?: TopLeak[];
 }
 
 // =============================================================================
@@ -58,6 +71,13 @@ const recColors = [
 
 const severityColors = { HIGH: 'bg-red-100 text-red-700', MEDIUM: 'bg-amber-100 text-amber-700', LOW: 'bg-blue-100 text-blue-700' };
 function severityFromIndex(i: number): 'HIGH' | 'MEDIUM' | 'LOW' { return i < 2 ? 'HIGH' : i < 4 ? 'MEDIUM' : 'LOW'; }
+
+// Top 3 Leaks (Section 3) — programmatic severity tiers
+const SEVERITY_BADGES: Record<'CRITICAL' | 'HIGH' | 'MEDIUM', { bg: string; text: string }> = {
+  CRITICAL: { bg: 'bg-red-100', text: 'text-red-700' },
+  HIGH:     { bg: 'bg-amber-100', text: 'text-amber-700' },
+  MEDIUM:   { bg: 'bg-blue-100', text: 'text-blue-700' },
+};
 
 // =============================================================================
 // Main Modal
@@ -327,6 +347,39 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
                   </div>
                 );
               })()}
+
+              {/* Top 3 Leaks (Phase 3 Section 3) — ranked, severity-tiered, programmatic evidence */}
+              <SectionHeader title="Top 3 Leaks" icon="M13 10V3L4 14h7v7l9-11h-7z" />
+              {report.topLeaks && report.topLeaks.length > 0 ? (
+                <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden mb-6">
+                  <div className="grid grid-cols-[40px_1fr_120px] md:grid-cols-[40px_220px_1fr_120px] gap-3 px-4 py-2 bg-[#f1f5f9] text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
+                    <span>#</span>
+                    <span>Where it leaks</span>
+                    <span className="hidden md:inline">Evidence</span>
+                    <span>Severity</span>
+                  </div>
+                  {report.topLeaks.map(leak => {
+                    const sev = SEVERITY_BADGES[leak.severity];
+                    return (
+                      <div key={leak.rank} className="grid grid-cols-[40px_1fr_120px] md:grid-cols-[40px_220px_1fr_120px] gap-3 px-4 py-3 text-sm border-t border-[#f1f5f9] items-start">
+                        <span className="text-base font-black text-[#0c4a6e]">{leak.rank}</span>
+                        <span className="font-mono text-xs text-[#0891b2] break-all">{leak.url}</span>
+                        <span className="hidden md:inline text-xs text-[#475569] leading-relaxed">{leak.evidence}</span>
+                        <span className="self-start">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${sev.bg} ${sev.text}`}>{leak.severity}</span>
+                          <span className="block text-[10px] text-[#94a3b8] mt-0.5">{leak.attributablePct.toFixed(1)}% attributable</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-4 py-3 mb-6 text-sm text-[#64748b]">
+                  No leaks reached the 5% qualified-loss threshold.
+                  {' '}
+                  This either means traffic is clean, or HIGH/MEDIUM intent classification hasn&apos;t scored sessions yet (intent scoring runs after sessions end).
+                </div>
+              )}
 
               {/* Drop-Off Pages */}
               {report.criticalPages && report.criticalPages.length > 0 && (
