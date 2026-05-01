@@ -170,6 +170,13 @@ model Site {
   webwatchStartDate DateTime?
   baselineResetDate DateTime?
 
+  // Day 7 / Day 14 onboarding check-in acknowledgments. Set when the user clicks
+  // the red throbbing nav button + reviews the data-quality banner. Visibility
+  // window: Day 7-9 and Day 14-16 of the audit. Once acknowledged, button
+  // disappears for that window.
+  checkin7AcknowledgedAt  DateTime?
+  checkin14AcknowledgedAt DateTime?
+
   // Integrations — PostHog
   posthogEnabled Boolean @default(false)
   posthogApiKey  String?

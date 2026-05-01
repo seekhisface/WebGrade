@@ -203,6 +203,12 @@ export async function GET(req: NextRequest) {
         webauditStartDate: site.webauditStartDate ?? null,
         webwatchStartDate: site.webwatchStartDate ?? null,
       }),
+      checkins: computeCheckinState({
+        tier: site.subscriptionTier ?? 'WEBAUDIT',
+        webauditStartDate: site.webauditStartDate ?? null,
+        checkin7AcknowledgedAt: site.checkin7AcknowledgedAt ?? null,
+        checkin14AcknowledgedAt: site.checkin14AcknowledgedAt ?? null,
+      }),
       baselineComparison,
     };
     return NextResponse.json(response);
@@ -253,4 +259,34 @@ function computeReportSchedule(input: {
   // Don't reference webwatchStartDate — silence unused-var linting on this branch
   void webwatchStartDate;
   return { nextReportDate: null, nextReportLabel: null, auditComplete: false };
+}
+
+// ---------------------------------------------------------------------------
+// Compute Day 7 / Day 14 check-in visibility for a site.
+// Visibility windows: Day 7-9 and Day 14-16. Auto-disappears after the window
+// closes OR when the user acknowledges it.
+// ---------------------------------------------------------------------------
+
+function computeCheckinState(input: {
+  tier: string;
+  webauditStartDate: Date | null;
+  checkin7AcknowledgedAt: Date | null;
+  checkin14AcknowledgedAt: Date | null;
+}): {
+  day7Visible: boolean;
+  day14Visible: boolean;
+} {
+  const { tier, webauditStartDate, checkin7AcknowledgedAt, checkin14AcknowledgedAt } = input;
+
+  // Only WebAudit sites have these check-ins. Expired/WebWatch tiers skip.
+  if (tier !== 'WEBAUDIT' || !webauditStartDate) {
+    return { day7Visible: false, day14Visible: false };
+  }
+
+  const daysSinceStart = Math.floor((Date.now() - webauditStartDate.getTime()) / 86400000);
+
+  const day7Visible = daysSinceStart >= 7 && daysSinceStart <= 9 && !checkin7AcknowledgedAt;
+  const day14Visible = daysSinceStart >= 14 && daysSinceStart <= 16 && !checkin14AcknowledgedAt;
+
+  return { day7Visible, day14Visible };
 }

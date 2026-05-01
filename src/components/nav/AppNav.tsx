@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
+import CheckinModal from '@/components/dashboard/CheckinModal';
 
 function isSuperAdminSession(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -97,6 +98,20 @@ export function AppNav() {
       .then(data => setNeedsSetup(!data.snippetInstalled))
       .catch(() => setNeedsSetup(false));
   }, [currentSiteId, session]);
+
+  // Day 7 / Day 14 checkin visibility — drives the red throbbing button.
+  const [checkin, setCheckin] = useState<{ day7Visible: boolean; day14Visible: boolean }>({ day7Visible: false, day14Visible: false });
+  const [checkinModalDay, setCheckinModalDay] = useState<7 | 14 | null>(null);
+  const userEmail = session?.user?.email;
+  useEffect(() => {
+    if (!currentSiteId || !userEmail) { setCheckin({ day7Visible: false, day14Visible: false }); return; }
+    fetch(`/api/checkins/state?siteId=${currentSiteId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setCheckin({ day7Visible: !!data.day7Visible, day14Visible: !!data.day14Visible }))
+      .catch(() => null);
+  }, [currentSiteId, userEmail, checkinModalDay]);
+  // Day 14 takes priority over Day 7 when both somehow apply (shouldn't happen given non-overlapping windows).
+  const activeCheckinDay: 7 | 14 | null = checkin.day14Visible ? 14 : checkin.day7Visible ? 7 : null;
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -207,22 +222,37 @@ export function AppNav() {
         {/* Nav tabs */}
         <div className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
           {navTabs.map(tab => (
-            <Link
-              key={tab.id}
-              href={tab.href}
-              className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm whitespace-nowrap transition-colors ${
-                activePage === tab.id
-                  ? 'bg-white/20 text-white font-semibold'
-                  : 'text-sky-200 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {tab.label}
-              {tab.badge && (
-                <span className="px-1.5 py-0.5 bg-sky-400/30 text-sky-200 text-[10px] font-medium rounded">
-                  {tab.badge}
-                </span>
+            <Fragment key={tab.id}>
+              <Link
+                href={tab.href}
+                className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm whitespace-nowrap transition-colors ${
+                  activePage === tab.id
+                    ? 'bg-white/20 text-white font-semibold'
+                    : 'text-sky-200 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {tab.label}
+                {tab.badge && (
+                  <span className="px-1.5 py-0.5 bg-sky-400/30 text-sky-200 text-[10px] font-medium rounded">
+                    {tab.badge}
+                  </span>
+                )}
+              </Link>
+              {/* Render the Day 7 / Day 14 throbbing checkin button right after the Dashboard tab. */}
+              {tab.id === 'dashboard' && activeCheckinDay && (
+                <button
+                  onClick={() => setCheckinModalDay(activeCheckinDay)}
+                  className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs lg:text-sm whitespace-nowrap font-bold bg-red-600 text-white hover:bg-red-500 transition-colors animate-pulse shadow-md"
+                  title={`Day ${activeCheckinDay} data quality check-in`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+                  </span>
+                  Day {activeCheckinDay} checkin
+                </button>
               )}
-            </Link>
+            </Fragment>
           ))}
         </div>
       </div>
@@ -294,6 +324,15 @@ export function AppNav() {
           )}
         </div>
       </div>
+
+      {/* Day 7 / Day 14 check-in modal — opened by the throbbing button above */}
+      {checkinModalDay && currentSiteId && (
+        <CheckinModal
+          siteId={currentSiteId}
+          day={checkinModalDay}
+          onClose={() => setCheckinModalDay(null)}
+        />
+      )}
     </nav>
   );
 }
