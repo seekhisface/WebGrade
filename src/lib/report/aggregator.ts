@@ -39,6 +39,9 @@ export interface LiveMetrics {
   highIntentSessions: number;
   rageClickEvents: number;
   hesitationEvents: number;
+  // Sum of lost-visitors above per-page benchmark (qualified-visitor loss).
+  // Used for the "Disengaged Leads" KPI card when no revenue data is available.
+  totalDisengagedVisitors: number;
   dataSource: 'live' | 'demo';
   periodDays: number;
 }
@@ -203,6 +206,7 @@ export async function aggregateReportData(
     highIntentSessions: 0,
     rageClickEvents: dropoff.pages.reduce((sum, p) => sum + p.rageClickCount, 0),
     hesitationEvents: dropoff.pages.reduce((sum, p) => sum + p.hesitationCount, 0),
+    totalDisengagedVisitors: dropoff.totalDisengagedVisitors,
     dataSource: dropoff.dataSource,
     periodDays,
   };

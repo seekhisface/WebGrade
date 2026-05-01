@@ -11,13 +11,16 @@ interface ActionItem { rank: number; title: string; problem: string; fix: string
 interface GrowthPlay { rank: number; title: string; opportunity: string; hypothesis: string; experiment: string; upside: string; timeToResult: string; category: string; }
 interface CriticalPage { url: string; exitRate: number; scrollDepth: number; revenueAtRisk: number; severity: string; }
 interface TopFinding { title: string; problem: string; impact: string; category: string; }
+interface TrackingHealth { conversionEventsFiring: boolean; conversionEventsCount: number; botPct: number; eventDataCompleteness: number; }
 interface ReportPayload {
   id: string; status: string; periodStart: string; periodEnd: string;
   executiveSummary: string | null; actionItems: ActionItem[] | null; topFindings: TopFinding[] | null;
   growthPlays: GrowthPlay[] | null; estimatedImpact: string | null;
-  liveMetrics: { totalSessions: number; avgIntentScore: number } | null;
+  liveMetrics: { totalSessions: number; avgIntentScore: number; totalDisengagedVisitors?: number; periodDays?: number } | null;
   baselineMetrics: { bounceRate: number; conversionRate: number } | null;
   criticalPages: CriticalPage[] | null; totalRevenueAtRisk: number; createdAt: string;
+  trackingHealth?: TrackingHealth | null;
+  conversionGoalConfigured?: boolean;
 }
 
 // =============================================================================
@@ -252,26 +255,78 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
                   : <p className="text-[#94a3b8] text-sm">No executive summary available.</p>}
               </div>
 
-              {/* Key Metrics */}
+              {/* Key Metrics — Sessions / Avg Intent Score / Disengaged Leads / Revenue at Risk
+                  Per Phase 3 Section 2 spec. Action Items count moved to recommendations header. */}
               <SectionHeader title="Key Metrics" icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Sessions</p>
-                  <p className="text-xl font-black text-[#0c4a6e]">{report.liveMetrics?.totalSessions.toLocaleString() ?? '—'}</p>
-                </div>
-                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Intent Score</p>
-                  <p className="text-xl font-black text-[#0c4a6e]">{report.liveMetrics?.avgIntentScore ?? '—'}/100</p>
-                </div>
-                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Revenue at Risk</p>
-                  <p className="text-xl font-black text-[#dc2626]">{fmtMoney(report.totalRevenueAtRisk)}/mo</p>
-                </div>
-                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Action Items</p>
-                  <p className="text-xl font-black text-[#0c4a6e]">{(report.actionItems ?? []).length}</p>
-                </div>
-              </div>
+              {(() => {
+                const sessions = report.liveMetrics?.totalSessions ?? 0;
+                const intent = report.liveMetrics?.avgIntentScore ?? 0;
+                const disengaged = report.liveMetrics?.totalDisengagedVisitors ?? 0;
+                const periodDays = report.liveMetrics?.periodDays ?? 30;
+                const conversions = report.trackingHealth?.conversionEventsCount ?? 0;
+                const goalConfigured = !!report.conversionGoalConfigured;
+
+                // Spec: <10 sessions in window — collapse the card row entirely.
+                if (sessions < 10) {
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 text-sm text-amber-800">
+                      Insufficient sample (<strong>{sessions} sessions</strong> in window). Key Metrics need 10+ to be statistically meaningful.
+                    </div>
+                  );
+                }
+
+                // Determine Revenue at Risk card state per spec table.
+                let rarLabel: string;
+                let rarValue: string;
+                let rarColor: string;
+                let rarSubtext: React.ReactNode = null;
+                if (conversions >= 1) {
+                  rarLabel = 'Revenue at Risk';
+                  rarValue = `${fmtMoney(report.totalRevenueAtRisk)}/mo`;
+                  rarColor = 'text-[#dc2626]';
+                } else if (goalConfigured && periodDays >= 30) {
+                  rarLabel = 'Revenue at Risk';
+                  rarValue = `${fmtMoney(report.totalRevenueAtRisk)}/mo`;
+                  rarColor = 'text-[#b45309]';
+                  rarSubtext = (
+                    <span className="text-[10px] text-[#94a3b8] mt-1 block group cursor-help relative">
+                      (modeled)
+                      <span className="absolute z-50 hidden group-hover:block top-full left-0 mt-1 w-64 px-3 py-2 bg-[#0c4a6e] text-white text-[11px] leading-relaxed rounded-lg shadow-xl pointer-events-none">
+                        Modeled estimate. Conversion tracking is configured but no conversion events fired in this {periodDays}-day window. Figure assumes industry-default AOV and lead-to-win rate.
+                      </span>
+                    </span>
+                  );
+                } else {
+                  rarLabel = 'Revenue at Risk';
+                  rarValue = 'Not yet measurable';
+                  rarColor = 'text-[#94a3b8]';
+                  rarSubtext = (
+                    <a href="#data-gaps" className="text-[10px] text-[#0891b2] hover:text-[#0e7490] underline mt-1 inline-block">(why?)</a>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Sessions</p>
+                      <p className="text-xl font-black text-[#0c4a6e]">{sessions.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Avg Intent Score</p>
+                      <p className="text-xl font-black text-[#0c4a6e]">{intent}/100</p>
+                    </div>
+                    <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">Disengaged Leads</p>
+                      <p className="text-xl font-black text-[#b45309]">{disengaged.toLocaleString()}<span className="text-base font-normal text-[#94a3b8] ml-1">visitors</span></p>
+                    </div>
+                    <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4">
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-1">{rarLabel}</p>
+                      <p className={`text-xl font-black ${rarColor}`}>{rarValue}</p>
+                      {rarSubtext}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Drop-Off Pages */}
               {report.criticalPages && report.criticalPages.length > 0 && (

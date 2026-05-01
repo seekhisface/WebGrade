@@ -96,6 +96,9 @@ export async function generateReport(input: GenerateReportInput) {
           baselineMetrics: reportData.baseline,
           criticalPages: reportData.criticalPages,
           totalRevenueAtRisk: reportData.totalRevenueAtRisk,
+          // Section 2 conditional KPI logic — drives the Revenue at Risk card states.
+          trackingHealth: reportData.trackingHealth,
+          conversionGoalConfigured: !!reportData.context.conversionGoalUrl,
           reportLabel,
         }),
         estimatedImpact,
