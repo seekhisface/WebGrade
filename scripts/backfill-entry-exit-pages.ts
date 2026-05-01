@@ -33,7 +33,7 @@ async function main() {
     const pageViews = await prisma.pageView.findMany({
       where: { sessionId: s.id },
       orderBy: { enteredAt: 'asc' },
-      select: { url: true, isExit: true, enteredAt: true },
+      select: { url: true, enteredAt: true },
     });
 
     if (pageViews.length === 0) {
@@ -41,9 +41,12 @@ async function main() {
       continue;
     }
 
+    // Entry = first PageView by enteredAt. Exit = last PageView by enteredAt.
+    // Don't use isExit: every page_exit event sets it (each navigation fires
+    // page_exit for the page being left), so multiple PageViews end up with
+    // isExit=true and picking the "first one" is always the entry page.
     const newEntryPage = stripHash(pageViews[0].url);
-    const exitPv = pageViews.find(pv => pv.isExit) ?? pageViews[pageViews.length - 1];
-    const newExitPage = stripHash(exitPv.url);
+    const newExitPage = stripHash(pageViews[pageViews.length - 1].url);
 
     // Only update if values differ from what's already in the session row.
     if (s.entryPage === newEntryPage && s.exitPage === newExitPage) {
