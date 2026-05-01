@@ -245,7 +245,7 @@ export default function ReportModal({ siteId, days, schedule, onClose }: ReportM
           {!loading && report && (
             <div>
               {/* Executive Summary */}
-              <SectionHeader title="Executive Summary" icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <SectionHeader title="Bottom line" icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-xl p-5 mb-6">
                 {report.executiveSummary
                   ? report.executiveSummary.split('\n\n').map((p, i) => <p key={i} className="text-sm text-[#334155] leading-relaxed mb-3 last:mb-0">{p}</p>)

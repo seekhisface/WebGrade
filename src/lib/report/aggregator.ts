@@ -62,6 +62,16 @@ export interface AlertSummary {
   topAlertType: string | null;
 }
 
+// Drives the conditional logic in the Bottom line prompt — specifically whether
+// the LLM is allowed to state a $/mo revenue-at-risk figure or must use the
+// "cost unquantifiable" variant.
+export interface TrackingHealth {
+  conversionEventsFiring: boolean;
+  conversionEventsCount: number;
+  botPct: number;                  // 0-100
+  eventDataCompleteness: number;   // 0-100, % of non-bot sessions with event-level data
+}
+
 export interface ReportData {
   siteId: string;
   siteName: string;
@@ -99,6 +109,9 @@ export interface ReportData {
 
   // Alerts
   alerts: AlertSummary;
+
+  // Tracking health — used by Bottom line prompt conditional logic
+  trackingHealth: TrackingHealth;
 
   // Competitors
   competitors: string[];
@@ -208,6 +221,36 @@ export async function aggregateReportData(
     live.highIntentSessions = highIntent;
   } catch { /* snippet not collecting yet */ }
 
+  // Tracking health — drives the Bottom line prompt's conditional cost branch
+  let trackingHealth: TrackingHealth = {
+    conversionEventsFiring: false,
+    conversionEventsCount: 0,
+    botPct: 0,
+    eventDataCompleteness: 0,
+  };
+  try {
+    const [conversionEventsCount, totalSessionsAll, botCount, sessionsWithEvents] = await Promise.all([
+      prisma.visitorSession.count({
+        where: { siteId, startedAt: { gte: periodStart }, conversionGoalHit: true },
+      }),
+      prisma.visitorSession.count({
+        where: { siteId, startedAt: { gte: periodStart } },
+      }),
+      prisma.visitorSession.count({
+        where: { siteId, startedAt: { gte: periodStart }, OR: [{ isBotFiltered: true }, { isBotSuspect: true }] },
+      }),
+      prisma.visitorSession.count({
+        where: { siteId, startedAt: { gte: periodStart }, isBotFiltered: false, events: { some: {} } },
+      }),
+    ]);
+    trackingHealth = {
+      conversionEventsFiring: conversionEventsCount > 0,
+      conversionEventsCount,
+      botPct: totalSessionsAll > 0 ? Math.round((botCount / totalSessionsAll) * 1000) / 10 : 0,
+      eventDataCompleteness: dropoff.totalSessions > 0 ? Math.round((sessionsWithEvents / dropoff.totalSessions) * 1000) / 10 : 0,
+    };
+  } catch { /* leave defaults */ }
+
   return {
     siteId,
     siteName: ctx.siteName,
@@ -237,6 +280,7 @@ export async function aggregateReportData(
     totalRevenueAtRisk: dropoff.totalRevenueAtRisk,
     estimatedMonthlyImpact,
     alerts: alertSummary,
+    trackingHealth,
     competitors,
   };
 }

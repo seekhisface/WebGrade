@@ -71,28 +71,60 @@ export function buildReportPrompts(data: ReportData): ReportPromptSet {
 }
 
 // ---------------------------------------------------------------------------
-// Section 1: Executive Summary
+// Section 1: Bottom line  (replaces "Executive Summary")
+//
+// Hard-rules contract — 3-5 sentences max, banned-word list, conditional Cost
+// sentence depending on whether conversion events are firing.
 // ---------------------------------------------------------------------------
 
 function buildExecutiveSummaryPrompt(data: ReportData, dataBlock: string): ReportSection {
   const periodLabel = formatPeriod(data.periodStart, data.periodEnd);
+  const th = data.trackingHealth;
+
+  const costInstructionLive = `Sentence 3 (Cost): State the modeled revenue-at-risk figure: "$${data.totalRevenueAtRisk.toLocaleString()}/mo at risk based on ${th.conversionEventsCount} conversion event${th.conversionEventsCount === 1 ? '' : 's'} in the period."`;
+  const costInstructionDark = `Sentence 3 (Cost): Conversion tracking is NOT firing. DO NOT output any $/mo or revenue-at-risk figure. Sentence 3 MUST state the cost is unquantifiable from this dataset, citing the specific gap (e.g. "no conversion events fired in the period — either no one converted or the conversion-tracking flag is not yet wired up"). Adapt wording to specifics but produce no dollar amount.`;
 
   return {
-    title: 'Executive Summary',
-    maxTokens: 600,
+    title: 'Bottom line',
+    maxTokens: 400,
     prompt: `${dataBlock}
 
-Write an executive summary for the WebGrade Interim Report™ covering ${periodLabel}.
+Write the "Bottom line" section of the WebGrade Interim Report covering ${periodLabel}.
 
-The summary should:
-- Open with the single most important finding (the one with the highest revenue impact)
-- Give a brief overall health assessment in 1-2 sentences
-- Name the top 2-3 problems found, with estimated dollar impact where possible
-- Close with a clear statement of what happens if these issues are NOT addressed
+# HARD RULES
 
-Format: 3-4 paragraphs. No headers. No bullet points. Write as if briefing a founder who has 60 seconds to read this.
+## Length — strictly enforced
+- 3 to 5 sentences. Hard ceiling. If you write 6 sentences, you have failed.
+- Each sentence ≤ 25 words.
 
-Tone: Direct, confident, specific. Use the business context to make it relevant to their industry and conversion goal.`,
+## Voice
+- Numbers BEFORE claims. "116 visitors entered, 116 exited" before "100% same-page exit rate."
+- BANNED adjectives unless paired with a specific quantitative anchor: catastrophic, hemorrhaging, concerning, alarming, devastating, dangerous, urgent, critical. Allowed: "critical — accounts for 47% of qualified-visitor loss". Banned: "concerning patterns".
+- Hedge honestly. "Likely worse", "we cannot confirm from this dataset because [reason]", "appears to be" are signs of integrity, not weakness.
+- Cite the data class for behavioral claims: "27 of 116 (23%) classified as COMPETITOR" — not "many competitors visited".
+
+## Structure (in order)
+- Sentence 1 (Context): what was measured, over what window, what the spend was if applicable.
+- Sentence 2 (Dominant finding): the single biggest leak, with the number that proves it.
+- ${th.conversionEventsFiring ? costInstructionLive : costInstructionDark}
+- Sentence 4-5 (Optional caveat): bot %, instrumentation gap, or other reason the picture is "likely worse." Skip if nothing meaningful to add.
+
+# TRACKING HEALTH (use this to write honestly)
+- Conversion events firing: ${th.conversionEventsFiring ? `yes (${th.conversionEventsCount} in period)` : 'NO — flag may not be wired up'}
+- Bot ratio: ${th.botPct}% of sessions flagged as bot or bot-suspect
+- Event data completeness: ${th.eventDataCompleteness}% of non-bot sessions have event-level data
+
+# EXEMPLAR (write in this style)
+
+"781 sessions and $3,300 in paid spend over 11 days produced 2 sessions that touched the demo thanks page. WebGrade marked 0 of 781 as 'converted' — that flag may not yet be wired up, so whether those 2 sessions actually completed the form is unclear. What is clear is the funnel itself: 116 visitors entered on the pricing page and 100% exited from the same page."
+
+# ANTI-PATTERN (do NOT write like this)
+
+"GSV's features page is hemorrhaging potential partnerships, with 68% of visitors exiting after barely engaging with the content—translating to $18,200 in monthly revenue at risk from a single page failure. This represents nearly half of the total $41,200 monthly revenue exposure across the site. Your website's overall health shows concerning patterns…"
+
+The anti-pattern fails because: (1) "hemorrhaging" / "concerning" are adjectives doing work numbers should do; (2) it presents modeled dollar figures as fact when they're modeled and may not be substantiated; (3) too many sentences before the actual point.
+
+Output the prose only — no headers, no preamble, no list bullets, no markdown.`,
   };
 }
 
