@@ -27,6 +27,12 @@ interface ProfileData {
   conversionGoalUrl: string;
   conversionGoalName: string;
   conversionFormSelector?: string;
+  modalConversionStats?: {
+    selectorConfigured: boolean;
+    selectorValue: string;
+    autoConversionsCount30d: number;
+    lastAutoConversionAt: string | null;
+  };
 
   businessDescription: string;
   targetAudience: string;
@@ -1143,9 +1149,52 @@ export default function SettingsPage() {
                 placeholder="demo-form  OR  /api/demo"
                 className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
               />
-              <p className="text-[11px] text-[#94a3b8] mt-1">
-                Leave empty if your conversion fires a page navigation to a thank-you URL (use the goal list above instead).
-              </p>
+
+              {/* Live diagnostic — proves whether the selector is actually catching submits */}
+              {(() => {
+                const stats = profile?.modalConversionStats;
+                if (!stats) return null;
+                if (!stats.selectorConfigured) {
+                  return (
+                    <p className="text-[11px] text-[#94a3b8] mt-1.5">
+                      Leave empty if your conversion fires a page navigation to a thank-you URL (use the goal list above instead).
+                    </p>
+                  );
+                }
+                if (stats.autoConversionsCount30d === 0) {
+                  return (
+                    <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-[11px] font-semibold text-amber-800">
+                        ⏳ Configured, no matches yet
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        The snippet is loaded with this selector, but no form_submit events have matched it in the last 30 days.
+                        Check your form&apos;s id or action URL contains <code className="font-mono bg-white px-1 rounded">{stats.selectorValue}</code>.
+                        Test it: submit your form and refresh this page after ~10 seconds.
+                      </p>
+                    </div>
+                  );
+                }
+                const lastFired = stats.lastAutoConversionAt
+                  ? (() => {
+                      const hrs = Math.floor((Date.now() - new Date(stats.lastAutoConversionAt!).getTime()) / 3600000);
+                      if (hrs < 1) return 'just now';
+                      if (hrs < 24) return `${hrs}h ago`;
+                      return `${Math.floor(hrs / 24)}d ago`;
+                    })()
+                  : 'unknown';
+                return (
+                  <div className="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <p className="text-[11px] font-semibold text-emerald-800">
+                      ✓ Active — auto-firing conversions
+                    </p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      <strong>{stats.autoConversionsCount30d}</strong> conversion{stats.autoConversionsCount30d !== 1 ? 's' : ''} auto-fired
+                      via this form selector in the last 30 days. Most recent: <strong>{lastFired}</strong>.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

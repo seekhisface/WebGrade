@@ -71,6 +71,35 @@ export async function GET(req: NextRequest) {
   });
   const isOAuthUser = !user?.hashedPassword && session.user.email !== 'demo@webgrade.io';
 
+  // Modal-conversion tracking diagnostic — counts CONVERSION events that fired
+  // automatically because the snippet matched the configured form selector.
+  // Lets the user verify the field is actually doing something without digging
+  // into raw session data.
+  const last30 = new Date(Date.now() - 30 * 86400000);
+  const autoConversions = await prisma.sessionEvent.findMany({
+    where: {
+      siteId: site.id,
+      eventType: 'CONVERSION',
+      timestamp: { gte: last30 },
+    },
+    select: { timestamp: true, metadata: true },
+    orderBy: { timestamp: 'desc' },
+    take: 200, // cap; we only need the count + most recent for display
+  });
+  // Filter in JS — JSON-path queries vary across Postgres versions and the
+  // dataset is small enough (one site, ≤200 events) that an in-memory filter
+  // is simpler and faster to develop than a raw SQL query.
+  const autoMatched = autoConversions.filter(e => {
+    const m = e.metadata as Record<string, unknown> | null;
+    return m && m.source === 'form_submit_auto';
+  });
+  const modalConversionStats = {
+    selectorConfigured: !!ob?.conversionFormSelector,
+    selectorValue: ob?.conversionFormSelector ?? '',
+    autoConversionsCount30d: autoMatched.length,
+    lastAutoConversionAt: autoMatched[0]?.timestamp?.toISOString() ?? null,
+  };
+
   return NextResponse.json({
     // Site info
     siteId: site.id,
@@ -84,6 +113,7 @@ export async function GET(req: NextRequest) {
     conversionGoalUrl: ob?.conversionGoalUrl ?? '',
     conversionGoalName: ob?.conversionGoalName ?? '',
     conversionFormSelector: ob?.conversionFormSelector ?? '',
+    modalConversionStats,
 
     // Business context
     businessDescription: ob?.businessDescription ?? '',
