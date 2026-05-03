@@ -394,36 +394,78 @@ function CrawlModal({
                 </div>
               </label>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 mb-4">
-                <p className="text-xs text-slate-600 mb-2">Add a competitor URL</p>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    placeholder="https://competitor.com"
-                    value={newCompetitorUrl}
-                    onChange={e => setNewCompetitorUrl(e.target.value)}
-                    className="flex-1 text-sm px-2 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                  <button
-                    onClick={() => {
-                      if (newCompetitorUrl && !addedCompetitors.includes(newCompetitorUrl)) {
-                        setAddedCompetitors([...addedCompetitors, newCompetitorUrl]);
-                        setNewCompetitorUrl('');
-                      }
-                    }}
-                    className="px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 rounded-md font-semibold"
-                  >
-                    Add
-                  </button>
-                </div>
-                {addedCompetitors.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {addedCompetitors.map(url => (
-                      <span key={url} className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{url}</span>
-                    ))}
+              {(() => {
+                const MAX_COMPETITORS = 3;
+                const totalCompetitors = status.competitorUrls.length + addedCompetitors.length;
+                const remainingSlots = Math.max(0, MAX_COMPETITORS - totalCompetitors);
+                const atCap = remainingSlots === 0;
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-slate-600">Add a competitor URL</p>
+                      <p className="text-[10px] text-slate-400">
+                        {totalCompetitors} of {MAX_COMPETITORS} competitor slots used
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://www.competitor.com"
+                        value={newCompetitorUrl}
+                        onFocus={() => {
+                          // Auto-prefill the protocol so the user only types the domain
+                          if (!newCompetitorUrl) setNewCompetitorUrl('https://www.');
+                        }}
+                        onChange={e => setNewCompetitorUrl(e.target.value)}
+                        disabled={atCap}
+                        className="flex-1 text-sm px-2 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                      <button
+                        onClick={() => {
+                          const trimmed = newCompetitorUrl.trim();
+                          // Reject the bare prefix or anything without a real domain
+                          if (!trimmed || trimmed === 'https://www.' || trimmed === 'https://') return;
+                          if (addedCompetitors.includes(trimmed)) return;
+                          if (totalCompetitors >= MAX_COMPETITORS) return;
+                          setAddedCompetitors([...addedCompetitors, trimmed]);
+                          setNewCompetitorUrl('');
+                        }}
+                        disabled={atCap}
+                        className="px-3 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-md font-semibold"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {addedCompetitors.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {addedCompetitors.map(url => (
+                          <span
+                            key={url}
+                            className="text-[11px] bg-emerald-100 text-emerald-700 pl-2 pr-1 py-0.5 rounded-full inline-flex items-center gap-1"
+                          >
+                            {url}
+                            <button
+                              onClick={() => setAddedCompetitors(addedCompetitors.filter(u => u !== url))}
+                              className="w-3.5 h-3.5 rounded-full hover:bg-emerald-200 flex items-center justify-center transition-colors"
+                              title="Remove"
+                              aria-label={`Remove ${url}`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {atCap && (
+                      <p className="text-[11px] text-slate-500 mt-2">
+                        Max 3 competitors per crawl. Remove one above or manage the full list in Settings.
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             </>

@@ -60,13 +60,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Append any new competitor URLs to onboarding before the crawl runs.
+  // Hard cap at 3 — competitor crawling is for CTA comparison only, not full
+  // analysis, so we don't need a long list. Users can manage the full list
+  // in Settings if they want to rotate which 3 are tracked.
   if (addCompetitorUrls && addCompetitorUrls.length > 0) {
     const onboarding = await prisma.siteOnboarding.findUnique({ where: { siteId } });
     if (onboarding) {
       const merged = Array.from(new Set([...(onboarding.competitorUrls ?? []), ...addCompetitorUrls]));
       await prisma.siteOnboarding.update({
         where: { siteId },
-        data: { competitorUrls: merged.slice(0, 10) }, // hard cap at 10 competitors
+        data: { competitorUrls: merged.slice(0, 3) },
       });
     }
   }
