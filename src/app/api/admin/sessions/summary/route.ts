@@ -57,6 +57,118 @@ function cleanPagePath(url: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Programmatic Highlights — rule-based commentary on the data, no LLM calls.
+// Returns 3-6 short bullets the reader sees first before the data tables.
+// ---------------------------------------------------------------------------
+
+interface HighlightsInput {
+  totalSessions: number;
+  totalBots: number;
+  totalAll: number;
+  conversions: number;
+  conversionRate: string;     // "1.20%" formatted
+  bounces: number;
+  intentCounts: Map<string, number>;
+  sourceSorted: [string, number][];
+  entryTop10: { label: string; pct: string }[];
+  deviceSorted: [string, number][];
+  avgDurationSec: number;
+  avgPagesPerSession: string;
+}
+
+function generateHighlights(input: HighlightsInput): string[] {
+  const {
+    totalSessions, totalBots, totalAll, conversions, conversionRate, bounces,
+    intentCounts, sourceSorted, entryTop10, deviceSorted, avgDurationSec, avgPagesPerSession,
+  } = input;
+  const out: string[] = [];
+
+  // Bot ratio
+  if (totalAll > 0) {
+    const botPct = (totalBots / totalAll) * 100;
+    if (botPct > 50) {
+      out.push(`${botPct.toFixed(1)}% of all visits flagged as bots — paid traffic likely needs auditing.`);
+    } else if (botPct > 30) {
+      out.push(`${botPct.toFixed(1)}% bot traffic — elevated but not unusual for organic-heavy sites.`);
+    } else if (botPct > 0) {
+      out.push(`${botPct.toFixed(1)}% bot traffic — within the healthy range (<30%).`);
+    }
+  }
+
+  // Top traffic source
+  if (sourceSorted.length > 0 && totalSessions > 0) {
+    const [topSrc, topCount] = sourceSorted[0];
+    const pct = ((topCount / totalSessions) * 100).toFixed(1);
+    out.push(`Most sessions came from ${topSrc} (${pct}%), accounting for ${topCount.toLocaleString()} of ${totalSessions.toLocaleString()} visits.`);
+  }
+
+  // Conversion / no-conversion callout (this is the "honest" one)
+  if (conversions === 0 && totalSessions >= 50) {
+    out.push(`No conversion events recorded across ${totalSessions.toLocaleString()} sessions. Either nobody converted in this window or the conversion tracking is not yet wired up — confirm before drawing conclusions on the funnel.`);
+  } else if (conversions > 0) {
+    out.push(`${conversions} session${conversions === 1 ? '' : 's'} converted (${conversionRate}).`);
+  }
+
+  // Intent dominance
+  if (totalSessions >= 20) {
+    const high = intentCounts.get('HIGH') ?? 0;
+    const low = intentCounts.get('LOW') ?? 0;
+    const competitor = intentCounts.get('COMPETITOR') ?? 0;
+    if (high / totalSessions > 0.4) {
+      out.push(`${((high / totalSessions) * 100).toFixed(0)}% of sessions classified as HIGH intent — strong engagement signal.`);
+    } else if (low / totalSessions > 0.7) {
+      out.push(`${((low / totalSessions) * 100).toFixed(0)}% of sessions are LOW intent — most traffic is browsing without conversion signals.`);
+    } else if (competitor / totalSessions > 0.15) {
+      out.push(`${((competitor / totalSessions) * 100).toFixed(0)}% of sessions classified as COMPETITOR — concentrated price-shopping or feature-comparison traffic.`);
+    }
+  }
+
+  // Bounce rate context (only call out when meaningfully outside the typical 40-60% range)
+  const bouncePct = totalSessions > 0 ? (bounces / totalSessions) * 100 : 0;
+  if (totalSessions >= 50) {
+    if (bouncePct > 70) {
+      out.push(`${bouncePct.toFixed(1)}% bounce rate — well above the 40-60% industry-typical range. Likely a targeting mismatch or slow / broken landing experience.`);
+    } else if (bouncePct < 30 && bouncePct > 0) {
+      out.push(`${bouncePct.toFixed(1)}% bounce rate — better than the 40-60% industry-typical range.`);
+    }
+  }
+
+  // Top entry page concentration
+  if (entryTop10.length > 0) {
+    const top = entryTop10[0];
+    const pct = parseFloat(top.pct);
+    if (!isNaN(pct) && pct > 50) {
+      out.push(`Over half of sessions (${top.pct}) land on ${top.label} — most of your audience exposure is concentrated on a single page.`);
+    }
+  }
+
+  // Mobile / desktop skew
+  if (totalSessions >= 50) {
+    const mobile = deviceSorted.find(d => d[0] === 'mobile')?.[1] ?? 0;
+    const desktop = deviceSorted.find(d => d[0] === 'desktop')?.[1] ?? 0;
+    const denom = mobile + desktop;
+    if (denom > 0) {
+      const mobilePct = (mobile / denom) * 100;
+      if (mobilePct > 70) {
+        out.push(`${mobilePct.toFixed(0)}% mobile traffic — design and conversion flow should be mobile-first.`);
+      } else if (mobilePct < 20) {
+        out.push(`${(100 - mobilePct).toFixed(0)}% desktop traffic — typical pattern for B2B / professional audiences.`);
+      }
+    }
+  }
+
+  // Engagement quality (avg duration + pages)
+  if (avgDurationSec >= 120 && parseFloat(avgPagesPerSession) >= 3) {
+    out.push(`Avg ${avgDurationSec}s session duration across ${avgPagesPerSession} pages — visitors are engaging meaningfully.`);
+  } else if (avgDurationSec < 20 && totalSessions >= 50) {
+    out.push(`Avg session under ${avgDurationSec}s — visitors are leaving very quickly. Investigate page-speed or above-fold relevance.`);
+  }
+
+  // Cap at 6 to keep the section scannable
+  return out.slice(0, 6);
+}
+
+// ---------------------------------------------------------------------------
 // PDF rendering helpers
 // ---------------------------------------------------------------------------
 
@@ -476,7 +588,25 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Highlights — programmatic commentary, no LLM tokens used
+    const highlights = generateHighlights({
+      totalSessions, totalBots, totalAll, conversions, conversionRate, bounces,
+      intentCounts, sourceSorted, entryTop10, deviceSorted, avgDurationSec, avgPagesPerSession,
+    });
+    if (highlights.length > 0) {
+      ensureSpace(40 + highlights.length * 18);
+      y = drawSectionTitle(doc, 'Highlights', y);
+      doc.fontSize(9).font('Helvetica').fillColor(COLORS.darkText);
+      for (const line of highlights) {
+        doc.text(`• ${line}`, 44, y, { width: 510, lineGap: 2 });
+        const heightUsed = doc.heightOfString(`• ${line}`, { width: 510, lineGap: 2 });
+        y += heightUsed + 4;
+      }
+      y += 8;
+    }
+
     // Key Metrics
+    ensureSpace(80);
     y = drawSectionTitle(doc, 'Key Metrics', y);
     y = drawKpiGrid(doc, [
       { label: 'Unique Sessions (humans)', value: totalSessions.toLocaleString() },

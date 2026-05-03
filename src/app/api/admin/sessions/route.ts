@@ -22,13 +22,13 @@ export async function GET(req: NextRequest) {
   // Pagination
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10));
   const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') ?? '25', 10)));
-  const showBots = url.searchParams.get('showBots') === 'true';
   const start = url.searchParams.get('start');
   const end = url.searchParams.get('end');
 
+  // The Sessions page always shows ALL traffic (bots + humans). Bot status is
+  // surfaced per row visually so the user can see what's bot-flagged.
   const where = {
     siteId,
-    ...(!showBots ? { isBotFiltered: false } : {}),
     ...(start || end ? {
       startedAt: {
         ...(start ? { gte: new Date(start) } : {}),

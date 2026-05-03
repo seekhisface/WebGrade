@@ -142,7 +142,8 @@ export default function SessionExplorerPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize] = useState(25);
-  const [showBots, setShowBots] = useState(false);
+  // Sessions list always includes ALL traffic (bots + humans). Per-session bot
+  // status is still flagged on each row so the user can spot it visually.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -158,7 +159,7 @@ export default function SessionExplorerPage() {
   function fetchSessions() {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ siteId, page: String(page), pageSize: String(pageSize), showBots: String(showBots) });
+    const params = new URLSearchParams({ siteId, page: String(page), pageSize: String(pageSize) });
     if (dateStart) params.set('start', dateStart);
     if (dateEnd) params.set('end', dateEnd);
     fetch(`/api/admin/sessions?${params}`)
@@ -179,7 +180,7 @@ export default function SessionExplorerPage() {
   // Fetch on mount and when filters/page/refreshKey change
   useEffect(() => {
     fetchSessions();
-  }, [siteId, page, pageSize, showBots, dateStart, dateEnd, refreshKey]);
+  }, [siteId, page, pageSize, dateStart, dateEnd, refreshKey]);
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -282,10 +283,6 @@ export default function SessionExplorerPage() {
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
               <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
                 className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Auto
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input type="checkbox" checked={showBots} onChange={e => { setShowBots(e.target.checked); setPage(1); }}
-                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Bots
             </label>
           </div>
         </div>
