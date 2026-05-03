@@ -76,8 +76,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runDeepCrawl(siteId);
+    // Always 200 if we got a result — even partial. Errors are surfaced in
+    // result.errors[] so the UI can show per-step diagnostics rather than a
+    // single opaque "Crawl failed (500)" string.
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
+    // Only catastrophic failures (e.g., site not found in DB) reach here.
     console.error('[sitemap/crawl]', err);
     const msg = err instanceof Error ? err.message : 'Deep crawl failed';
     return NextResponse.json({ error: msg }, { status: 500 });

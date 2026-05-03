@@ -427,10 +427,18 @@ function CrawlModal({
   const [addedCompetitors, setAddedCompetitors] = useState<string[]>([]);
   const [crawling, setCrawling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-step errors returned by the API. Keyed lookups by URL drive the red-pill
+  // styling so the user knows exactly which competitor (or main site) failed.
+  const [crawlErrors, setCrawlErrors] = useState<Array<{
+    stage: 'own-site-crawl' | 'own-site-cta' | 'competitor';
+    url: string;
+    reason: string;
+  }>>([]);
 
   async function startCrawl() {
     setCrawling(true);
     setError(null);
+    setCrawlErrors([]);
     try {
       const res = await fetch('/api/sitemap/crawl', {
         method: 'POST',
@@ -441,9 +449,18 @@ function CrawlModal({
           addCompetitorUrls: addedCompetitors,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || e.message || `Crawl failed (${res.status})`);
+        // Catastrophic failure — no per-step info, just the top-level error
+        throw new Error(data.error || data.message || `Crawl failed (${res.status})`);
+      }
+      // Partial success path: result returned with errors[] populated
+      const errs = (data.errors ?? []) as Array<{ stage: string; url: string; reason: string }>;
+      if (errs.length > 0) {
+        setCrawlErrors(errs as typeof crawlErrors);
+        setCrawling(false);
+        // Don't auto-close — let the user see what failed before they dismiss
+        return;
       }
       onCrawlComplete();
     } catch (e) {
@@ -451,6 +468,9 @@ function CrawlModal({
       setCrawling(false);
     }
   }
+
+  // Lookup table: URL → did this URL fail in the most recent crawl?
+  const failedUrls = new Set(crawlErrors.map(e => e.url));
 
   return (
     <div
@@ -546,24 +566,31 @@ function CrawlModal({
                     </div>
                     {addedCompetitors.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {addedCompetitors.map(url => (
-                          <span
-                            key={url}
-                            className="text-[11px] bg-emerald-100 text-emerald-700 pl-2 pr-1 py-0.5 rounded-full inline-flex items-center gap-1"
-                          >
-                            {url}
-                            <button
-                              onClick={() => setAddedCompetitors(addedCompetitors.filter(u => u !== url))}
-                              className="w-3.5 h-3.5 rounded-full hover:bg-emerald-200 flex items-center justify-center transition-colors"
-                              title="Remove"
-                              aria-label={`Remove ${url}`}
+                        {addedCompetitors.map(url => {
+                          const failed = failedUrls.has(url);
+                          const pillBg = failed ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-700';
+                          const xHover = failed ? 'hover:bg-red-200' : 'hover:bg-emerald-200';
+                          return (
+                            <span
+                              key={url}
+                              className={`text-[11px] ${pillBg} pl-2 pr-1 py-0.5 rounded-full inline-flex items-center gap-1`}
+                              title={failed ? 'This URL failed in the last crawl attempt' : url}
                             >
-                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </span>
-                        ))}
+                              {failed && <span className="text-red-600">⚠</span>}
+                              {url}
+                              <button
+                                onClick={() => setAddedCompetitors(addedCompetitors.filter(u => u !== url))}
+                                className={`w-3.5 h-3.5 rounded-full ${xHover} flex items-center justify-center transition-colors`}
+                                title="Remove"
+                                aria-label={`Remove ${url}`}
+                              >
+                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                     {atCap && (
@@ -575,7 +602,36 @@ function CrawlModal({
                 );
               })()}
 
+              {/* Top-level catastrophic error (rare — only fires on 500/non-JSON response) */}
               {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+              {/* Per-step crawl failures — partial success path. The user sees
+                  exactly what URL failed and why, so they know whether to retry,
+                  fix the competitor URL, or accept the partial data. */}
+              {crawlErrors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-3">
+                  <p className="text-sm font-semibold text-red-800 mb-2">
+                    Crawl completed with {crawlErrors.length} failure{crawlErrors.length !== 1 ? 's' : ''}.
+                    Whatever succeeded was saved.
+                  </p>
+                  <ul className="space-y-2">
+                    {crawlErrors.map((e, i) => (
+                      <li key={i} className="text-xs">
+                        <p className="font-semibold text-red-700">
+                          {e.stage === 'own-site-crawl' && 'Your site (page crawl) — '}
+                          {e.stage === 'own-site-cta' && 'Your site (CTA detection) — '}
+                          {e.stage === 'competitor' && 'Competitor — '}
+                          <span className="font-mono">{e.url}</span>
+                        </p>
+                        <p className="text-red-600 mt-0.5">{e.reason}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[11px] text-red-600 mt-3">
+                    Failed competitor URLs are highlighted in red above. Remove or replace them, then try again.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>

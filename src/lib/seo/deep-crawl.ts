@@ -52,14 +52,56 @@ function classifyCta(text: string, href: string | null): CtaType {
   return 'OTHER';
 }
 
+export interface DeepCrawlError {
+  // What part of the crawl failed.
+  stage: 'own-site-crawl' | 'own-site-cta' | 'competitor';
+  // For competitor errors, the exact URL that failed. For own-site errors, the customer's site URL.
+  url: string;
+  // Plain-language explanation suitable for showing the user.
+  reason: string;
+  // The raw error message (for support / debugging).
+  rawMessage: string;
+}
+
 export interface DeepCrawlResult {
-  crawlId: string;
+  crawlId: string | null;             // null if own-site crawl failed entirely
   pagesCrawled: number;
-  ctasDetected: number;     // logical CTAs after dedup (own site)
-  ctasNew: number;          // first-time-seen CTAs (status SUGGESTED)
-  ctasUpdated: number;      // re-seen CTAs (status preserved)
+  ctasDetected: number;               // logical CTAs after dedup (own site)
+  ctasNew: number;                    // first-time-seen CTAs (status SUGGESTED)
+  ctasUpdated: number;                // re-seen CTAs (status preserved)
+  competitorsAttempted: number;
   competitorsCrawled: number;
   competitorCtasDetected: number;
+  errors: DeepCrawlError[];           // empty = clean run; otherwise per-step diagnostics
+}
+
+// Convert a raw error into a plain-language reason a non-engineer can act on.
+function explainError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const m = msg.toLowerCase();
+  if (m.includes('econnrefused') || m.includes('failed to fetch') || m.includes('fetch failed') || m.includes('enotfound')) {
+    return 'Could not reach the site. Could be offline, behind a firewall, or blocking outside crawlers.';
+  }
+  if (m.includes('timeout') || m.includes('aborterror') || m.includes('timed out')) {
+    return 'Site took too long to respond (>10s). Likely slow hosting or overloaded server.';
+  }
+  if (m.includes('403') || m.includes('forbidden')) {
+    return 'Site refused our crawler (403). Likely a Cloudflare / bot-protection block on robots.txt.';
+  }
+  if (m.includes('404') || m.includes('not found')) {
+    return 'URL returned 404. Confirm the address is correct and reachable.';
+  }
+  if (m.includes('429')) {
+    return 'Site rate-limited the crawler. Try again later or contact the site owner.';
+  }
+  if (m.includes('503')) {
+    return 'Site is temporarily unavailable (503). Likely under maintenance or being protected.';
+  }
+  if (m.includes('certificate') || m.includes('ssl') || m.includes('tls')) {
+    return 'SSL certificate issue. Site may have an expired or misconfigured HTTPS cert.';
+  }
+  // Fall back to the raw message but keep it short
+  return msg.length > 200 ? msg.slice(0, 200) + '…' : msg;
 }
 
 export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
@@ -73,24 +115,48 @@ export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
   });
   if (!site) throw new Error(`Site not found: ${siteId}`);
 
-  // 1. SEO crawl (creates a new SeoCrawl record + per-page results)
-  const crawlOut = await crawlSite({ siteId, startUrl: site.url, maxPages: 50 });
+  const errors: DeepCrawlError[] = [];
+  const now = new Date();
 
-  // Mark this crawl as the deep crawl variant
-  await prisma.seoCrawl.update({
-    where: { id: crawlOut.crawlId },
-    data: { isDeepCrawl: true },
-  });
+  // 1. SEO crawl (creates a new SeoCrawl record + per-page results)
+  let crawlId: string | null = null;
+  let pagesCrawled = 0;
+  try {
+    const crawlOut = await crawlSite({ siteId, startUrl: site.url, maxPages: 50 });
+    crawlId = crawlOut.crawlId;
+    pagesCrawled = crawlOut.pagesFound;
+    // Mark this crawl as the deep crawl variant
+    await prisma.seoCrawl.update({
+      where: { id: crawlOut.crawlId },
+      data: { isDeepCrawl: true },
+    });
+  } catch (err) {
+    console.error(`[deep-crawl] own-site-crawl ${site.url}:`, err);
+    errors.push({
+      stage: 'own-site-crawl',
+      url: site.url,
+      reason: explainError(err),
+      rawMessage: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   // 2. CTA detection (independent crawl pass — uses the same fetch infra)
-  const detected = await detectCtas(site.url, 12);
+  let own = { logicalCount: 0, created: 0, updated: 0 };
+  try {
+    const detected = await detectCtas(site.url, 12);
+    own = await persistCtas(siteId, '', detected, now);
+  } catch (err) {
+    console.error(`[deep-crawl] own-site-cta ${site.url}:`, err);
+    errors.push({
+      stage: 'own-site-cta',
+      url: site.url,
+      reason: explainError(err),
+      rawMessage: err instanceof Error ? err.message : String(err),
+    });
+  }
 
-  // 3. Persist own-site CTAs
-  const now = new Date();
-  const own = await persistCtas(siteId, '', detected, now);
-
-  // 4. Crawl competitors (max 3, lightweight) and persist their CTAs separately
-  // so the UI can compare side-by-side. Failures are non-fatal.
+  // 3. Crawl competitors (max 3, lightweight). Per-competitor failures are
+  // collected so the UI can mark exactly which one failed.
   const competitorUrls = (site.onboarding?.competitorUrls ?? []).slice(0, 3);
   let competitorsCrawled = 0;
   let competitorCtasDetected = 0;
@@ -102,23 +168,33 @@ export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
       competitorsCrawled++;
     } catch (err) {
       console.error(`[deep-crawl] competitor ${compUrl}:`, err);
+      errors.push({
+        stage: 'competitor',
+        url: compUrl,
+        reason: explainError(err),
+        rawMessage: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  // 5. Stamp the deep-crawl timestamp on the site (drives the 90-day cooldown)
+  // 4. Stamp the deep-crawl timestamp on the site (drives the 90-day cooldown).
+  // Stamp even on partial failure so users aren't stuck retrying — the cron will
+  // catch the next opportunity, and partial data is still useful.
   await prisma.site.update({
     where: { id: siteId },
     data: { lastDeepCrawlAt: now },
   });
 
   return {
-    crawlId: crawlOut.crawlId,
-    pagesCrawled: crawlOut.pagesFound,
+    crawlId,
+    pagesCrawled,
     ctasDetected: own.logicalCount,
     ctasNew: own.created,
     ctasUpdated: own.updated,
+    competitorsAttempted: competitorUrls.length,
     competitorsCrawled,
     competitorCtasDetected,
+    errors,
   };
 }
 
