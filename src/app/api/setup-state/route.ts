@@ -57,7 +57,19 @@ export async function GET(req: NextRequest) {
   }
 
   const ob = site.onboarding;
-  const hasConversionGoal = !!(ob?.conversionGoalUrl || ob?.conversionGoalName);
+
+  // Conversion goal is "set" if ANY of these signals are present:
+  //  - Legacy onboarding singular field (oldest path)
+  //  - At least one active ConversionGoal record (Settings page multi-goal table)
+  //  - At least one SiteCta marked TRACKED (Site Map page approval flow)
+  // Any one is sufficient to dismiss the "Set Conversion Goal" banner item.
+  const [conversionGoalCount, trackedCtaCount] = await Promise.all([
+    prisma.conversionGoal.count({ where: { siteId, isActive: true } }),
+    prisma.siteCta.count({ where: { siteId, competitorUrl: '', status: 'TRACKED' } }),
+  ]);
+  const hasConversionGoal = !!(ob?.conversionGoalUrl || ob?.conversionGoalName)
+    || conversionGoalCount > 0
+    || trackedCtaCount > 0;
   const hasRevenueData = !!(ob?.averageOrderValue && ob?.conversionRate);
   const hasAdSpend = !!(ob?.monthlyAdSpend && ob.monthlyAdSpend > 0);
   const hasBusinessContext = !!(ob?.businessDescription && ob?.targetAudience);
