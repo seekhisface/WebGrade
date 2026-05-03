@@ -177,6 +177,10 @@ model Site {
   checkin7AcknowledgedAt  DateTime?
   checkin14AcknowledgedAt DateTime?
 
+  // Deep crawl tracking (Site Map page). Differs from regular SEO crawl in
+  // that it also extracts CTAs and competitor data. Throttled to once per 90 days.
+  lastDeepCrawlAt DateTime?
+
   // Integrations — PostHog
   posthogEnabled Boolean @default(false)
   posthogApiKey  String?
@@ -219,6 +223,7 @@ model Site {
   adSources                AdSource[]
   gadsCampaignMetrics      GadsCampaignMetric[]
   staleUtmCampaigns        StaleUtmCampaign[]
+  siteCtas                 SiteCta[]
   reports                  Report[]
   alerts                   Alert[]
   alertSettings            AlertSetting[]
@@ -303,6 +308,13 @@ model SiteOnboarding {
   // Step 1: Site config
   conversionGoalUrl  String? // OB-06: gate — required before reports
   conversionGoalName String? // e.g. "Free trial signup"
+
+  // Modal-based conversion tracking (Option A from design discussion)
+  // Form selector — either an HTML id (e.g. "demo-form") or a substring of
+  // the form action URL (e.g. "/api/demo"). When the snippet sees a form_submit
+  // matching this selector, it auto-fires a conversion event without needing
+  // the customer to add window.wg('conversion') code on a thank-you page.
+  conversionFormSelector String?
 
   // Step 2: Business context (injected into all Claude prompts — OB-05)
   businessDescription String? @db.Text
@@ -732,6 +744,9 @@ model SeoCrawl {
   pagesFound    Int         @default(0)
   pagesAnalyzed Int         @default(0)
   crawlStatus   CrawlStatus @default(RUNNING)
+  // Deep crawls also extract CTAs + (optionally) competitor snapshots.
+  // Quick crawls (the existing weekly Sunday 3am UTC cron) skip both.
+  isDeepCrawl   Boolean     @default(false)
 
   // Overall scores
   overallSeoScore   Int? // 0–100
@@ -978,6 +993,55 @@ model GadsCampaignMetric {
   @@unique([siteId, campaignId, date])
   @@index([siteId, date])
   @@map("gads_campaign_metrics")
+}
+
+// CTAs detected on the customer's site by the deep crawler.
+// Logical (not per-instance) — one row per unique (text, href) pair, with the
+// list of pages where it appears. Status persists across re-crawls so the user's
+// accept/reject decisions stick.
+model SiteCta {
+  id        String  @id @default(cuid())
+  siteId    String
+
+  ctaText   String  // e.g. "Book a Demo" — truncated to 200 chars
+  ctaHref   String  @default("") // e.g. "/demo" or full URL — empty string for buttons with JS handlers (avoids null-key composite issues)
+  ctaType   CtaType @default(OTHER)
+
+  // Pages where this CTA was found (URL paths, query stripped)
+  pages     String[] @default([])
+  pageCount Int      @default(0)
+
+  // User-managed status. Default SUGGESTED for newly-detected CTAs.
+  // TRACKED = the user has marked this as a conversion goal worth watching.
+  // IGNORED = the user has dismissed this; don't surface again.
+  status    CtaStatus @default(SUGGESTED)
+
+  firstDetectedAt DateTime  @default(now())
+  lastDetectedAt  DateTime  @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, ctaText, ctaHref])
+  @@index([siteId, status])
+  @@index([siteId, ctaType])
+  @@map("site_ctas")
+}
+
+enum CtaType {
+  DEMO        // "Book demo", "Get demo", "Request demo"
+  SIGNUP      // "Sign up", "Get started", "Create account"
+  TRIAL       // "Start trial", "Try free"
+  CONTACT     // "Contact", "Get in touch", "Talk to sales"
+  BUY         // "Buy", "Purchase", "Checkout"
+  SUBSCRIBE   // "Subscribe", "Newsletter"
+  DOWNLOAD    // Linked to .pdf, .docx, etc.
+  OTHER
+}
+
+enum CtaStatus {
+  SUGGESTED   // Crawler found it; user hasn't reviewed yet
+  TRACKED     // User marked it as a conversion goal worth measuring
+  IGNORED     // User dismissed it
 }
 
 // utm_campaign values seen in sessions but not present in any active or

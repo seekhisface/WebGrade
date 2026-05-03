@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
     // Conversion goals
     conversionGoalUrl: ob?.conversionGoalUrl ?? '',
     conversionGoalName: ob?.conversionGoalName ?? '',
+    conversionFormSelector: ob?.conversionFormSelector ?? '',
 
     // Business context
     businessDescription: ob?.businessDescription ?? '',
@@ -134,6 +135,7 @@ const PatchSchema = z.object({
   // Conversion goals
   conversionGoalUrl: z.string().optional(),
   conversionGoalName: z.string().optional(),
+  conversionFormSelector: z.string().optional(),
 
   // Business context
   businessDescription: z.string().optional(),
@@ -207,6 +209,7 @@ export async function PATCH(req: NextRequest) {
   const obData: Record<string, unknown> = {};
   if (onboardingFields.conversionGoalUrl !== undefined) obData.conversionGoalUrl = onboardingFields.conversionGoalUrl;
   if (onboardingFields.conversionGoalName !== undefined) obData.conversionGoalName = onboardingFields.conversionGoalName;
+  if (onboardingFields.conversionFormSelector !== undefined) obData.conversionFormSelector = onboardingFields.conversionFormSelector || null;
   if (onboardingFields.businessDescription !== undefined) obData.businessDescription = onboardingFields.businessDescription;
   if (onboardingFields.targetAudience !== undefined) obData.targetAudience = onboardingFields.targetAudience;
   if (onboardingFields.primaryValueProp !== undefined) obData.primaryValueProp = onboardingFields.primaryValueProp;

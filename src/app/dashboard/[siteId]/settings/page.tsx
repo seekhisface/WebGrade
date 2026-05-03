@@ -26,6 +26,7 @@ interface ProfileData {
 
   conversionGoalUrl: string;
   conversionGoalName: string;
+  conversionFormSelector?: string;
 
   businessDescription: string;
   targetAudience: string;
@@ -1126,6 +1127,25 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Modal-conversion tracking (form selector) */}
+            <div className="pt-3 border-t border-[#e0f2fe]">
+              <div className="flex items-center mb-1">
+                <p className="text-xs font-semibold text-[#64748b]">Modal-confirmation tracking</p>
+                <Tooltip text="If your demo / signup form shows a confirmation modal instead of redirecting to a thank-you page, the snippet can't see a URL change. Enter the form's HTML id OR a fragment of the form action URL — when that form submits, the snippet auto-fires a conversion event." />
+              </div>
+              <input
+                type="text"
+                value={profile?.conversionFormSelector ?? ''}
+                onChange={e => setProfile(p => p ? { ...p, conversionFormSelector: e.target.value } : p)}
+                onBlur={() => patchProfile({ conversionFormSelector: profile?.conversionFormSelector ?? '' })}
+                placeholder="demo-form  OR  /api/demo"
+                className="w-full px-3 py-2 bg-[#f0f9ff] border border-[#bae6fd] rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-[#94a3b8]"
+              />
+              <p className="text-[11px] text-[#94a3b8] mt-1">
+                Leave empty if your conversion fires a page navigation to a thank-you URL (use the goal list above instead).
+              </p>
             </div>
           </div>
         </div>

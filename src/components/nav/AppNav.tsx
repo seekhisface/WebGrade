@@ -36,6 +36,7 @@ function getActivePageFromPath(pathname: string) {
   if (pathname.includes('/report')) return 'report';
   if (pathname.includes('/snippet')) return 'snippet';
   if (pathname.includes('/winback')) return 'winback';
+  if (pathname.includes('/sitemap')) return 'sitemap';
   if (pathname.includes('/admin/stale-utms')) return 'stale-utms';
   if (pathname.includes('/admin')) return 'admin';
   if (pathname.includes('/settings')) return 'settings';
@@ -139,6 +140,7 @@ export function AppNav() {
     { id: 'snippet',   label: 'Installation', href: `/dashboard/${currentSiteId}/snippet`,        show: !!currentSiteId },
     { id: 'winback',   label: 'Win-Back',     href: `/dashboard/${currentSiteId}/winback`,        show: !!currentSiteId && isAuthenticated },
     { id: 'admin',      label: 'Sessions',    href: `/dashboard/${currentSiteId}/admin/sessions`,    show: !!currentSiteId && isAuthenticated },
+    { id: 'sitemap',    label: 'Site Map',    href: `/dashboard/${currentSiteId}/sitemap`,           show: !!currentSiteId && isAuthenticated },
     { id: 'stale-utms', label: 'Stale Tags',  href: `/dashboard/${currentSiteId}/admin/stale-utms`,  show: !!currentSiteId && isAuthenticated },
     { id: 'settings',   label: 'Settings',    href: `/dashboard/${currentSiteId}/settings`,          show: !!currentSiteId && isAuthenticated },
   ].filter(tab => tab.show);

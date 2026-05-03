@@ -397,7 +397,7 @@ export const webwatchMonthlyReport = inngest.createFunction(
           isActive: true,
           subscriptionTier: { in: ['WEBWATCH', 'WEBWATCH_WEBOPP'] },
         },
-        select: { id: true, webwatchStartDate: true },
+        select: { id: true, webwatchStartDate: true, lastDeepCrawlAt: true },
       });
     });
 
@@ -429,6 +429,19 @@ export const webwatchMonthlyReport = inngest.createFunction(
       const periodEnd: Date = prevMonthEnd;
       const periodDays = Math.max(1, Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000));
       const reportLabel = isPartialFirstMonth ? 'Partial 1st month' : monthLabel;
+
+      // Auto-trigger deep crawl if it's been >90 days since the last one. This
+      // ensures the monthly report has fresh on-page + CTA + competitor data
+      // without the user needing to click the Crawl button manually. Failures
+      // are non-fatal — if the crawl errors, the report still generates.
+      const lastDeepCrawl = site.lastDeepCrawlAt ? new Date(site.lastDeepCrawlAt) : null;
+      const needsDeepCrawl = !lastDeepCrawl || (now.getTime() - lastDeepCrawl.getTime() > 90 * 86400000);
+      if (needsDeepCrawl) {
+        await step.run(`pre-report-deep-crawl-${site.id}`, async () => {
+          const { runDeepCrawl } = await import('@/lib/seo/deep-crawl');
+          return runDeepCrawl(site.id);
+        }).catch(err => console.error(`[pre-report deep crawl] site ${site.id}:`, err));
+      }
 
       await step.run(`webwatch-report-${site.id}`, async () => {
         return generateReport({

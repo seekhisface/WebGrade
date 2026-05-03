@@ -32,6 +32,11 @@
   var CONFIG = {
     snippetId: '{{SNIPPET_ID}}',      // Replaced server-side
     ingestUrl: '{{INGEST_URL}}',      // e.g. https://app.webgrade.io/api/ingest
+    // Modal-conversion tracking: form ID or action-URL fragment.
+    // When a form_submit event matches this selector, the snippet auto-fires
+    // a conversion event WITHOUT requiring window.wg('conversion') in customer code.
+    // Empty string = disabled. Substituted server-side from SiteOnboarding.conversionFormSelector.
+    conversionFormSelector: '{{CONVERSION_FORM_SELECTOR}}',
     version: '1.0.0',
     debug: false,
   };
@@ -463,10 +468,29 @@
   });
 
   document.addEventListener('submit', function (e) {
+    var formId = e.target.id || null;
+    var formAction = e.target.action || null;
+
     track('form_submit', {
-      id: e.target.id || null,
-      action: e.target.action || null,
+      id: formId,
+      action: formAction,
     });
+
+    // Modal-conversion tracking: if the form matches the configured selector,
+    // auto-fire a conversion event. Selector matches against form id (exact)
+    // OR against form action URL (substring match). This lets sites with
+    // modal-only confirmation flows (no /thanks page) still record conversions.
+    var sel = CONFIG.conversionFormSelector;
+    if (sel && sel.length > 0) {
+      var matches = false;
+      if (formId && formId === sel) matches = true;
+      else if (formAction && formAction.indexOf(sel) !== -1) matches = true;
+      if (matches) {
+        track('conversion', { source: 'form_submit_auto', formId: formId, formAction: formAction });
+        // Flush immediately — conversions are high priority
+        send(queue.splice(0));
+      }
+    }
   }, true);
 
   // -------------------------------------------------------------------------

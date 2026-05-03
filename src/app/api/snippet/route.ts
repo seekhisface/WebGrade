@@ -33,10 +33,15 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Look up the site by snippet ID
+  // Look up the site by snippet ID — also pull the conversion form selector
+  // for modal-conversion auto-tracking.
   const site = await prisma.site.findFirst({
     where: { snippetId, isActive: true },
-    select: { id: true, snippetId: true },
+    select: {
+      id: true,
+      snippetId: true,
+      onboarding: { select: { conversionFormSelector: true } },
+    },
   });
 
   if (!site) {
@@ -52,11 +57,16 @@ export async function GET(req: NextRequest) {
     : new URL(req.url).origin;
   const ingestUrl = `${origin}/api/ingest`;
 
-  // Read template and substitute placeholders
+  // Read template and substitute placeholders. Escape the form selector for
+  // safe inline JS embedding (no quote-injection if customer set a wonky value).
+  const conversionFormSelector = (site.onboarding?.conversionFormSelector ?? '')
+    .replace(/'/g, "\\'")
+    .replace(/\\/g, '\\\\');
   const template = await getSnippetTemplate();
   const js = template
     .replace('{{SNIPPET_ID}}', site.snippetId)
-    .replace('{{INGEST_URL}}', ingestUrl);
+    .replace('{{INGEST_URL}}', ingestUrl)
+    .replace('{{CONVERSION_FORM_SELECTOR}}', conversionFormSelector);
 
   return new NextResponse(js, {
     status: 200,

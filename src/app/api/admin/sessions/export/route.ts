@@ -434,8 +434,9 @@ export async function GET(req: NextRequest) {
           step: i + 1,
           timeInSession: fmtRelative(evTs, s.startedAt),
           eventType: ev.eventType,
-          page: stripHash(ev.pageUrl),
-          pageLastSeg: lastSegment(ev.pageUrl),
+          // Strip query strings (e.g. Google Ads auto-tag noise) so the column is readable
+          page: toPathOnly(ev.pageUrl),
+          pageLastSeg: lastSegment(toPathOnly(ev.pageUrl)),
           scrollDepthPct: ev.scrollDepthPct ?? '',
           elementTag: ev.elementTag ?? '',
           elementText: ev.elementText ?? '',
