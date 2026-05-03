@@ -55,15 +55,21 @@ function classifyCta(text: string, href: string | null): CtaType {
 export interface DeepCrawlResult {
   crawlId: string;
   pagesCrawled: number;
-  ctasDetected: number;     // logical CTAs after dedup
+  ctasDetected: number;     // logical CTAs after dedup (own site)
   ctasNew: number;          // first-time-seen CTAs (status SUGGESTED)
   ctasUpdated: number;      // re-seen CTAs (status preserved)
+  competitorsCrawled: number;
+  competitorCtasDetected: number;
 }
 
 export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
   const site = await prisma.site.findUnique({
     where: { id: siteId },
-    select: { id: true, url: true },
+    select: {
+      id: true,
+      url: true,
+      onboarding: { select: { competitorUrls: true } },
+    },
   });
   if (!site) throw new Error(`Site not found: ${siteId}`);
 
@@ -79,9 +85,56 @@ export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
   // 2. CTA detection (independent crawl pass — uses the same fetch infra)
   const detected = await detectCtas(site.url, 12);
 
-  // 3. Aggregate per-instance into logical CTAs (text + href as the key).
-  // Using empty string instead of null for href avoids composite-key issues
-  // with Prisma's findUnique on nullable fields.
+  // 3. Persist own-site CTAs
+  const now = new Date();
+  const own = await persistCtas(siteId, '', detected, now);
+
+  // 4. Crawl competitors (max 3, lightweight) and persist their CTAs separately
+  // so the UI can compare side-by-side. Failures are non-fatal.
+  const competitorUrls = (site.onboarding?.competitorUrls ?? []).slice(0, 3);
+  let competitorsCrawled = 0;
+  let competitorCtasDetected = 0;
+  for (const compUrl of competitorUrls) {
+    try {
+      const compDetected = await detectCtas(compUrl, 6);
+      const result = await persistCtas(siteId, compUrl, compDetected, now);
+      competitorCtasDetected += result.logicalCount;
+      competitorsCrawled++;
+    } catch (err) {
+      console.error(`[deep-crawl] competitor ${compUrl}:`, err);
+    }
+  }
+
+  // 5. Stamp the deep-crawl timestamp on the site (drives the 90-day cooldown)
+  await prisma.site.update({
+    where: { id: siteId },
+    data: { lastDeepCrawlAt: now },
+  });
+
+  return {
+    crawlId: crawlOut.crawlId,
+    pagesCrawled: crawlOut.pagesFound,
+    ctasDetected: own.logicalCount,
+    ctasNew: own.created,
+    ctasUpdated: own.updated,
+    competitorsCrawled,
+    competitorCtasDetected,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate detected CTAs into logical rows (one per text+href) and upsert,
+// preserving user-set status (TRACKED / IGNORED) for the customer's own CTAs.
+// Pass competitorUrl='' for the customer's site, or the competitor URL for
+// competitor CTAs.
+// ---------------------------------------------------------------------------
+
+async function persistCtas(
+  siteId: string,
+  competitorUrl: string,
+  detected: Awaited<ReturnType<typeof detectCtas>>,
+  now: Date,
+): Promise<{ logicalCount: number; created: number; updated: number }> {
   type Logical = { text: string; href: string; type: CtaType; pages: Set<string> };
   const logical = new Map<string, Logical>();
   for (const c of detected) {
@@ -97,32 +150,25 @@ export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
     row.pages.add(c.pageUrl);
   }
 
-  // 4. Upsert SiteCta — preserve user-set status (TRACKED / IGNORED) on re-crawl
-  let ctasNew = 0;
-  let ctasUpdated = 0;
-  const now = new Date();
+  let created = 0;
+  let updated = 0;
   for (const row of logical.values()) {
     const pages = Array.from(row.pages);
     const existing = await prisma.siteCta.findUnique({
-      where: { siteId_ctaText_ctaHref: { siteId, ctaText: row.text, ctaHref: row.href } },
+      where: { siteId_competitorUrl_ctaText_ctaHref: { siteId, competitorUrl, ctaText: row.text, ctaHref: row.href } },
     });
 
     if (existing) {
       await prisma.siteCta.update({
         where: { id: existing.id },
-        data: {
-          ctaType: row.type,        // type may have improved with better classifier
-          pages,
-          pageCount: pages.length,
-          lastDetectedAt: now,
-          // status NOT updated — user's TRACKED/IGNORED decision is sticky
-        },
+        data: { ctaType: row.type, pages, pageCount: pages.length, lastDetectedAt: now },
       });
-      ctasUpdated++;
+      updated++;
     } else {
       await prisma.siteCta.create({
         data: {
           siteId,
+          competitorUrl,
           ctaText: row.text,
           ctaHref: row.href,
           ctaType: row.type,
@@ -133,21 +179,9 @@ export async function runDeepCrawl(siteId: string): Promise<DeepCrawlResult> {
           lastDetectedAt: now,
         },
       });
-      ctasNew++;
+      created++;
     }
   }
 
-  // 5. Stamp the deep-crawl timestamp on the site (drives the 90-day cooldown)
-  await prisma.site.update({
-    where: { id: siteId },
-    data: { lastDeepCrawlAt: now },
-  });
-
-  return {
-    crawlId: crawlOut.crawlId,
-    pagesCrawled: crawlOut.pagesFound,
-    ctasDetected: logical.size,
-    ctasNew,
-    ctasUpdated,
-  };
+  return { logicalCount: logical.size, created, updated };
 }

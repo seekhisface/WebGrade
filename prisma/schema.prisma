@@ -1003,6 +1003,10 @@ model SiteCta {
   id        String  @id @default(cuid())
   siteId    String
 
+  // Empty string = the customer's own site. Non-empty = a competitor's URL.
+  // Lets one table store both your CTAs and competitor CTAs for side-by-side comparison.
+  competitorUrl String @default("")
+
   ctaText   String  // e.g. "Book a Demo" — truncated to 200 chars
   ctaHref   String  @default("") // e.g. "/demo" or full URL — empty string for buttons with JS handlers (avoids null-key composite issues)
   ctaType   CtaType @default(OTHER)
@@ -1021,9 +1025,10 @@ model SiteCta {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@unique([siteId, ctaText, ctaHref])
+  @@unique([siteId, competitorUrl, ctaText, ctaHref])
   @@index([siteId, status])
   @@index([siteId, ctaType])
+  @@index([siteId, competitorUrl])
   @@map("site_ctas")
 }
 

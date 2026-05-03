@@ -12,6 +12,7 @@ type CtaStatus = 'TRACKED' | 'SUGGESTED' | 'IGNORED';
 
 interface CtaRow {
   id: string;
+  competitorUrl: string;
   ctaText: string;
   ctaHref: string;
   ctaType: CtaType;
@@ -23,13 +24,20 @@ interface CtaRow {
   clickCount30d: number;
   sessionsExposed: number;
   ctr: number;
+  priority: number;
+  recommendation: 'track' | 'ignore' | 'review';
 }
 
 interface CtaSummary {
   ctas: CtaRow[];
+  competitorCtas: CtaRow[];
+  competitorGroups: Record<string, CtaRow[]>;
+  competitorCount: number;
   summary: Record<string, { count: number; tracked: number; suggested: number; ignored: number }>;
   totalPages: number;
   totalCtas: number;
+  recommendedTrackCount: number;
+  recommendedIgnoreCount: number;
 }
 
 interface CrawlStatus {
@@ -118,6 +126,16 @@ export default function SiteMapPage() {
     refresh();
   }
 
+  async function bulkUpdate(ids: string[], newStatus: CtaStatus) {
+    if (ids.length === 0) return;
+    await fetch('/api/sitemap/ctas/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteId, ids, status: newStatus }),
+    });
+    refresh();
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -178,6 +196,41 @@ export default function SiteMapPage() {
         {/* CTA inventory */}
         {!loading && ctaData && ctaData.totalCtas > 0 && (
           <>
+            {/* Bulk action bar — surfaces what we'd recommend so the user can
+                approve in one click instead of reviewing every row */}
+            {(ctaData.recommendedTrackCount > 0 || ctaData.recommendedIgnoreCount > 0) && (
+              <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+                <p className="text-sm text-sky-900">
+                  We&apos;ve scored each CTA. {ctaData.recommendedTrackCount} look worth tracking
+                  {ctaData.recommendedIgnoreCount > 0 && `, ${ctaData.recommendedIgnoreCount} likely safe to ignore`}.
+                </p>
+                <div className="ml-auto flex gap-2">
+                  {ctaData.recommendedTrackCount > 0 && (
+                    <button
+                      onClick={() => bulkUpdate(
+                        ctaData.ctas.filter(c => c.recommendation === 'track' && c.status === 'SUGGESTED').map(c => c.id),
+                        'TRACKED'
+                      )}
+                      className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
+                    >
+                      Track {ctaData.recommendedTrackCount} recommended
+                    </button>
+                  )}
+                  {ctaData.recommendedIgnoreCount > 0 && (
+                    <button
+                      onClick={() => bulkUpdate(
+                        ctaData.ctas.filter(c => c.recommendation === 'ignore' && c.status === 'SUGGESTED').map(c => c.id),
+                        'IGNORED'
+                      )}
+                      className="px-3 py-1.5 text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg"
+                    >
+                      Ignore {ctaData.recommendedIgnoreCount} low-priority
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Type summary chips */}
             <div className="flex items-center gap-2 flex-wrap">
               {TYPE_ORDER.filter(t => ctaData.summary[t]).map(type => {
@@ -235,6 +288,13 @@ export default function SiteMapPage() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="text-sm font-semibold text-slate-900">{cta.ctaText}</p>
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${sev.bg} ${sev.text}`}>{cta.status}</span>
+                                  {cta.status === 'SUGGESTED' && cta.recommendation === 'track' && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">★ Recommended</span>
+                                  )}
+                                  {cta.status === 'SUGGESTED' && cta.recommendation === 'ignore' && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200">Low priority</span>
+                                  )}
+                                  <span className="text-[10px] text-slate-400" title={`Priority score 0-100: ${cta.priority}`}>· score {cta.priority}</span>
                                 </div>
                                 {cta.ctaHref && <p className="font-mono text-[11px] text-[#0891b2] mt-0.5 truncate">{cta.ctaHref}</p>}
                                 <p className="text-xs text-slate-500 mt-1">
@@ -286,6 +346,54 @@ export default function SiteMapPage() {
                 );
               })}
             </div>
+
+            {/* Competitor CTAs section — view-only, for comparison */}
+            {ctaData.competitorCount > 0 && (
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Competitor CTAs</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      What {ctaData.competitorCount} competitor{ctaData.competitorCount !== 1 ? 's are' : ' is'} doing on their site. Reference only — not tracked or acted on.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {Object.entries(ctaData.competitorGroups).map(([url, items]) => {
+                    let host = url;
+                    try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
+                    return (
+                      <div key={url} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                          <p className="text-sm font-bold text-slate-700">{host}</p>
+                          <p className="text-[11px] text-slate-400 font-mono truncate">{url}</p>
+                        </div>
+                        {items.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-slate-500 italic">No CTAs detected on this competitor.</p>
+                        ) : (
+                          <div className="divide-y divide-slate-100">
+                            {items.slice(0, 8).map(cta => (
+                              <div key={cta.id} className="px-4 py-2.5 flex items-center gap-3">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase tracking-wider flex-shrink-0">
+                                  {TYPE_LABELS[cta.ctaType]}
+                                </span>
+                                <p className="text-sm text-slate-700 flex-1 truncate">{cta.ctaText}</p>
+                                {cta.ctaHref && (
+                                  <p className="font-mono text-[11px] text-slate-400 truncate max-w-xs">{cta.ctaHref}</p>
+                                )}
+                              </div>
+                            ))}
+                            {items.length > 8 && (
+                              <p className="px-4 py-2 text-[11px] text-slate-500 italic">+{items.length - 8} more not shown</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
