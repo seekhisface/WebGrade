@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "EventType" ADD VALUE 'WIDGET_ENGAGED';
+

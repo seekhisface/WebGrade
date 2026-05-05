@@ -71,10 +71,13 @@ export async function GET(req: NextRequest) {
   });
   const isOAuthUser = !user?.hashedPassword && session.user.email !== 'demo@webgrade.io';
 
-  // Modal-conversion tracking diagnostic — counts CONVERSION events that fired
-  // automatically because the snippet matched the configured form selector.
-  // Lets the user verify the field is actually doing something without digging
-  // into raw session data.
+  // Conversion-tracking diagnostic — counts the various ways conversions can
+  // auto-fire and breaks them down by source so the user can verify each
+  // tracking mechanism is actually doing something:
+  //   - form_submit_auto: parent-page form matched the conversionFormSelector
+  //   - calendly_iframe:  Calendly widget broadcast a booking confirmation
+  //   - hubspot_iframe:   HubSpot form widget broadcast a submission
+  //   - manual:           customer site called window.wg('conversion')
   const last30 = new Date(Date.now() - 30 * 86400000);
   const autoConversions = await prisma.sessionEvent.findMany({
     where: {
@@ -84,20 +87,50 @@ export async function GET(req: NextRequest) {
     },
     select: { timestamp: true, metadata: true },
     orderBy: { timestamp: 'desc' },
-    take: 200, // cap; we only need the count + most recent for display
+    take: 500,
   });
+  const widgetEngaged = await prisma.sessionEvent.count({
+    where: {
+      siteId: site.id,
+      eventType: 'WIDGET_ENGAGED',
+      timestamp: { gte: last30 },
+    },
+  });
+
   // Filter in JS — JSON-path queries vary across Postgres versions and the
-  // dataset is small enough (one site, ≤200 events) that an in-memory filter
-  // is simpler and faster to develop than a raw SQL query.
-  const autoMatched = autoConversions.filter(e => {
-    const m = e.metadata as Record<string, unknown> | null;
-    return m && m.source === 'form_submit_auto';
-  });
+  // dataset is small enough that an in-memory filter is simpler and faster.
+  type SrcKey = 'form_submit_auto' | 'calendly_iframe' | 'hubspot_iframe' | 'manual';
+  const bySource: Record<SrcKey, { count: number; lastAt: string | null }> = {
+    form_submit_auto: { count: 0, lastAt: null },
+    calendly_iframe:  { count: 0, lastAt: null },
+    hubspot_iframe:   { count: 0, lastAt: null },
+    manual:           { count: 0, lastAt: null },
+  };
+  for (const e of autoConversions) {
+    const m = (e.metadata ?? {}) as Record<string, unknown>;
+    const src = (m.source as string) ?? null;
+    let bucket: SrcKey;
+    if (src === 'form_submit_auto') bucket = 'form_submit_auto';
+    else if (src === 'calendly_iframe') bucket = 'calendly_iframe';
+    else if (src === 'hubspot_iframe') bucket = 'hubspot_iframe';
+    else bucket = 'manual';
+    bySource[bucket].count++;
+    if (!bySource[bucket].lastAt) bySource[bucket].lastAt = e.timestamp.toISOString();
+  }
+  const formSubmit = bySource.form_submit_auto;
   const modalConversionStats = {
     selectorConfigured: !!ob?.conversionFormSelector,
     selectorValue: ob?.conversionFormSelector ?? '',
-    autoConversionsCount30d: autoMatched.length,
-    lastAutoConversionAt: autoMatched[0]?.timestamp?.toISOString() ?? null,
+    autoConversionsCount30d: formSubmit.count,
+    lastAutoConversionAt: formSubmit.lastAt,
+    // New: iframe-sourced conversions and engagement events
+    iframeConversions: {
+      calendly: bySource.calendly_iframe,
+      hubspot: bySource.hubspot_iframe,
+    },
+    widgetEngagedCount30d: widgetEngaged,
+    manualConversionsCount30d: bySource.manual.count,
+    totalConversionsCount30d: autoConversions.length,
   };
 
   return NextResponse.json({

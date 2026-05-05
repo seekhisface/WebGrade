@@ -32,6 +32,13 @@ interface ProfileData {
     selectorValue: string;
     autoConversionsCount30d: number;
     lastAutoConversionAt: string | null;
+    iframeConversions?: {
+      calendly: { count: number; lastAt: string | null };
+      hubspot: { count: number; lastAt: string | null };
+    };
+    widgetEngagedCount30d?: number;
+    manualConversionsCount30d?: number;
+    totalConversionsCount30d?: number;
   };
 
   businessDescription: string;
@@ -1192,6 +1199,55 @@ export default function SettingsPage() {
                       <strong>{stats.autoConversionsCount30d}</strong> conversion{stats.autoConversionsCount30d !== 1 ? 's' : ''} auto-fired
                       via this form selector in the last 30 days. Most recent: <strong>{lastFired}</strong>.
                     </p>
+                  </div>
+                );
+              })()}
+
+              {/* Iframe widget tracking (Calendly + HubSpot) — always-on, no setup needed */}
+              {(() => {
+                const stats = profile?.modalConversionStats;
+                if (!stats?.iframeConversions) return null;
+                const cal = stats.iframeConversions.calendly;
+                const hs = stats.iframeConversions.hubspot;
+                const totalIframeConversions = cal.count + hs.count;
+                const widgetEngaged = stats.widgetEngagedCount30d ?? 0;
+
+                return (
+                  <div className="mt-4 pt-3 border-t border-[#e0f2fe]">
+                    <div className="flex items-center mb-2">
+                      <p className="text-xs font-semibold text-[#64748b]">Iframe widget tracking (Calendly / HubSpot)</p>
+                      <Tooltip text="The snippet automatically listens for booking events from Calendly and HubSpot iframes via postMessage. No setup needed — if you embed either widget, conversions are auto-recorded when bookings complete." />
+                    </div>
+                    {totalIframeConversions === 0 && widgetEngaged === 0 ? (
+                      <p className="text-[11px] text-[#94a3b8]">
+                        No iframe widget activity detected in the last 30 days. If you embed Calendly or HubSpot booking forms, this counter will populate automatically once a visitor uses them.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3">
+                            <p className="text-[9px] text-[#64748b] uppercase tracking-wider mb-1">Calendly bookings</p>
+                            <p className="text-lg font-black text-emerald-700">{cal.count}</p>
+                            {cal.lastAt && <p className="text-[10px] text-[#94a3b8] mt-0.5">last: {new Date(cal.lastAt).toLocaleDateString()}</p>}
+                          </div>
+                          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3">
+                            <p className="text-[9px] text-[#64748b] uppercase tracking-wider mb-1">HubSpot submits</p>
+                            <p className="text-lg font-black text-emerald-700">{hs.count}</p>
+                            {hs.lastAt && <p className="text-[10px] text-[#94a3b8] mt-0.5">last: {new Date(hs.lastAt).toLocaleDateString()}</p>}
+                          </div>
+                          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3">
+                            <p className="text-[9px] text-[#64748b] uppercase tracking-wider mb-1">Widget engagements</p>
+                            <p className="text-lg font-black text-[#0c4a6e]">{widgetEngaged}</p>
+                            <p className="text-[10px] text-[#94a3b8] mt-0.5">opens, slot-picks</p>
+                          </div>
+                        </div>
+                        {widgetEngaged > 0 && (
+                          <p className="text-[11px] text-[#94a3b8] mt-2">
+                            Funnel signal: {widgetEngaged} visitors interacted with a widget; {totalIframeConversions} actually converted. Gap = drop-off inside the widget.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                 );
               })()}

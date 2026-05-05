@@ -603,6 +603,56 @@
   });
 
   // -------------------------------------------------------------------------
+  // Cross-origin iframe widgets — Calendly + HubSpot postMessage listener
+  //
+  // Same-origin policy means our snippet (on the parent page) can't see what
+  // happens inside an iframe. But most modern booking widgets broadcast events
+  // to the parent window via window.postMessage when key things happen.
+  // We listen for those broadcasts and:
+  //   - Engagement events (widget loaded, time/date selected) → widget_engaged
+  //   - Completion events (booking confirmed, form submitted) → conversion
+  //
+  // Privacy: we deliberately do NOT capture invitee names/emails from these
+  // payloads — only the event type + form/event identifiers (no PII).
+  // -------------------------------------------------------------------------
+  window.addEventListener('message', function (e) {
+    // Be defensive — postMessage data is untrusted input from any iframe.
+    if (!e.data) return;
+    var data = typeof e.data === 'string' ? (function () { try { return JSON.parse(e.data); } catch (err) { return null; } })() : e.data;
+    if (!data || typeof data !== 'object') return;
+
+    // ── Calendly ────────────────────────────────────────────────────────────
+    // Calendly fires events like: { event: 'calendly.event_scheduled', payload: {...} }
+    var calendlyEvent = typeof data.event === 'string' && data.event.indexOf('calendly.') === 0 ? data.event : null;
+    if (calendlyEvent) {
+      if (calendlyEvent === 'calendly.event_scheduled') {
+        // Booking confirmed — fire conversion immediately
+        track('conversion', { source: 'calendly_iframe', widget: 'calendly' });
+        send(queue.splice(0));
+      } else if (
+        calendlyEvent === 'calendly.event_type_viewed'
+        || calendlyEvent === 'calendly.date_and_time_selected'
+        || calendlyEvent === 'calendly.profile_page_viewed'
+      ) {
+        // Engagement signal — opened the widget or progressed inside it
+        track('widget_engaged', { widget: 'calendly', stage: calendlyEvent.replace('calendly.', '') });
+      }
+      return;
+    }
+
+    // ── HubSpot ─────────────────────────────────────────────────────────────
+    // HubSpot fires: { type: 'hsFormCallback', eventName: 'onFormSubmitted', id: 'form-id' }
+    if (data.type === 'hsFormCallback' && typeof data.eventName === 'string') {
+      if (data.eventName === 'onFormSubmitted' || data.eventName === 'onFormSubmit') {
+        track('conversion', { source: 'hubspot_iframe', widget: 'hubspot', formId: data.id || null });
+        send(queue.splice(0));
+      } else if (data.eventName === 'onFormReady' || data.eventName === 'onBeforeFormSubmit') {
+        track('widget_engaged', { widget: 'hubspot', stage: data.eventName, formId: data.id || null });
+      }
+    }
+  }, false);
+
+  // -------------------------------------------------------------------------
   // Conversion tracking — call window.wg('conversion') from your thank-you page
   // or pass the conversion URL in the snippet config
   // -------------------------------------------------------------------------

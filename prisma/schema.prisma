@@ -688,6 +688,7 @@ enum EventType {
   TAB_FOCUS           // User returned to tab
   COPY_TEXT            // User copied text from the page (high research intent)
   FILE_DOWNLOAD       // Click on a downloadable file link (.pdf, .doc, etc.)
+  WIDGET_ENGAGED      // Cross-origin iframe widget broadcast a non-conversion event (e.g. Calendly date selected, HubSpot form ready)
   CUSTOM
 }
 

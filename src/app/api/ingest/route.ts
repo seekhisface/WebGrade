@@ -480,6 +480,7 @@ function mapEventType(type: string): import('@prisma/client').EventType {
     'tab_focus': 'TAB_FOCUS',
     'copy_text': 'COPY_TEXT',
     'file_download': 'FILE_DOWNLOAD',
+    'widget_engaged': 'WIDGET_ENGAGED',
   };
   return map[type] ?? 'CUSTOM';
 }

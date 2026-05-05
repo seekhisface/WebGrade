@@ -1,5 +1,6 @@
 import { requireSession, getUserSites } from '@/lib/auth/session';
 import { AppNav } from '@/components/nav/AppNav';
+import HealthBanner from '@/components/dashboard/HealthBanner';
 
 export default async function DashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default async function DashboardLayout({
         }}
       />
       <AppNav />
+      <HealthBanner />
       {children}
     </div>
   );

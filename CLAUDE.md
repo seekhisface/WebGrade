@@ -1,5 +1,37 @@
 # CLAUDE.md — WebGrade
 
+## Workflow Rules
+
+### Prisma schema changes — migrate-files workflow (live as of May 2026)
+
+**Every schema change MUST produce a committed migration file.** Vercel's build step runs `prisma migrate deploy` automatically (see `package.json` "build" script), which applies any pending migrations to the production DB before the app starts. This is the safety net that prevents the silent "no visits for N days" outage we hit when schema drift wasn't being applied to prod.
+
+The local workflow:
+
+```bash
+# After editing schema.prisma:
+npx prisma migrate dev --name <descriptive-name>
+```
+
+Requires a shadow database. Two options:
+- **(a)** Set `SHADOW_DATABASE_URL` env var to a separate Postgres (free Supabase project, Neon, Railway, etc.)
+- **(b)** If `migrate dev` fails because of pooler / shadow-DB issues, fall back to manually generating SQL:
+  ```bash
+  npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script > /tmp/diff.sql
+  mkdir -p prisma/migrations/<timestamp>_<name>
+  cp /tmp/diff.sql prisma/migrations/<timestamp>_<name>/migration.sql
+  npx prisma migrate resolve --applied <timestamp>_<name>  # marks applied on local DB
+  ```
+  Commit both the migration file AND the schema change. Vercel will run `migrate deploy` on the next push to apply it to prod.
+
+**Do NOT use `prisma db push` for schema changes anymore.** It bypasses migration files and creates the silent-drift problem we just fixed.
+
+### Health monitoring
+
+- `/api/healthz` returns 503 if any of the ingest-critical tables fail a column probe
+- The dashboard layout renders a `HealthBanner` that polls every 60s and shows a red banner if anything is broken — visible across every authenticated page
+- This is the second safety net: if a deploy DOES somehow ship without migrations, this surfaces within a minute
+
 ## Quick Reference
 
 ```bash
