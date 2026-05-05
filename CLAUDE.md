@@ -2,35 +2,50 @@
 
 ## Workflow Rules
 
-### Prisma schema changes — migrate-files workflow (live as of May 2026)
+### Prisma schema changes — manual-apply workflow (live as of May 2026)
 
-**Every schema change MUST produce a committed migration file.** Vercel's build step runs `prisma migrate deploy` automatically (see `package.json` "build" script), which applies any pending migrations to the production DB before the app starts. This is the safety net that prevents the silent "no visits for N days" outage we hit when schema drift wasn't being applied to prod.
+**Every schema change MUST produce a committed migration file**, AND must be applied to prod manually before merging. The Vercel build does NOT run migrations — `prisma migrate deploy` cannot acquire its advisory lock through the Supabase pooler this project uses, so the build script is just `prisma generate && next build`. The HealthBanner is the runtime safety net that surfaces drift within 60s if anyone forgets to apply.
 
-The local workflow:
+The workflow for any schema change:
 
-```bash
-# After editing schema.prisma:
-npx prisma migrate dev --name <descriptive-name>
-```
+1. **Edit** `prisma/schema.prisma`.
 
-Requires a shadow database. Two options:
-- **(a)** Set `SHADOW_DATABASE_URL` env var to a separate Postgres (free Supabase project, Neon, Railway, etc.)
-- **(b)** If `migrate dev` fails because of pooler / shadow-DB issues, fall back to manually generating SQL:
-  ```bash
-  npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script > /tmp/diff.sql
-  mkdir -p prisma/migrations/<timestamp>_<name>
-  cp /tmp/diff.sql prisma/migrations/<timestamp>_<name>/migration.sql
-  npx prisma migrate resolve --applied <timestamp>_<name>  # marks applied on local DB
-  ```
-  Commit both the migration file AND the schema change. Vercel will run `migrate deploy` on the next push to apply it to prod.
+2. **Generate the migration SQL.** `prisma migrate dev` requires a shadow DB and usually hits P1002 against the Supabase pooler, so use the diff form:
+   ```bash
+   npx prisma migrate diff \
+     --from-migrations prisma/migrations \
+     --to-schema-datamodel prisma/schema.prisma \
+     --script > /tmp/diff.sql
+   mkdir -p "prisma/migrations/$(date +%Y%m%d%H%M%S)_<descriptive_name>"
+   mv /tmp/diff.sql "prisma/migrations/$(date +%Y%m%d%H%M%S)_<descriptive_name>/migration.sql"
+   ```
 
-**Do NOT use `prisma db push` for schema changes anymore.** It bypasses migration files and creates the silent-drift problem we just fixed.
+3. **Apply the SQL to prod manually.** This bypasses the advisory-lock issue:
+   ```bash
+   npx prisma db execute --file prisma/migrations/<dir>/migration.sql --schema prisma/schema.prisma
+   ```
+
+4. **Mark the migration as applied** in the `_prisma_migrations` table (so future diffs don't re-include it):
+   ```bash
+   npx tsx scripts/mark-migration-applied.ts <migration_directory_name>
+   ```
+
+5. **Regenerate the Prisma client** locally:
+   ```bash
+   npx prisma generate
+   ```
+
+6. **Commit** the schema change AND the migration directory together. Push.
+
+**Do NOT use `prisma db push` for schema changes.** It bypasses migration files and creates the silent-drift problem (the original "no visits for 3 days" outage).
+
+**Do NOT add `prisma migrate deploy` back into the build script.** It will P1002 on Vercel just like it does locally — this Supabase pooler does not support Prisma's advisory-lock acquisition. The committed migration files are still the source of truth; they are just applied manually rather than at build time.
 
 ### Health monitoring
 
 - `/api/healthz` returns 503 if any of the ingest-critical tables fail a column probe
 - The dashboard layout renders a `HealthBanner` that polls every 60s and shows a red banner if anything is broken — visible across every authenticated page
-- This is the second safety net: if a deploy DOES somehow ship without migrations, this surfaces within a minute
+- This is the runtime safety net: if a schema change ships without the corresponding `db execute`, this surfaces within a minute and tells you which column probe failed
 
 ## Quick Reference
 
@@ -40,8 +55,8 @@ npm run build        # Production build
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
 npm run db:generate  # prisma generate (after schema changes)
-npm run db:push      # prisma db push (sync schema to DB)
-npm run db:migrate   # prisma migrate dev (production migrations)
+npm run db:push      # prisma db push — DEPRECATED, do not use (causes silent drift)
+npm run db:migrate   # prisma migrate dev — usually fails on this pooler; see manual workflow above
 npm run db:studio    # prisma studio (DB browser)
 ```
 
