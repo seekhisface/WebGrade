@@ -368,37 +368,88 @@ export async function GET(req: NextRequest) {
     // Sheet 3: Events (one row per event with session context)
     // -----------------------------------------------------------------------
 
-    // Slim — only fields needed for forensic flow analysis. Use Session ID as
-    // the join key back to the Sessions tab via VLOOKUP for everything else.
+    // Self-contained — every event row carries its parent session's context
+    // (device, traffic source, intent, conversion flag, etc.) so the sheet can
+    // be filtered/pivoted without VLOOKUPing back to the Sessions tab. Date/
+    // time are split into separate columns so they sort & pivot cleanly, same
+    // pattern as the Sessions tab.
     const eventsSheet = wb.addWorksheet('Events');
     eventsSheet.columns = [
+      // --- Session identity & timing ---
       { header: 'Session ID', key: 'sessionId', width: 18 },
-      { header: 'Session Start', key: 'sessionStart', width: 22 },
+      { header: 'Session Start Date', key: 'sessionStartDate', width: 14 },
+      { header: 'Session Start Time', key: 'sessionStartTime', width: 12 },
+      // --- Event identity & timing ---
+      { header: 'Event Date', key: 'eventDate', width: 12 },
+      { header: 'Event Time', key: 'eventTime', width: 11 },
       { header: 'Step', key: 'step', width: 7 },
       { header: 'Time in Session', key: 'timeInSession', width: 14 },
       { header: 'Event Type', key: 'eventType', width: 16 },
+      // --- What was seen / interacted with ---
       { header: 'Page', key: 'page', width: 36 },
       { header: 'Page (last seg)', key: 'pageLastSeg', width: 18 },
       { header: 'Scroll Depth %', key: 'scrollDepthPct', width: 13 },
       { header: 'Element Tag', key: 'elementTag', width: 11 },
+      { header: 'Element Class', key: 'elementClass', width: 22 },
       { header: 'Element Text', key: 'elementText', width: 28 },
       { header: 'Is CTA Click', key: 'isCtaClick', width: 12 },
-      { header: 'Hesitation (ms)', key: 'hesitationMs', width: 13 },
+      { header: 'Hesitation (ms)', key: 'hesitationMs', width: 14 },
       { header: 'Rage Clicks', key: 'rageClickCount', width: 11 },
       { header: 'Time on Page', key: 'timeOnPage', width: 12 },
       { header: 'Metadata', key: 'metadata', width: 36 },
+      // --- Session context (denormalized for filtering without VLOOKUP) ---
+      { header: 'Country', key: 'country', width: 10 },
+      { header: 'Region', key: 'region', width: 12 },
+      { header: 'Device', key: 'device', width: 10 },
+      { header: 'Browser', key: 'browser', width: 12 },
+      { header: 'OS', key: 'os', width: 12 },
+      { header: 'Traffic Source', key: 'trafficSource', width: 14 },
+      { header: 'UTM Source', key: 'utmSource', width: 14 },
+      { header: 'UTM Medium', key: 'utmMedium', width: 12 },
+      { header: 'UTM Campaign', key: 'utmCampaign', width: 22 },
+      { header: 'Click ID Type', key: 'clickIdType', width: 12 },
+      { header: 'Resolved Campaign', key: 'resolvedCampaignName', width: 22 },
+      { header: 'Intent Score', key: 'intentScore', width: 12 },
+      { header: 'Intent Class', key: 'intentClass', width: 12 },
+      { header: 'Converted (Session)', key: 'converted', width: 18 },
+      { header: 'Bounce (Session)', key: 'isBounce', width: 16 },
+      { header: 'Bot Filtered', key: 'isBotFiltered', width: 12 },
     ];
     eventsSheet.getRow(1).eachCell(c => Object.assign(c, headerStyle));
     eventsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     for (const s of sessions) {
       const sessionId = truncateSessionId(s.sessionId);
-      const sessionStart = s.startedAt.toISOString();
+      const sessionStartDate = dateOnly(s.startedAt);
+      const sessionStartTime = timeOnly(s.startedAt);
+
+      // Session-context fields shared by every event row in this session.
+      const sessionCtx = {
+        country: s.country ?? '',
+        region: s.region ?? '',
+        device: s.deviceType ?? '',
+        browser: s.browser ?? '',
+        os: s.os ?? '',
+        trafficSource: s.trafficSource ?? '',
+        utmSource: s.utmSource ?? '',
+        utmMedium: s.utmMedium ?? '',
+        utmCampaign: s.utmCampaign ?? '',
+        clickIdType: s.clickIdType ?? '',
+        resolvedCampaignName: s.resolvedCampaignName ?? '',
+        intentScore: s.intentScore ?? '',
+        intentClass: s.intentClass ?? '',
+        converted: s.conversionGoalHit ? 'Yes' : 'No',
+        isBounce: s.isBounce ? 'Yes' : 'No',
+        isBotFiltered: s.isBotFiltered ? 'Yes' : 'No',
+      };
 
       if (s.events.length === 0) {
         eventsSheet.addRow({
           sessionId,
-          sessionStart,
+          sessionStartDate,
+          sessionStartTime,
+          eventDate: '',
+          eventTime: '',
           step: 1,
           timeInSession: '0s',
           eventType: '(no events)',
@@ -406,12 +457,14 @@ export async function GET(req: NextRequest) {
           pageLastSeg: '',
           scrollDepthPct: '',
           elementTag: '',
+          elementClass: '',
           elementText: '',
           isCtaClick: '',
           hesitationMs: '',
           rageClickCount: '',
           timeOnPage: '',
           metadata: '',
+          ...sessionCtx,
         });
         continue;
       }
@@ -430,7 +483,10 @@ export async function GET(req: NextRequest) {
 
         eventsSheet.addRow({
           sessionId,
-          sessionStart,
+          sessionStartDate,
+          sessionStartTime,
+          eventDate: dateOnly(evTs),
+          eventTime: timeOnly(evTs),
           step: i + 1,
           timeInSession: fmtRelative(evTs, s.startedAt),
           eventType: ev.eventType,
@@ -439,12 +495,14 @@ export async function GET(req: NextRequest) {
           pageLastSeg: lastSegment(toPathOnly(ev.pageUrl)),
           scrollDepthPct: ev.scrollDepthPct ?? '',
           elementTag: ev.elementTag ?? '',
+          elementClass: ev.elementClass ?? '',
           elementText: ev.elementText ?? '',
           isCtaClick: ev.isCtaClick ? 'Yes' : '',
           hesitationMs: ev.hesitationMs ?? '',
           rageClickCount: ev.rageClickCount ?? '',
           timeOnPage: ev.timeOnPageMs ? fmtDuration(Math.round(ev.timeOnPageMs / 1000)) : '',
           metadata: meta,
+          ...sessionCtx,
         });
       }
     }
