@@ -31,6 +31,7 @@ interface Site {
 // ---------------------------------------------------------------------------
 
 function getActivePageFromPath(pathname: string) {
+  if (pathname.includes('/overview')) return 'overview';
   if (pathname.includes('/setup')) return 'setup';
   if (pathname.includes('/webopp')) return 'webopp';
   if (pathname.includes('/report')) return 'report';
@@ -134,6 +135,10 @@ export function AppNav() {
 
   const navTabs = [
     { id: 'setup',     label: 'Setup',        href: `/dashboard/${currentSiteId}/setup`,            show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
+    // New simplified front door — sits ahead of the existing Dashboard tab
+    // during preview. The old Dashboard / detail tabs stay visible so nothing
+    // breaks; they'll be consolidated in a follow-up nav restructure.
+    { id: 'overview',  label: 'Overview',     href: `/dashboard/${currentSiteId}/overview`,        show: !!currentSiteId, badge: 'NEW' as string | undefined },
     { id: 'dashboard', label: 'Dashboard',    href: `/dashboard/${currentSiteId}`,                show: !!currentSiteId },
     { id: 'report',    label: 'Reports',      href: `/dashboard/${currentSiteId}/report`,         show: !!currentSiteId },
     { id: 'webopp',    label: 'WebOpp™',      href: `/dashboard/${currentSiteId}/webopp`,         show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
