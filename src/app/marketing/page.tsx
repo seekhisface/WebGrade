@@ -7,7 +7,17 @@ import Image from 'next/image';
 import Cal, { getCalApi } from '@calcom/embed-react';
 import SampleReportModal from '@/components/marketing/SampleReportModal';
 
-// -- Hero Slides ----------------------------------------------------------
+// -- Hero promise (single funnel-led hook) -------------------------------
+// One hook, one demo, one CTA. The previous 5-slide rotation buried the
+// "what is this thing" question; we now lead with the same three-step
+// funnel question the customer's dashboard answers.
+const HERO_PROMISE = {
+  tag: 'WebGrade Intelligence Platform',
+  headline: <>How many visitors came, how many<br /><span className="text-[#4a9ebe]">reached your goal</span>, how many converted?</>,
+  subhead: 'WebGrade answers that one question in one glance — plus the single biggest fix to move it. Forensic 45-day audit, then continuous monthly intelligence, all in one place.',
+};
+// Kept for backwards compat with any code that still references the old
+// constant. Will be removed once nothing imports it.
 const HERO_SLIDES = [
   {
     tag: 'WebAudit™',
@@ -294,109 +304,80 @@ function DemoButton({
 }
 
 // -- Hero Slider ----------------------------------------------------------
-function HeroSlider({
-  currentSlide,
-  onSlideChange,
-  onPause,
-  onResume,
+// HeroFunnel — single static hero leading with the same three-step funnel
+// question the dashboard answers. No rotation, no five-slide carousel.
+function HeroFunnel({
   openModal,
   onOpenDeliverables,
 }: {
-  currentSlide: number;
-  onSlideChange: (i: number) => void;
-  onPause: () => void;
-  onResume: () => void;
   openModal: () => void;
   onOpenDeliverables: () => void;
 }) {
   return (
-    <section
-      className="max-w-5xl mx-auto px-4 pb-16 text-center"
-      onMouseEnter={onPause}
-      onMouseLeave={onResume}
-    >
-      {/* SLIDE AREA: fixed height, content aligned to bottom so it grows up into padding */}
-      <div className="relative h-[400px] flex flex-col justify-end">
-        {HERO_SLIDES.map((slide, i) => (
-          <div
-            key={i}
-            className={`absolute bottom-0 left-0 right-0 transition-opacity duration-700 ease-in-out flex flex-col items-center ${
-              i === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-            }`}
-          >
-            <div className="inline-flex items-center gap-2 bg-[#0c4a6e]/10 border border-[#bae6fd] rounded-full px-4 py-1.5 mb-6">
-              <span className="w-1.5 h-1.5 bg-[#0d9488] rounded-full animate-pulse" />
-              <span className="text-xs font-semibold text-[#0c4a6e] uppercase tracking-wider">{slide.tag}</span>
-            </div>
-
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-[#0c4a6e] leading-tight mb-6 tracking-tight">
-              {slide.headline}
-            </h1>
-
-            <p className="text-lg md:text-xl text-[#334155] max-w-2xl mx-auto leading-relaxed">
-              {slide.subhead}
-            </p>
-          </div>
-        ))}
+    <section className="max-w-5xl mx-auto px-4 pb-16 text-center">
+      <div className="inline-flex items-center gap-2 bg-[#0c4a6e]/10 border border-[#bae6fd] rounded-full px-4 py-1.5 mb-6 mt-4">
+        <span className="w-1.5 h-1.5 bg-[#0d9488] rounded-full animate-pulse" />
+        <span className="text-xs font-semibold text-[#0c4a6e] uppercase tracking-wider">{HERO_PROMISE.tag}</span>
       </div>
 
-      {/* STATIC: CTAs, pills, dots — these never move */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
+      <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-[#0c4a6e] leading-tight mb-6 tracking-tight">
+        {HERO_PROMISE.headline}
+      </h1>
+
+      <p className="text-lg md:text-xl text-[#334155] max-w-2xl mx-auto leading-relaxed mb-10">
+        {HERO_PROMISE.subhead}
+      </p>
+
+      {/* Live funnel mockup — same shape the customer sees in their dashboard */}
+      <div className="max-w-3xl mx-auto bg-white border border-[#bae6fd] rounded-3xl shadow-lg p-6 md:p-8 mb-10 text-left">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider">Sample dashboard · NovaPulse HR</p>
+          <span className="text-[10px] text-[#64748b] bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">Last 30 days</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+          <FunnelMock label="Visitors"   value="5,432" delta="▲ +12%"  good />
+          <FunnelMock label="Demo page"  value="387"   delta="▼ -3 pts" good={false} sub="7.1% reach" />
+          <FunnelMock label="Converted"  value="61"    delta="▲ +4"    good          sub="15.8% convert" />
+        </div>
+
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-1">🔥 The #1 fix right now</p>
+          <p className="text-sm text-[#082f49] leading-relaxed">
+            <span className="font-semibold">72% of visitors who reach the demo page leave without clicking the CTA.</span>{' '}
+            CTA text tested 41% lower than industry benchmark.
+          </p>
+          <p className="text-xs text-amber-900 mt-1.5"><span className="font-semibold">Estimated impact:</span> +$3,200/mo if fixed</p>
+        </div>
+      </div>
+
+      {/* CTAs — one primary, one secondary */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
         <DemoButton size="lg" onClick={openModal} />
         <button
           onClick={onOpenDeliverables}
-          className="inline-flex items-center gap-2 text-[#0c4a6e] font-bold text-sm hover:text-[#0891b2] transition-colors bg-[#e0f2fe] hover:bg-[#bae6fd] px-5 py-2.5 rounded-xl border border-[#bae6fd] shadow-sm animate-subtle-pulse"
+          className="inline-flex items-center gap-2 text-[#0c4a6e] font-bold text-sm hover:text-[#0891b2] transition-colors bg-[#e0f2fe] hover:bg-[#bae6fd] px-5 py-2.5 rounded-xl border border-[#bae6fd] shadow-sm"
         >
           <svg className="w-4 h-4 text-[#0891b2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
           Everything WebGrade tracks for you
         </button>
-        <style>{`
-          @keyframes subtle-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.3); } 50% { box-shadow: 0 0 0 8px rgba(8, 145, 178, 0); } }
-          .animate-subtle-pulse { animation: subtle-pulse 2.5s ease-in-out infinite; }
-        `}</style>
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-3 mt-8">
-        {HERO_SLIDES.slice(0, 4).map((slide, i) => (
-          <button
-            key={slide.tag}
-            onClick={() => onSlideChange(i)}
-            className={`px-4 py-1.5 border rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer ${
-              i === currentSlide
-                ? 'bg-[#0c4a6e] text-white border-[#0c4a6e]'
-                : 'bg-white text-[#0c4a6e] border-[#bae6fd] hover:bg-[#f0f9ff]'
-            }`}
-          >
-            {slide.tag}
-          </button>
-        ))}
-        <button
-          onClick={() => onSlideChange(4)}
-          className={`px-4 py-1.5 border rounded-full text-xs font-bold shadow-sm transition-all cursor-pointer ${
-            currentSlide === 4
-              ? 'bg-[#0d9488] text-white border-[#0d9488]'
-              : 'bg-[#f0fdf4] text-[#0d9488] border-[#0d9488] hover:bg-[#0d9488] hover:text-white'
-          }`}
-        >
-          {HERO_SLIDES[4].tag}
-        </button>
-      </div>
-
-      <div className="flex justify-center gap-2 mt-5">
-        {HERO_SLIDES.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => onSlideChange(i)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              i === currentSlide ? 'bg-[#0c4a6e] w-6' : 'bg-[#bae6fd] hover:bg-[#7dd3fc]'
-            }`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
       </div>
     </section>
+  );
+}
+
+function FunnelMock({ label, value, delta, good, sub }: {
+  label: string; value: string; delta: string; good: boolean; sub?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</p>
+      <p className="text-2xl md:text-3xl font-black text-[#082f49] tabular-nums">{value}</p>
+      {sub && <p className="text-[11px] text-slate-500 mt-1">{sub}</p>}
+      <p className={`text-xs font-semibold mt-2 ${good ? 'text-emerald-600' : 'text-red-600'}`}>{delta}</p>
+    </div>
   );
 }
 
@@ -497,17 +478,7 @@ export default function MarketingPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDeliverables, setShowDeliverables] = useState(false);
   const [sampleReport, setSampleReport] = useState<'webaudit' | 'webwatch' | 'webopp' | null>(null);
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [sliderPaused, setSliderPaused] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
-
-  // Auto-advance slider — always runs, 3 seconds per slide
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % HERO_SLIDES.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const el = statsRef.current;
@@ -567,12 +538,8 @@ export default function MarketingPage() {
         </div>
       </nav>
 
-      {/* HERO SLIDER */}
-      <HeroSlider
-        currentSlide={currentSlide}
-        onSlideChange={setCurrentSlide}
-        onPause={() => setSliderPaused(true)}
-        onResume={() => setSliderPaused(false)}
+      {/* HERO — single funnel-led promise */}
+      <HeroFunnel
         openModal={openModal}
         onOpenDeliverables={() => setShowDeliverables(true)}
       />
@@ -623,15 +590,20 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      {/* PRODUCTS */}
+      {/* PRODUCTS — single bundle framing; modules below */}
       <section id="products" className="py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider mb-3">Three Products. One Platform.</p>
-            <h2 className="text-4xl font-black text-[#0c4a6e] mb-4">Intelligence at every stage</h2>
-            <p className="text-lg text-[#334155] max-w-xl mx-auto">Start with a one-time audit. Scale to continuous intelligence. Add market analysis when you&apos;re ready to grow.</p>
+          <div className="text-center mb-12">
+            <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider mb-3">One Platform. Three Modules.</p>
+            <h2 className="text-4xl font-black text-[#0c4a6e] mb-4">Everything in WebGrade</h2>
+            <p className="text-lg text-[#334155] max-w-2xl mx-auto">
+              Start with a 45-day forensic audit, graduate to always-on monthly intelligence, and add competitive market analysis when you&apos;re ready to grow. All three modules feed the same funnel-led dashboard.
+            </p>
           </div>
 
+          {/* Three lean module summaries — kept as drill-in detail, not the
+              headline taxonomy. The pricing card below is the actual buy
+              path; this section is "what's inside the bundle." */}
           <div className="space-y-8">
             {PRODUCTS.map((p) => (
               <div key={p.id} className="bg-white rounded-3xl border border-[#bae6fd] overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -719,30 +691,83 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      {/* PRICING */}
+      {/* PRICING — single bundle, optional add-on */}
       <section id="pricing" className="py-20">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider mb-3">Simple Pricing</p>
-            <h2 className="text-4xl font-black text-[#0c4a6e] mb-4">Start with your audit. Stay for the intelligence.</h2>
-            <p className="text-lg text-[#334155] max-w-xl mx-auto">Every customer starts with a 60-day WebAudit. After that, WebWatch keeps your site improving month over month.</p>
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <p className="text-xs font-bold text-[#0891b2] uppercase tracking-wider mb-3">Simple, bundled pricing</p>
+            <h2 className="text-4xl font-black text-[#0c4a6e] mb-4">Get WebGrade</h2>
+            <p className="text-lg text-[#334155] max-w-xl mx-auto">
+              Forensic audit + always-on intelligence in a single bundle. Add the market intelligence module whenever you&apos;re ready to look outside your own site.
+            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-[#0c4a6e] rounded-3xl p-7 flex flex-col relative overflow-hidden">
-              <div className="absolute top-4 right-4 bg-[#0891b2] text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Start Here</div>
+            {/* MAIN BUNDLE — spans 2 cols on md+ so it dominates visually */}
+            <div className="md:col-span-2 bg-[#0c4a6e] rounded-3xl p-8 flex flex-col relative overflow-hidden">
+              <div className="absolute top-4 right-4 bg-[#0d9488] text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Recommended</div>
               <div className="mb-6">
-                <span className="text-[10px] font-black text-sky-300 uppercase tracking-wider">First 60 Days</span>
-                <h3 className="text-xl font-black text-white mt-1 mb-1">WebAudit™</h3>
-                <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-4xl font-black text-white">$1,000</span>
-                  <span className="text-sm text-sky-300">for 60 days</span>
+                <span className="text-[10px] font-black text-sky-300 uppercase tracking-wider">The bundle</span>
+                <h3 className="text-2xl font-black text-white mt-1 mb-1">Get WebGrade</h3>
+                <div className="flex items-baseline gap-2 mt-3">
+                  <span className="text-5xl font-black text-white">$299</span>
+                  <span className="text-sm text-sky-300">/month after the audit</span>
                 </div>
-                <p className="text-xs text-sky-300 mt-2">Your deep-dive onboarding into WebGrade. Full forensic audit of behavioral data, ad spend, and conversion funnels.</p>
+                <p className="text-xs text-sky-300 mt-2">
+                  Starts with a one-time <span className="font-bold text-white">$1,000</span> 45-day forensic audit. Then WebWatch keeps the dashboard live with new findings every month.
+                </p>
               </div>
-              <ul className="space-y-2.5 mb-8 flex-1">
-                {['Full 60-day behavioral audit', 'AI-generated executive summary', 'Drop-off analysis by page', 'Revenue at risk identified', 'Ad spend efficiency review', 'Converts to WebWatch automatically'].map(f => (
+              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-8 flex-1">
+                {[
+                  '45-day behavioral audit',
+                  'AI-generated executive summary',
+                  'Drop-off analysis by page',
+                  'Revenue at risk identified',
+                  'Monthly WebWatch reports',
+                  'New issue auto-detection',
+                  'Slack + email alerts',
+                  'Cancel anytime',
+                ].map(f => (
                   <li key={f} className="flex items-center gap-2 text-sm text-sky-100">
+                    <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={openModal}
+                  className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-sky-50 text-[#0c4a6e] font-bold py-3 px-6 rounded-xl transition-colors text-sm"
+                >
+                  Get WebGrade →
+                </button>
+                <DemoButton size="md" className="flex-1 justify-center" onClick={openModal} />
+              </div>
+            </div>
+
+            {/* WebOpp add-on */}
+            <div className="bg-white rounded-3xl border border-[#bae6fd] p-7 flex flex-col">
+              <div className="mb-6">
+                <span className="text-[10px] font-black text-[#7c3aed] uppercase tracking-wider">Optional module</span>
+                <h3 className="text-xl font-black text-[#1e293b] mt-1 mb-1">+ Market Intelligence</h3>
+                <div className="flex items-baseline gap-1 mt-3">
+                  <span className="text-3xl font-black text-[#0c4a6e]">+$199</span>
+                  <span className="text-xs text-[#64748b]">/month</span>
+                </div>
+                <p className="text-xs text-[#64748b] mt-2">
+                  Add WebOpp™ to see competitor keyword gaps, uncontested demand, and channel ROI alongside your own funnel.
+                </p>
+              </div>
+              <ul className="space-y-2.5 mb-6 flex-1">
+                {[
+                  'Full keyword market map',
+                  'Competitor gap analysis',
+                  'Uncontested demand',
+                  'Channel ROI by source',
+                ].map(f => (
+                  <li key={f} className="flex items-center gap-2 text-sm text-[#334155]">
                     <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
@@ -752,62 +777,16 @@ export default function MarketingPage() {
               </ul>
               <button
                 onClick={openModal}
-                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-sky-50 text-[#0c4a6e] font-bold py-3 px-6 rounded-xl transition-colors text-sm"
+                className="w-full flex items-center justify-center gap-2 bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-bold py-2.5 px-5 rounded-xl transition-colors text-sm"
               >
-                Get started →
+                Add to bundle →
               </button>
-            </div>
-
-            <div className="bg-white rounded-3xl border border-[#bae6fd] p-7 flex flex-col">
-              <div className="mb-6">
-                <span className="text-[10px] font-black text-[#0891b2] tracking-wider">After WebAudit</span>
-                <h3 className="text-xl font-black text-[#1e293b] mt-1 mb-1">WebWatch™</h3>
-                <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-4xl font-black text-[#0c4a6e]">$299</span>
-                  <span className="text-sm text-[#64748b]">/month</span>
-                </div>
-                <p className="text-xs text-[#64748b] mt-2">Continuous monthly monitoring. Track improvements, catch regressions, get new AI recommendations every cycle.</p>
-              </div>
-              <ul className="space-y-2.5 mb-8 flex-1">
-                {['Monthly fresh analysis', 'Trend vs. prior month', 'Auto-alert on regressions', 'New issue detection', 'Slack + email delivery', 'Cancel anytime'].map(f => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-[#334155]">
-                    <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <DemoButton size="md" className="w-full justify-center" onClick={openModal} />
-            </div>
-
-            <div className="bg-white rounded-3xl border border-[#bae6fd] p-7 flex flex-col">
-              <div className="mb-6">
-                <span className="text-[10px] font-black text-[#7c3aed] uppercase tracking-wider">Add-On</span>
-                <h3 className="text-xl font-black text-[#1e293b] mt-1 mb-1">WebOpp™</h3>
-                <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-4xl font-black text-[#0c4a6e]">$199</span>
-                  <span className="text-sm text-[#64748b]">/month</span>
-                </div>
-                <p className="text-xs text-[#64748b] mt-2">Add to WebWatch for an outside-in view. Competitor intelligence, keyword gaps, and market opportunities.</p>
-              </div>
-              <ul className="space-y-2.5 mb-8 flex-1">
-                {['Full keyword market map', 'Competitor gap analysis', 'Uncontested demand', 'Channel ROI by source', 'Content gap identification', 'Cancel anytime'].map(f => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-[#334155]">
-                    <svg className="w-4 h-4 text-[#0d9488] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <DemoButton size="md" className="w-full justify-center" onClick={openModal} />
             </div>
           </div>
 
           <div className="mt-6 p-5 bg-[#f0fdf4] border border-[#bbf7d0] rounded-2xl text-center">
             <p className="text-sm text-[#166534]">
-              <strong>Annual commitment:</strong> Sign up for WebWatch™ + WebOpp™ for 12 months and pay just <strong>$398/mo</strong> — save over $1,200/year.{' '}
+              <strong>Annual commitment:</strong> Take the full bundle (WebGrade + Market Intelligence) for 12 months and pay just <strong>$398/mo</strong> — save over $1,200/year.{' '}
               <button onClick={openModal} className="underline hover:no-underline text-[#166534]">Get started →</button>
             </p>
           </div>
