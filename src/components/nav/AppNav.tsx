@@ -32,6 +32,8 @@ interface Site {
 
 function getActivePageFromPath(pathname: string) {
   if (pathname.includes('/overview')) return 'overview';
+  if (pathname.includes('/detail')) return 'detail';
+  if (pathname.includes('/alerts')) return 'alerts';
   if (pathname.includes('/setup')) return 'setup';
   if (pathname.includes('/webopp')) return 'webopp';
   if (pathname.includes('/report')) return 'report';
@@ -41,8 +43,7 @@ function getActivePageFromPath(pathname: string) {
   if (pathname.includes('/admin/stale-utms')) return 'stale-utms';
   if (pathname.includes('/admin')) return 'admin';
   if (pathname.includes('/settings')) return 'settings';
-  if (pathname.includes('/alerts')) return 'settings';
-  return 'dashboard';
+  return 'behavioral';
 }
 
 // ---------------------------------------------------------------------------
@@ -86,8 +87,10 @@ export function AppNav() {
 
   const [siteSwitcherOpen, setSiteSwitcherOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const siteSwitcherRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const currentSite = sites.find(s => s.id === currentSiteId) ?? sites[0];
 
@@ -124,6 +127,9 @@ export function AppNav() {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -133,21 +139,27 @@ export function AppNav() {
   // The API routes enforce OWNER/ADMIN access server-side.
   const isAuthenticated = !!session?.user?.email;
 
+  // Primary nav — 3 customer-facing tabs (plus Setup when the snippet
+  // isn't installed yet). Everything else moves into the "More" dropdown.
   const navTabs = [
-    { id: 'setup',     label: 'Setup',        href: `/dashboard/${currentSiteId}/setup`,            show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
-    // New simplified front door — sits ahead of the existing Dashboard tab
-    // during preview. The old Dashboard / detail tabs stay visible so nothing
-    // breaks; they'll be consolidated in a follow-up nav restructure.
-    { id: 'overview',  label: 'Overview',     href: `/dashboard/${currentSiteId}/overview`,        show: !!currentSiteId, badge: 'NEW' as string | undefined },
-    { id: 'dashboard', label: 'Dashboard',    href: `/dashboard/${currentSiteId}`,                show: !!currentSiteId },
-    { id: 'report',    label: 'Reports',      href: `/dashboard/${currentSiteId}/report`,         show: !!currentSiteId },
-    { id: 'webopp',    label: 'WebOpp™',      href: `/dashboard/${currentSiteId}/webopp`,         show: !!currentSiteId, badge: (currentSite?.hasWebOpp ? undefined : 'CTA') as string | undefined },
-    { id: 'snippet',   label: 'Installation', href: `/dashboard/${currentSiteId}/snippet`,        show: !!currentSiteId },
-    { id: 'winback',   label: 'Win-Back',     href: `/dashboard/${currentSiteId}/winback`,        show: !!currentSiteId && isAuthenticated },
-    { id: 'admin',      label: 'Sessions',    href: `/dashboard/${currentSiteId}/admin/sessions`,    show: !!currentSiteId && isAuthenticated },
-    { id: 'sitemap',    label: 'Site Map',    href: `/dashboard/${currentSiteId}/sitemap`,           show: !!currentSiteId && isAuthenticated },
-    { id: 'stale-utms', label: 'Stale Tags',  href: `/dashboard/${currentSiteId}/admin/stale-utms`,  show: !!currentSiteId && isAuthenticated },
-    { id: 'settings',   label: 'Settings',    href: `/dashboard/${currentSiteId}/settings`,          show: !!currentSiteId && isAuthenticated },
+    { id: 'setup',     label: 'Setup',        href: `/dashboard/${currentSiteId}/setup`,           show: !!currentSiteId && needsSetup, badge: '!' as string | undefined },
+    { id: 'overview',  label: 'Overview',     href: `/dashboard/${currentSiteId}/overview`,        show: !!currentSiteId },
+    { id: 'detail',    label: 'Detail',       href: `/dashboard/${currentSiteId}/detail`,          show: !!currentSiteId },
+    { id: 'alerts',    label: 'Alerts',       href: `/dashboard/${currentSiteId}/alerts`,          show: !!currentSiteId },
+  ].filter(tab => tab.show);
+
+  // Secondary nav — power-user / drill-in pages reachable from the "More"
+  // dropdown. Kept available for anyone who needs the deeper views without
+  // cluttering the top bar.
+  const moreTabs = [
+    { id: 'report',     label: 'Reports',      href: `/dashboard/${currentSiteId}/report`,           show: !!currentSiteId },
+    { id: 'webopp',     label: 'WebOpp™',      href: `/dashboard/${currentSiteId}/webopp`,           show: !!currentSiteId },
+    { id: 'snippet',    label: 'Installation', href: `/dashboard/${currentSiteId}/snippet`,          show: !!currentSiteId },
+    { id: 'winback',    label: 'Win-Back',     href: `/dashboard/${currentSiteId}/winback`,          show: !!currentSiteId && isAuthenticated },
+    { id: 'admin',      label: 'Sessions',     href: `/dashboard/${currentSiteId}/admin/sessions`,   show: !!currentSiteId && isAuthenticated },
+    { id: 'sitemap',    label: 'Site Map',     href: `/dashboard/${currentSiteId}/sitemap`,          show: !!currentSiteId && isAuthenticated },
+    { id: 'stale-utms', label: 'Stale Tags',   href: `/dashboard/${currentSiteId}/admin/stale-utms`, show: !!currentSiteId && isAuthenticated },
+    { id: 'behavioral', label: 'Behavioral (legacy)', href: `/dashboard/${currentSiteId}/behavioral`, show: !!currentSiteId },
   ].filter(tab => tab.show);
 
   return (
@@ -245,8 +257,8 @@ export function AppNav() {
                   </span>
                 )}
               </Link>
-              {/* Render the Day 7 / Day 14 throbbing checkin button right after the Dashboard tab. */}
-              {tab.id === 'dashboard' && activeCheckinDay && (
+              {/* Render the Day 7 / Day 14 throbbing checkin button right after the Overview tab. */}
+              {tab.id === 'overview' && activeCheckinDay && (
                 <button
                   onClick={() => setCheckinModalDay(activeCheckinDay)}
                   className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs lg:text-sm whitespace-nowrap font-bold bg-red-600 text-white hover:bg-red-500 transition-colors animate-pulse shadow-md"
@@ -261,6 +273,41 @@ export function AppNav() {
               )}
             </Fragment>
           ))}
+
+          {/* "More" dropdown — power-user / drill-in pages */}
+          {moreTabs.length > 0 && (
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setMoreMenuOpen(o => !o)}
+                className={`flex items-center gap-1 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm whitespace-nowrap transition-colors ${
+                  moreMenuOpen
+                    ? 'bg-white/20 text-white font-semibold'
+                    : 'text-sky-200 hover:text-white hover:bg-white/10'
+                }`}
+                aria-haspopup="menu"
+                aria-expanded={moreMenuOpen}
+              >
+                More
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {moreMenuOpen && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-sky-200 rounded-xl shadow-xl overflow-hidden z-50 py-1">
+                  {moreTabs.map(t => (
+                    <Link
+                      key={t.id}
+                      href={t.href}
+                      onClick={() => setMoreMenuOpen(false)}
+                      className="block px-4 py-2.5 text-sm text-slate-600 hover:bg-sky-50 hover:text-slate-900 transition-colors"
+                    >
+                      {t.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

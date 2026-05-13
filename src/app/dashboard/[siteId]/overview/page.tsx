@@ -14,8 +14,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { VisitorsPanel, GoalPagePanel, ConversionsPanel } from '@/components/overview/SlideOutPanel';
+
+type SlideOutStep = 'visitors' | 'goal' | 'conversions' | null;
 
 // ---------------------------------------------------------------------------
 // Types — mirror the API response shape
@@ -69,13 +72,13 @@ type Range = 7 | 30 | 90;
 
 export default function OverviewPage() {
   const params = useParams();
-  const router = useRouter();
   const siteId = params?.siteId as string;
 
   const [days, setDays] = useState<Range>(30);
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openStep, setOpenStep] = useState<SlideOutStep>(null);
 
   useEffect(() => {
     if (!siteId) return;
@@ -149,10 +152,30 @@ export default function OverviewPage() {
       )}
 
       {/* THE FUNNEL */}
-      <FunnelRow data={data.funnel} siteId={siteId} router={router} />
+      <FunnelRow data={data.funnel} onOpenStep={setOpenStep} />
 
       {/* THE #1 FIX */}
       <TopFixTile fix={data.topFix} audit={data.auditReport} siteId={siteId} />
+
+      {/* SLIDE-OUT PANELS */}
+      <VisitorsPanel
+        open={openStep === 'visitors'}
+        onClose={() => setOpenStep(null)}
+        siteId={siteId}
+        days={days}
+      />
+      <GoalPagePanel
+        open={openStep === 'goal'}
+        onClose={() => setOpenStep(null)}
+        siteId={siteId}
+        days={days}
+      />
+      <ConversionsPanel
+        open={openStep === 'conversions'}
+        onClose={() => setOpenStep(null)}
+        siteId={siteId}
+        days={days}
+      />
     </div>
   );
 }
@@ -209,25 +232,11 @@ function RangePicker({ value, onChange }: { value: Range; onChange: (d: Range) =
 // ---------------------------------------------------------------------------
 
 function FunnelRow({
-  data, siteId, router,
+  data, onOpenStep,
 }: {
   data: OverviewData['funnel'];
-  siteId: string;
-  router: ReturnType<typeof useRouter>;
+  onOpenStep: (step: SlideOutStep) => void;
 }) {
-  // Slide-out panels land in a follow-up commit. For now each card routes
-  // into the closest existing detail page so the click does *something*
-  // useful and we don't ship dead UI.
-  function openVisitorsDetail() {
-    router.push(`/dashboard/${siteId}/admin/sessions`);
-  }
-  function openGoalPageDetail() {
-    router.push(`/dashboard/${siteId}`);
-  }
-  function openConversionsDetail() {
-    router.push(`/dashboard/${siteId}/settings`);
-  }
-
   return (
     <div className="mb-10">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -236,7 +245,7 @@ function FunnelRow({
           value={data.visitors.count}
           delta={data.visitors.deltaPct}
           deltaLabel={`${data.visitors.delta >= 0 ? '+' : ''}${data.visitors.delta} vs prior`}
-          onClick={openVisitorsDetail}
+          onClick={() => onOpenStep('visitors')}
         />
 
         <FunnelCard
@@ -250,7 +259,7 @@ function FunnelRow({
               : ''
           }
           isPts
-          onClick={openGoalPageDetail}
+          onClick={() => onOpenStep('goal')}
           dimmed={!data.goalConfigured}
         />
 
@@ -261,7 +270,7 @@ function FunnelRow({
           delta={data.conversions.delta}
           deltaLabel={`${data.conversions.delta >= 0 ? '+' : ''}${data.conversions.delta} vs prior`}
           isCount
-          onClick={openConversionsDetail}
+          onClick={() => onOpenStep('conversions')}
         />
       </div>
 
