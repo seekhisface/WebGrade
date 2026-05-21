@@ -210,30 +210,68 @@ export default function SessionExplorerPage() {
                 className="px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500" />
             </div>
 
-            {/* Download CSV */}
+            {/* Download CSV (fast — Sessions only) */}
             <button
               onClick={async () => {
                 setDownloading(true);
-                const params = new URLSearchParams({ siteId });
+                const params = new URLSearchParams({ siteId, format: 'csv' });
                 if (dateStart) params.set('start', dateStart);
                 if (dateEnd) params.set('end', dateEnd);
-                const res = await fetch(`/api/admin/sessions/export?${params}`);
-                if (res.ok) {
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.xlsx';
-                  a.click();
-                  URL.revokeObjectURL(url);
+                try {
+                  const res = await fetch(`/api/admin/sessions/export?${params}`);
+                  if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    alert(`CSV export failed (${res.status})`);
+                  }
+                } finally {
+                  setDownloading(false);
                 }
-                setDownloading(false);
               }}
               disabled={downloading}
+              title="One row per session. Fastest format for large date ranges."
               className="px-3 py-1.5 text-sm bg-[#0c4a6e] text-white rounded-lg hover:bg-[#075985] disabled:opacity-50 transition-colors flex items-center gap-1.5"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              {downloading ? 'Exporting...' : 'Raw Data'}
+              {downloading ? 'Exporting…' : 'CSV (fast)'}
+            </button>
+
+            {/* Download full Excel workbook (Sessions + Events + Summary) */}
+            <button
+              onClick={async () => {
+                setDownloading(true);
+                const params = new URLSearchParams({ siteId, format: 'xlsx' });
+                if (dateStart) params.set('start', dateStart);
+                if (dateEnd) params.set('end', dateEnd);
+                try {
+                  const res = await fetch(`/api/admin/sessions/export?${params}`);
+                  if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'sessions.xlsx';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    alert(`Excel export failed (${res.status})`);
+                  }
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+              disabled={downloading}
+              title="Three sheets: Summary, Sessions, Events. Slower for big ranges."
+              className="px-3 py-1.5 text-sm bg-white border border-[#0c4a6e] text-[#0c4a6e] rounded-lg hover:bg-sky-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              Excel (full)
             </button>
 
             {/* Download Summary */}
