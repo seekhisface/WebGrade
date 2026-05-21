@@ -22,6 +22,7 @@
     "@supabase/ssr": "^0.2.0",
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdfkit": "^0.17.5",
+    "@vercel/blob": "^2.4.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.0",

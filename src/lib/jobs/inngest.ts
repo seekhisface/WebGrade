@@ -929,6 +929,147 @@ export const runDailyVerification = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// Session export — generate large CSV/XLSX out-of-band and email link
+// Triggered by POST /api/admin/sessions/export/queue
+//
+// Runs with no time pressure (Inngest doesn't apply Vercel's 60s cap to
+// step.run bodies on Inngest Cloud; even on self-hosted the timeout is
+// far larger than HTTP). Uploads the generated file to Vercel Blob and
+// emails the requester a direct download link via Resend.
+//
+// No DB table needed for job state — the unguessable Blob URL is the
+// only artifact the customer needs. If they lose the email they can
+// just re-request the export.
+// ---------------------------------------------------------------------------
+export const generateSessionExport = inngest.createFunction(
+  { id: 'generate-session-export', retries: 1 },
+  { event: 'webgrade/session-export.requested' },
+  async ({ event, step }) => {
+    const { siteId, siteName, recipientEmail, startISO, endISO, format } = event.data as {
+      siteId: string;
+      siteName: string;
+      recipientEmail: string;
+      startISO: string;
+      endISO: string;
+      format: 'csv' | 'xlsx';
+    };
+
+    const { put } = await import('@vercel/blob');
+    const { streamSessionsAsCsv, streamSessionsAsXlsx, buildExportFilename } =
+      await import('@/lib/exports/sessions-export');
+    const { sendEmail } = await import('@/lib/email/sender');
+
+    const start = new Date(startISO);
+    const end = new Date(endISO);
+    const filename = buildExportFilename(siteName, start, end, format);
+
+    // ---- Step 1: generate + upload --------------------------------------
+    const { url } = await step.run('generate-and-upload', async () => {
+      const stream =
+        format === 'csv'
+          ? streamSessionsAsCsv(siteId, start, end)
+          : streamSessionsAsXlsx(siteId, siteName, start, end);
+
+      const contentType =
+        format === 'csv'
+          ? 'text/csv; charset=utf-8'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      // addRandomSuffix=true gives us an unguessable URL component so the
+      // file isn't enumerable. The blob is set to public so the link in
+      // the email works without auth — security relies on the URL being
+      // unguessable + the cleanup cron deleting it after 7 days.
+      const blob = await put(`exports/${filename}`, stream, {
+        access: 'public',
+        addRandomSuffix: true,
+        contentType,
+      });
+      return { url: blob.url };
+    });
+
+    // ---- Step 2: email the link ----------------------------------------
+    await step.run('send-email', async () => {
+      const formatLabel = format === 'csv' ? 'CSV' : 'Excel (.xlsx)';
+      const dateRange = `${start.toISOString().split('T')[0]} → ${end.toISOString().split('T')[0]}`;
+
+      const html = `
+        <div style="font-family: -apple-system, sans-serif; max-width: 540px; margin: 0 auto;">
+          <h2 style="color: #082f49; margin-bottom: 8px;">Your session export is ready</h2>
+          <p style="color: #475569; line-height: 1.6;">
+            We've finished generating the ${formatLabel} export for
+            <strong>${siteName}</strong> covering <strong>${dateRange}</strong>.
+          </p>
+          <p style="margin: 24px 0;">
+            <a href="${url}"
+               style="display: inline-block; background: #0c4a6e; color: white;
+                      padding: 12px 22px; border-radius: 8px;
+                      text-decoration: none; font-weight: 600;">
+              Download ${formatLabel}
+            </a>
+          </p>
+          <p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">
+            This link works for the next 7 days. If you need to re-export, just
+            click the button again from your Sessions admin page.
+          </p>
+          <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">
+            — WebGrade
+          </p>
+        </div>
+      `;
+
+      return sendEmail({
+        to: recipientEmail,
+        subject: `Your WebGrade export is ready — ${siteName} (${dateRange})`,
+        html,
+      });
+    });
+
+    return { url, filename, recipientEmail };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Daily cleanup — delete export blobs older than 7 days
+//
+// The export emails promise the link works for 7 days. This cron sweeps
+// anything past that so the Blob store doesn't grow unbounded.
+// ---------------------------------------------------------------------------
+export const cleanupOldExports = inngest.createFunction(
+  { id: 'cleanup-old-exports', retries: 1 },
+  { cron: '0 3 * * *' },
+  async ({ step }) => {
+    const { list, del } = await import('@vercel/blob');
+
+    const cutoff = Date.now() - 7 * 86400 * 1000;
+    let deleted = 0;
+    let cursor: string | undefined;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const page = await step.run(`list-${cursor ?? 'first'}`, async () => {
+        return list({ prefix: 'exports/', cursor });
+      });
+
+      const toDelete = page.blobs
+        .filter(b => new Date(b.uploadedAt).getTime() < cutoff)
+        .map(b => b.url);
+
+      if (toDelete.length > 0) {
+        await step.run(`delete-${cursor ?? 'first'}`, async () => {
+          await del(toDelete);
+        });
+        deleted += toDelete.length;
+      }
+
+      if (!page.cursor) break;
+      cursor = page.cursor;
+    }
+
+    return { deleted };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Export all functions for the Inngest handler
 // ---------------------------------------------------------------------------
 export const inngestFunctions = [
@@ -949,4 +1090,6 @@ export const inngestFunctions = [
   syncGa4Daily,
   runWeeklySeoCrawl,
   runDailyVerification,
+  generateSessionExport,
+  cleanupOldExports,
 ];
