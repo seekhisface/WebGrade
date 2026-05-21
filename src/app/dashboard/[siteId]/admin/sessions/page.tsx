@@ -274,6 +274,41 @@ export default function SessionExplorerPage() {
               Excel (full)
             </button>
 
+            {/* Queue a background export — for huge ranges that would
+                time out the live download. Returns a 202 and emails the
+                customer when the file is ready. */}
+            <button
+              onClick={async () => {
+                if (!confirm('Generate the export in the background and email it to you when ready? This works for any size — useful when the live download is timing out.')) return;
+                try {
+                  const res = await fetch('/api/admin/sessions/export/queue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      siteId,
+                      start: dateStart || undefined,
+                      end: dateEnd || undefined,
+                      format: 'xlsx',
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok) {
+                    alert(data.message ?? "We'll email you when it's ready.");
+                  } else {
+                    alert(data.error ?? `Queue failed (${res.status})`);
+                  }
+                } catch (e) {
+                  console.error('Queue export error:', e);
+                  alert('Failed to queue the export. Check console for details.');
+                }
+              }}
+              title="For really large ranges. We email you a download link when the file is ready (usually 1–5 minutes)."
+              className="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              Email me (big ranges)
+            </button>
+
             {/* Download Summary */}
             <button
               onClick={async () => {

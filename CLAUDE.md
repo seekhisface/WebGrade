@@ -289,6 +289,7 @@ public/
 - `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` — PostHog
 - `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` — Inngest
 - `RESEND_API_KEY` — email delivery via Resend
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob, used for out-of-band session exports (POST /api/admin/sessions/export/queue → Inngest job stores file → email link via Resend). Set up via Vercel project → Storage → Create Blob store (token auto-injects on deploy)
 - `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` — WebOpp keyword data
 - `DEMO_PASSWORD` — override demo account password (default: `DemoPass2026!`)
 - `FINGERPRINT_SECRET` — HMAC salt for privacy fingerprinting
