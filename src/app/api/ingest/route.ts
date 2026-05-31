@@ -217,8 +217,27 @@ export async function POST(req: NextRequest) {
         ...(event.href ? { href: event.href } : {}),
       }) as Prisma.InputJsonValue | undefined,
     }));
-    const result = await tx.sessionEvent.createMany({ data: eventData });
-    console.log(`[ingest] session=${session.id} created ${result.count}/${eventData.length} events types=[${events.map(e => e.t).join(',')}]`);
+    // Try batch insert first — fastest path. If it fails (most common cause:
+    // an enum value in the batch that the DB doesn't recognize because a
+    // schema migration wasn't applied), fall back to per-event inserts so
+    // ONE bad event can't drop the entire batch. The events that fail
+    // individually are logged but don't take valid events down with them.
+    let createdCount = 0;
+    try {
+      const result = await tx.sessionEvent.createMany({ data: eventData });
+      createdCount = result.count;
+    } catch (batchErr) {
+      console.error(`[ingest] batch insert failed for session=${session.id}, falling back to per-event:`, (batchErr as Error).message);
+      for (const ev of eventData) {
+        try {
+          await tx.sessionEvent.create({ data: ev });
+          createdCount++;
+        } catch (evErr) {
+          console.error(`[ingest] dropped event type=${ev.eventType} session=${session.id}:`, (evErr as Error).message.slice(0, 200));
+        }
+      }
+    }
+    console.log(`[ingest] session=${session.id} created ${createdCount}/${eventData.length} events types=[${events.map(e => e.t).join(',')}]`);
 
     // Aggregate PageView records for drop-off analysis
     // Group events by page URL to build per-page engagement metrics
