@@ -20,6 +20,7 @@
  */
 
 import { createHash } from 'crypto';
+import geoip from 'geoip-lite';
 
 /**
  * Hash an IP address with a site-specific salt.
@@ -129,8 +130,19 @@ export function anonymizeRequest(
   // 2. Hash immediately — rawIp is not returned or stored
   const ipHash = hashIp(rawIp, siteId);
 
-  // 3. Extract geo from Vercel headers (IP itself not needed)
-  const { country, region } = extractGeoFromHeaders(headers);
+  // 3. Extract geo from platform headers (Vercel, Cloudflare, CloudFront)
+  const { country: headerCountry, region: headerRegion } = extractGeoFromHeaders(headers);
+
+  // 4. Fall back to local geoip-lite lookup when no platform header provided geo data.
+  //    Private/loopback IPs (127.0.0.1, ::1) return null from geoip.lookup() natively.
+  //    rawIp is consumed here in-memory and never returned or persisted (DL-01).
+  let country = headerCountry;
+  let region = headerRegion;
+  if (country === null && region === null) {
+    const geo = geoip.lookup(rawIp);
+    country = geo?.country ?? null;
+    region = geo?.region ?? null;
+  }
 
   // rawIp goes out of scope here and is never persisted
   return { ipHash, country, region };
