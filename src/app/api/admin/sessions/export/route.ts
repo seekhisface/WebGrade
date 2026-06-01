@@ -76,7 +76,20 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('Export error:', err);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    // Surface the real message to the admin who triggered the export.
+    // This endpoint is admin-gated, so leaking internals to the response is
+    // acceptable and the alternative (digging through Vercel logs for every
+    // failure) is much worse for debugging.
+    const e = err as Error;
+    console.error('Export error:', e?.stack ?? e?.message ?? err);
+    return NextResponse.json(
+      {
+        error: 'Internal error',
+        message: e?.message ?? String(err),
+        // Short stack hint — first 3 lines is usually enough to know which file
+        stack: typeof e?.stack === 'string' ? e.stack.split('\n').slice(0, 6).join('\n') : undefined,
+      },
+      { status: 500 },
+    );
   }
 }

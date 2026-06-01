@@ -228,7 +228,10 @@ export default function SessionExplorerPage() {
                     a.click();
                     URL.revokeObjectURL(url);
                   } else {
-                    alert(`CSV export failed (${res.status})`);
+                    const body = await res.json().catch(() => ({}));
+                    const detail = body.message ?? body.error ?? 'unknown';
+                    const stackLine = body.stack ? `\n\nStack:\n${body.stack}` : '';
+                    alert(`CSV export failed (${res.status})\n\n${detail}${stackLine}`);
                   }
                 } finally {
                   setDownloading(false);
@@ -260,7 +263,12 @@ export default function SessionExplorerPage() {
                     a.click();
                     URL.revokeObjectURL(url);
                   } else {
-                    alert(`Excel export failed (${res.status})`);
+                    // Surface the real error so we can diagnose without
+                    // digging through Vercel logs every time.
+                    const body = await res.json().catch(() => ({}));
+                    const detail = body.message ?? body.error ?? 'unknown';
+                    const stackLine = body.stack ? `\n\nStack:\n${body.stack}` : '';
+                    alert(`Excel export failed (${res.status})\n\n${detail}${stackLine}`);
                   }
                 } finally {
                   setDownloading(false);
