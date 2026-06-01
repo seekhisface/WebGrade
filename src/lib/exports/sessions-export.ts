@@ -67,9 +67,36 @@ function fmtReferrer(referrer: string | null): string {
   catch { return referrer; }
 }
 
-function pad(n: number) { return n < 10 ? `0${n}` : String(n); }
-function dateOnly(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function timeOnly(d: Date) { return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+// All exported dates/times are rendered in America/New_York (EST/EDT,
+// auto-switches with DST). Vercel runs in UTC, so the previous
+// d.getFullYear()/getHours() helpers showed UTC dates, which confused
+// users — a 9 PM EDT session would show as "next day 01:00" because UTC
+// had already rolled over. Intl.DateTimeFormat with an explicit timeZone
+// is the standard fix and needs no extra dependency.
+// If we ever ship to customers outside the US Eastern timezone, this
+// should become a per-site or per-user setting; for now it's hardcoded
+// because this product is operated out of EST.
+const REPORT_TZ = 'America/New_York';
+
+const dateFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: REPORT_TZ,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const timeFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: REPORT_TZ,
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: false,
+});
+
+function dateOnly(d: Date): string {
+  // en-CA gives YYYY-MM-DD
+  return dateFmt.format(d);
+}
+
+function timeOnly(d: Date): string {
+  // en-GB + hour12:false gives HH:MM:SS in 24-hour
+  return timeFmt.format(d);
+}
 
 // CSV field escape per RFC 4180
 function csvField(v: unknown): string {
@@ -480,8 +507,12 @@ export function streamSessionsAsXlsx(siteId: string, siteName: string, start: Da
 
       const summaryRows = [
         { metric: 'Site', value: siteName },
+        // Date range stays as the user-picked dates (no TZ conversion —
+        // they're just calendar bounds the user typed in). Generated-at
+        // and all per-session timestamps below are in America/New_York.
         { metric: 'Date range', value: `${start.toISOString().split('T')[0]} → ${end.toISOString().split('T')[0]}` },
-        { metric: 'Generated at', value: new Date().toISOString() },
+        { metric: 'Generated at', value: `${dateOnly(new Date())} ${timeOnly(new Date())} (${REPORT_TZ})` },
+        { metric: 'Timezone', value: REPORT_TZ },
         { metric: '', value: '' },
         { metric: 'Total sessions (incl. bots)', value: totalSessions },
         { metric: 'Bot sessions filtered',       value: botSessions },
