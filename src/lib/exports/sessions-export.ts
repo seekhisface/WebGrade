@@ -344,15 +344,18 @@ export function streamSessionsAsXlsx(siteId: string, siteName: string, start: Da
       summarySheet.getRow(1).eachCell(c => Object.assign(c, headerStyle));
       summarySheet.getRow(1).commit();
 
-      const sessionsSheet = wb.addWorksheet('Sessions');
+      // ExcelJS streaming WorksheetWriter exposes `views` as a getter-only
+      // property — assigning sheet.views = [...] throws "Cannot set property
+      // views of #<...> which has only a getter" once code is minified for
+      // production. Pass it via the addWorksheet options object instead;
+      // the constructor stores it for the eventual SheetView XML emit.
+      const sessionsSheet = wb.addWorksheet('Sessions', { views: [{ state: 'frozen', ySplit: 1 }] });
       sessionsSheet.columns = SESSION_COLUMNS.map(c => ({ header: c.header, key: c.key, width: c.width }));
-      sessionsSheet.views = [{ state: 'frozen', ySplit: 1 }];
       sessionsSheet.getRow(1).eachCell(c => Object.assign(c, headerStyle));
       sessionsSheet.getRow(1).commit();
 
-      const eventsSheet = wb.addWorksheet('Events');
+      const eventsSheet = wb.addWorksheet('Events', { views: [{ state: 'frozen', ySplit: 1 }] });
       eventsSheet.columns = EVENT_COLUMNS.map(c => ({ header: c.header, key: c.key, width: c.width }));
-      eventsSheet.views = [{ state: 'frozen', ySplit: 1 }];
       eventsSheet.getRow(1).eachCell(c => Object.assign(c, headerStyle));
       eventsSheet.getRow(1).commit();
 
