@@ -20,7 +20,23 @@
  */
 
 import { createHash } from 'crypto';
-import geoip from 'geoip-lite';
+
+// geoip-lite is lazy-loaded inside anonymizeRequest() so it doesn't run
+// at module-import time. Next.js's "Collecting page data" build step
+// evaluates imports, and geoip-lite tries to fs.openSync its .dat files
+// at that point — which fail because the serverless bundle isn't fully
+// constructed yet. Deferring the require to first-request time avoids
+// the build-time ENOENT and only costs a few ms of cold-start latency.
+type GeoLookup = (ip: string) => { country?: string; region?: string } | null;
+let geoipLookup: GeoLookup | null = null;
+function getGeoipLookup(): GeoLookup {
+  if (!geoipLookup) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const geoip = require('geoip-lite');
+    geoipLookup = geoip.lookup as GeoLookup;
+  }
+  return geoipLookup;
+}
 
 /**
  * Hash an IP address with a site-specific salt.
@@ -139,7 +155,7 @@ export function anonymizeRequest(
   let country = headerCountry;
   let region = headerRegion;
   if (country === null && region === null) {
-    const geo = geoip.lookup(rawIp);
+    const geo = getGeoipLookup()(rawIp);
     country = geo?.country ?? null;
     region = geo?.region ?? null;
   }
